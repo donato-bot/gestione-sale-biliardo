@@ -34,7 +34,7 @@ export default function AdminDashboard() {
     setLoadingVaro(true);
 
     try {
-      const res = await fetch('/api/onboarding', {
+      const res = await fetch('/api/crea-sala', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nomeClub: nuovoNome, emailManager: nuovaEmail, password: nuovaPass })
