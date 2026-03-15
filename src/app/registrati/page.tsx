@@ -17,6 +17,7 @@ export default function RegistratiPage() {
     setMessaggio({ tipo: '', testo: '' });
 
     try {
+      // Registrazione su Supabase Auth
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -46,7 +47,7 @@ export default function RegistratiPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
       <div className="w-full max-w-md bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700">
-        <h1 className="text-3xl font-bold mb-6 text-center text-blue-400">Radar Nucleare</h1>
+        <h1 className="text-3xl font-bold mb-6 text-center text-blue-400">Radar Nucleare!</h1>
         <p className="text-gray-400 text-center mb-8">Crea il tuo account gestore</p>
 
         <form onSubmit={handleSignUp} className="flex flex-col gap-4">
