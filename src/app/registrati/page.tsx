@@ -98,4 +98,6 @@ export default function RegistratiPage() {
       </div>
     </div>
   );
+
+  // test sblocco
 }
