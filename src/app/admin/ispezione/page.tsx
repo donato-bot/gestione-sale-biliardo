@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Usiamo la chiave Master segreta per bypassare il firewall RLS e vedere tutto
+// Usiamo la chiave pubblica configurata su Vercel per sbloccare il caricamento
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey);
 
 export default async function IspezionePage() {
   // Peschiamo tutte le sale senza filtri
