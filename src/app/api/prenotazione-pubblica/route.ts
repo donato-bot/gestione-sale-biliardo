@@ -4,9 +4,10 @@ import { NextResponse } from 'next/server';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+// Inizializza Supabase usando le chiavi pubbliche che abbiamo configurato
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
 export async function GET(req: Request) {
@@ -15,11 +16,11 @@ export async function GET(req: Request) {
 
     if (!salaId) return NextResponse.json({ error: 'Codice sala mancante' }, { status: 400 });
 
-    const { data: sala } = await supabaseAdmin.from('sale').select('manager_email, name, is_active').eq('id', salaId).single();
+    const { data: sala } = await supabase.from('sale').select('manager_email, name, is_active').eq('id', salaId).single();
     if (!sala) return NextResponse.json({ error: 'Club non trovato' }, { status: 404 });
     if (!sala.is_active) return NextResponse.json({ error: 'Il servizio prenotazioni per questo club è attualmente sospeso.' }, { status: 403 });
 
-    const { data: tavoli } = await supabaseAdmin.from('tavoli').select('id, nome, tariffa').eq('manager_email', sala.manager_email);
+    const { data: tavoli } = await supabase.from('tavoli').select('id, nome, tariffa').eq('manager_email', sala.manager_email);
 
     return NextResponse.json({ sala, tavoli });
 }
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
         const start = ora_inizio.length === 5 ? `${ora_inizio}:00` : ora_inizio;
         const end = ora_fine.length === 5 ? `${ora_fine}:00` : ora_fine;
 
-        const { error } = await supabaseAdmin.from('prenotazioni').insert([{
+        const { error } = await supabase.from('prenotazioni').insert([{
             manager_email,
             tavolo_id,
             nome_cliente,
