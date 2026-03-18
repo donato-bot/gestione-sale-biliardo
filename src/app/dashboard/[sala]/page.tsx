@@ -52,6 +52,9 @@ export default function DashboardSala() {
   const [pinBuffer, setPinBuffer] = useState("");
   const [pendingAction, setPendingAction] = useState<any>(null);
 
+  // NUOVO STATO: OPERATORE LOGGATO
+  const [activeStaff, setActiveStaff] = useState<any>(null);
+
   // Input
   const [reserveName, setReserveName] = useState("");
   const [reserveTime, setReserveTime] = useState("");
@@ -172,8 +175,9 @@ export default function DashboardSala() {
         const staff = listaStaff.find(s => s.pin === newBuffer);
         if (staff) {
           const action = pendingAction;
+          setActiveStaff(staff); // SALVIAMO L'OPERATORE IN SESSIONE!
           setPinBuffer(""); setIsPinModalOpen(false); setPendingAction(null);
-          action.callback(staff.id);
+          if (action) action.callback(staff.id);
         } else {
           alert("❌ PIN Errato!"); setPinBuffer("");
         }
@@ -183,9 +187,18 @@ export default function DashboardSala() {
 
   const richiedePin = (callback: (staffId: string) => void, descrizione: string) => {
     if (listaStaff.length === 0) { alert("⚠️ Crea Staff."); setActiveView("staff"); return; }
+    
+    // SE L'OPERATORE E' GIA LOGGATO, SALTA IL PIN E ESEGUE SUBITO L'AZIONE
+    if (activeStaff) {
+      callback(activeStaff.id);
+      return;
+    }
+    
+    // ALTRIMENTI CHIEDE IL PIN
     setPendingAction({ callback, descrizione }); setIsPinModalOpen(true);
   };
 
+  // --- FUNZIONI PRENOTAZIONI E TORNEI ---
   const prenotaTavolo = async (staffId: string) => {
     if (!activeTableId || !reserveName || !reserveTime) return;
     await supabase.from('tavoli').update({ 
@@ -413,8 +426,21 @@ export default function DashboardSala() {
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-green-500 font-black text-2xl tracking-widest italic animate-pulse">CARICAMENTO TORRE DI CONTROLLO...</div>;
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 font-sans tracking-tighter overflow-x-hidden">
+    <div className="min-h-screen bg-black text-white p-4 font-sans tracking-tighter overflow-x-hidden relative">
       
+      {/* BADGE OPERATORE LOGGATO IN ALTO A DESTRA */}
+      {activeStaff && (
+        <div className="absolute top-6 right-6 z-40 bg-gray-900 border border-cyan-600 px-6 py-3 rounded-2xl flex items-center gap-6 shadow-[0_0_15px_rgba(8,145,178,0.3)] animate-in slide-in-from-top">
+          <div>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none mb-1">Operatore Attivo</p>
+            <p className="text-cyan-400 font-black text-lg uppercase italic leading-none">{activeStaff.nome}</p>
+          </div>
+          <button onClick={() => setActiveStaff(null)} className="bg-red-950 text-red-500 hover:bg-red-600 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase transition-colors">
+            CAMBIO TURNO
+          </button>
+        </div>
+      )}
+
       {/* HUB */}
       {activeView === "hub" && (
         <div className="animate-in fade-in duration-500 text-center">
@@ -714,10 +740,7 @@ export default function DashboardSala() {
       {isManageIscrittiOpen && activeTorneo && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95">
           <div className="bg-gray-900 border-4 border-pink-600 p-8 rounded-[3rem] w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] relative">
-            {/* PULSANTE CHIUSURA X */}
-            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-xl transition-colors z-10 bg-black hover:bg-red-600 w-12 h-12 rounded-full flex items-center justify-center border-2 border-gray-700 shadow-lg">
-              ✕
-            </button>
+            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-xl transition-colors z-10 bg-black hover:bg-red-600 w-12 h-12 rounded-full flex items-center justify-center border-2 border-gray-700 shadow-lg">✕</button>
 
             <h3 className="text-3xl font-black text-pink-500 mb-2 uppercase italic text-center">{activeTorneo.nome}</h3>
             <p className="text-gray-400 text-center font-bold mb-6 uppercase text-sm">Gestione Iscritti (Totale: {(activeTorneo.iscritti || []).length})</p>
@@ -734,9 +757,7 @@ export default function DashboardSala() {
                       return <option key={s.id} value={s.id}>{s.cognome} {s.nome}</option>
                     })}
                   </select>
-                  <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid, 'socio'), "Iscrizione Socio")} className="px-6 bg-pink-600 text-white font-black uppercase rounded-xl hover:bg-pink-500 active:scale-95 transition-all">
-                    ➕ SOCIO
-                  </button>
+                  <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid, 'socio'), "Iscrizione Socio")} className="px-6 bg-pink-600 text-white font-black uppercase rounded-xl hover:bg-pink-500 active:scale-95 transition-all">➕ SOCIO</button>
                 </div>
               </div>
 
@@ -744,9 +765,7 @@ export default function DashboardSala() {
                 <p className="text-purple-500 font-bold uppercase text-xs text-center">Aggiungi Giocatore Esterno</p>
                 <div className="flex gap-2">
                   <input type="text" value={iscrittoEsterno} onChange={(e) => setIscrittoEsterno(e.target.value)} placeholder="Nome e Cognome..." className="flex-1 bg-black border border-gray-800 p-4 rounded-xl text-lg text-white outline-none focus:border-purple-500 transition-all" />
-                  <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid, 'esterno'), "Iscrizione Esterno")} className="px-6 bg-purple-600 text-white font-black uppercase rounded-xl hover:bg-purple-500 active:scale-95 transition-all">
-                    ➕ ESTERNO
-                  </button>
+                  <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid, 'esterno'), "Iscrizione Esterno")} className="px-6 bg-purple-600 text-white font-black uppercase rounded-xl hover:bg-purple-500 active:scale-95 transition-all">➕ ESTERNO</button>
                 </div>
               </div>
             </div>
@@ -761,24 +780,12 @@ export default function DashboardSala() {
                         <div className="flex items-center gap-4">
                           <span className="text-pink-600 font-black text-xl w-6">{index + 1}.</span>
                           <span className="text-white font-bold text-lg uppercase italic">{iscritto.nome}</span>
-                          <span className={`text-[10px] px-2 py-1 rounded uppercase font-black tracking-widest ${iscritto.tipo === 'socio' ? 'bg-pink-900 text-pink-300' : 'bg-purple-900 text-purple-300'}`}>
-                            {iscritto.tipo}
-                          </span>
-                          {!iscritto.confermato && (
-                            <span className="text-[10px] px-2 py-1 bg-yellow-600 text-black rounded uppercase font-black animate-pulse">
-                              RICHIESTA IN ATTESA
-                            </span>
-                          )}
+                          <span className={`text-[10px] px-2 py-1 rounded uppercase font-black tracking-widest ${iscritto.tipo === 'socio' ? 'bg-pink-900 text-pink-300' : 'bg-purple-900 text-purple-300'}`}>{iscritto.tipo}</span>
+                          {!iscritto.confermato && <span className="text-[10px] px-2 py-1 bg-yellow-600 text-black rounded uppercase font-black animate-pulse">RICHIESTA IN ATTESA</span>}
                         </div>
                         <div className="flex gap-2">
-                          {!iscritto.confermato && (
-                             <button onClick={() => richiedePin((sid) => confermaIscrizione(iscritto.id, sid), "Conferma Iscrizione")} className="bg-green-600 text-black font-black text-xs px-4 rounded-xl hover:bg-green-500 transition-colors uppercase">
-                               Conferma
-                             </button>
-                          )}
-                          <button onClick={() => richiedePin((sid) => rimuoviIscritto(iscritto.id, sid), "Annulla Iscrizione")} className="bg-red-950 text-red-500 p-3 rounded-xl hover:bg-red-900 transition-colors">
-                            ❌
-                          </button>
+                          {!iscritto.confermato && <button onClick={() => richiedePin((sid) => confermaIscrizione(iscritto.id, sid), "Conferma Iscrizione")} className="bg-green-600 text-black font-black text-xs px-4 rounded-xl hover:bg-green-500 transition-colors uppercase">Conferma</button>}
+                          <button onClick={() => richiedePin((sid) => rimuoviIscritto(iscritto.id, sid), "Annulla Iscrizione")} className="bg-red-950 text-red-500 p-3 rounded-xl hover:bg-red-900 transition-colors">❌</button>
                         </div>
                       </div>
                     )
@@ -787,9 +794,7 @@ export default function DashboardSala() {
               )}
             </div>
 
-            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="w-full py-6 mt-6 bg-gray-800 text-white uppercase font-black rounded-3xl hover:bg-gray-700 transition-all">
-              CHIUDI GESTIONE
-            </button>
+            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="w-full py-6 mt-6 bg-gray-800 text-white uppercase font-black rounded-3xl hover:bg-gray-700 transition-all">CHIUDI GESTIONE</button>
           </div>
         </div>
       )}
@@ -798,31 +803,18 @@ export default function DashboardSala() {
       {isBracketModalOpen && activeTorneo && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95">
           <div className="bg-gray-900 border-4 border-blue-600 p-8 rounded-[3rem] w-full max-w-5xl shadow-2xl flex flex-col max-h-[95vh] relative">
-            
-            {/* PULSANTE CHIUSURA X */}
-            <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-xl transition-colors z-10 bg-black hover:bg-red-600 w-12 h-12 rounded-full flex items-center justify-center border-2 border-gray-700 shadow-lg">
-              ✕
-            </button>
+            <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-xl transition-colors z-10 bg-black hover:bg-red-600 w-12 h-12 rounded-full flex items-center justify-center border-2 border-gray-700 shadow-lg">✕</button>
 
             <h3 className="text-4xl font-black text-blue-500 mb-2 uppercase italic text-center pr-12">{activeTorneo.nome}</h3>
-            <p className="text-gray-400 text-center font-bold mb-8 uppercase text-sm">
-              {activeTorneo.stato === 'completato' ? '🏆 TABELLONE FINALE 🏆' : 'SCONTRI DIRETTI IN CORSO'}
-            </p>
+            <p className="text-gray-400 text-center font-bold mb-8 uppercase text-sm">{activeTorneo.stato === 'completato' ? '🏆 TABELLONE FINALE 🏆' : 'SCONTRI DIRETTI IN CORSO'}</p>
 
             <div className="flex-1 overflow-y-auto pr-2 space-y-6">
               {activeTorneo.tabellone?.map((turno: any, turnoIndex: number) => (
                 <div key={turnoIndex} className="bg-black p-6 rounded-[2rem] border border-gray-800">
-                  
-                  {/* Etichetta Turno centrata (non più tagliata) */}
-                  <div className="w-max mx-auto bg-blue-900 text-blue-300 px-6 py-2 rounded-xl font-black uppercase text-sm tracking-widest border border-blue-700 mb-6 text-center shadow-lg">
-                    Turno {turnoIndex + 1}
-                  </div>
-                  
+                  <div className="w-max mx-auto bg-blue-900 text-blue-300 px-6 py-2 rounded-xl font-black uppercase text-sm tracking-widest border border-blue-700 mb-6 text-center shadow-lg">Turno {turnoIndex + 1}</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {turno.map((match: any) => (
                       <div key={match.id} className={`p-4 rounded-2xl border-2 flex flex-col gap-2 ${match.vincitore ? 'border-green-900 bg-gray-900' : 'border-blue-900/50 bg-gray-950'}`}>
-                        
-                        {/* Giocatore 1 */}
                         <button 
                           onClick={() => { if(!match.vincitore && activeTorneo.stato !== 'completato') richiedePin((sid) => impostaVincitore(turnoIndex, match.id, match.p1, sid), "Vittoria Giocatore 1") }}
                           disabled={!!match.vincitore}
@@ -831,10 +823,7 @@ export default function DashboardSala() {
                           <span className="uppercase italic">{match.p1.nome}</span>
                           {match.vincitore?.id === match.p1.id && <span>🏆</span>}
                         </button>
-
                         <div className="text-center text-gray-700 font-black text-xs">VS</div>
-
-                        {/* Giocatore 2 (o BYE) */}
                         {match.p2 ? (
                           <button 
                             onClick={() => { if(!match.vincitore && activeTorneo.stato !== 'completato') richiedePin((sid) => impostaVincitore(turnoIndex, match.id, match.p2, sid), "Vittoria Giocatore 2") }}
@@ -845,11 +834,8 @@ export default function DashboardSala() {
                             {match.vincitore?.id === match.p2.id && <span>🏆</span>}
                           </button>
                         ) : (
-                          <div className="p-3 rounded-xl bg-gray-900/50 border border-gray-800 text-gray-600 font-black text-center uppercase tracking-widest text-sm">
-                            PASSAGGIO AUTOMATICO (BYE)
-                          </div>
+                          <div className="p-3 rounded-xl bg-gray-900/50 border border-gray-800 text-gray-600 font-black text-center uppercase tracking-widest text-sm">PASSAGGIO AUTOMATICO (BYE)</div>
                         )}
-
                       </div>
                     ))}
                   </div>
@@ -857,19 +843,10 @@ export default function DashboardSala() {
               ))}
             </div>
 
-            {/* Azioni Fondo Tabellone */}
             {activeTorneo.stato === 'in_corso' && (
-              <button 
-                onClick={() => richiedePin((sid) => generaProssimoTurno(sid), "Genera Turno / Concludi")} 
-                className="w-full py-6 mt-8 bg-blue-600 text-white uppercase font-black rounded-3xl hover:bg-blue-500 transition-all shadow-[0_0_20px_rgba(37,99,235,0.5)] active:scale-95"
-              >
-                AVANZA AL TURNO SUCCESSIVO / CONCLUDI TORNEO
-              </button>
+              <button onClick={() => richiedePin((sid) => generaProssimoTurno(sid), "Genera Turno / Concludi")} className="w-full py-6 mt-8 bg-blue-600 text-white uppercase font-black rounded-3xl hover:bg-blue-500 transition-all shadow-[0_0_20px_rgba(37,99,235,0.5)] active:scale-95">AVANZA AL TURNO SUCCESSIVO / CONCLUDI TORNEO</button>
             )}
-
-            <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="w-full py-4 mt-4 bg-gray-800 text-gray-400 uppercase font-black rounded-3xl hover:bg-gray-700 transition-all">
-              CHIUDI TABELLONE
-            </button>
+            <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="w-full py-4 mt-4 bg-gray-800 text-gray-400 uppercase font-black rounded-3xl hover:bg-gray-700 transition-all">CHIUDI TABELLONE</button>
           </div>
         </div>
       )}
