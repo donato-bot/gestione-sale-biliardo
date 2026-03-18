@@ -52,7 +52,7 @@ export default function DashboardSala() {
   const [pinBuffer, setPinBuffer] = useState("");
   const [pendingAction, setPendingAction] = useState<any>(null);
 
-  // NUOVO STATO: OPERATORE LOGGATO
+  // NUOVO STATO: OPERATORE LOGGATO (Risolve il problema del PIN petulante)
   const [activeStaff, setActiveStaff] = useState<any>(null);
 
   // Input
@@ -167,6 +167,7 @@ export default function DashboardSala() {
     } catch (e) { console.error(e); }
   }
 
+  // --- LOGICA PIN "INTELLIGENTE" ---
   const handlePinDigit = (digit: string) => {
     if (pinBuffer.length < 4) {
       const newBuffer = pinBuffer + digit;
@@ -175,7 +176,7 @@ export default function DashboardSala() {
         const staff = listaStaff.find(s => s.pin === newBuffer);
         if (staff) {
           const action = pendingAction;
-          setActiveStaff(staff); // SALVIAMO L'OPERATORE IN SESSIONE!
+          setActiveStaff(staff); // Salva in sessione!
           setPinBuffer(""); setIsPinModalOpen(false); setPendingAction(null);
           if (action) action.callback(staff.id);
         } else {
@@ -188,13 +189,12 @@ export default function DashboardSala() {
   const richiedePin = (callback: (staffId: string) => void, descrizione: string) => {
     if (listaStaff.length === 0) { alert("⚠️ Crea Staff."); setActiveView("staff"); return; }
     
-    // SE L'OPERATORE E' GIA LOGGATO, SALTA IL PIN E ESEGUE SUBITO L'AZIONE
+    // SE LOGGATO, SALTA IL PIN E AGISCE SUBITO
     if (activeStaff) {
       callback(activeStaff.id);
       return;
     }
     
-    // ALTRIMENTI CHIEDE IL PIN
     setPendingAction({ callback, descrizione }); setIsPinModalOpen(true);
   };
 
@@ -428,7 +428,7 @@ export default function DashboardSala() {
   return (
     <div className="min-h-screen bg-black text-white p-4 font-sans tracking-tighter overflow-x-hidden relative">
       
-      {/* BADGE OPERATORE LOGGATO IN ALTO A DESTRA */}
+      {/* BADGE OPERATORE LOGGATO */}
       {activeStaff && (
         <div className="absolute top-6 right-6 z-40 bg-gray-900 border border-cyan-600 px-6 py-3 rounded-2xl flex items-center gap-6 shadow-[0_0_15px_rgba(8,145,178,0.3)] animate-in slide-in-from-top">
           <div>
@@ -636,15 +636,19 @@ export default function DashboardSala() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {tornei.map((tr) => (
-                <div key={tr.id} className="bg-gray-900 p-8 rounded-[2.5rem] border-2 border-pink-900 shadow-2xl flex flex-col justify-between">
+                <div key={tr.id} className="bg-gray-900 p-8 rounded-[2.5rem] border-2 border-pink-900 shadow-2xl flex flex-col justify-between relative overflow-hidden">
+                  
+                  {/* Etichetta Stato Alta Visibilità */}
+                  <div className={`absolute top-0 right-0 w-32 py-1 text-center font-black text-[10px] uppercase tracking-widest translate-x-8 translate-y-4 rotate-45 ${tr.stato === 'iscrizioni' ? 'bg-yellow-500 text-black' : tr.stato === 'in_corso' ? 'bg-blue-600 text-white' : 'bg-gray-500 text-white'}`}>
+                    {tr.stato === 'iscrizioni' ? 'Aperto' : tr.stato === 'in_corso' ? 'Live' : 'Chiuso'}
+                  </div>
+
                   <div>
                     <h4 className="text-2xl font-black uppercase text-white italic mb-2">{tr.nome}</h4>
                     <p className="text-pink-400 font-mono font-bold text-lg mb-2">📅 Data: {new Date(tr.data_inizio).toLocaleDateString()}</p>
-                    <p className="text-green-500 font-bold mb-4">💰 Quota: € {parseFloat(tr.quota_iscrizione).toFixed(2)}</p>
-                    <div className={`text-center py-2 rounded-xl font-black uppercase text-xs mb-6 ${tr.stato === 'iscrizioni' ? 'bg-yellow-900/50 text-yellow-500' : tr.stato === 'in_corso' ? 'bg-blue-900/50 text-blue-500' : 'bg-gray-800 text-gray-500'}`}>
-                      Stato: {tr.stato === 'iscrizioni' ? 'ISCRIZIONI APERTE' : tr.stato === 'in_corso' ? 'IN CORSO (TABELLONE)' : 'COMPLETATO'}
-                    </div>
+                    <p className="text-green-500 font-bold mb-6">💰 Quota: € {parseFloat(tr.quota_iscrizione).toFixed(2)}</p>
                   </div>
+                  
                   <div className="flex flex-col gap-2">
                     
                     {tr.stato === 'iscrizioni' && (
@@ -653,24 +657,32 @@ export default function DashboardSala() {
                           Gestisci Iscritti ({(tr.iscritti || []).length})
                         </button>
                         <button onClick={() => richiedePin((sid) => avviaTorneo(tr, sid), "Avvio Torneo")} className="w-full py-4 bg-green-600 text-black font-black uppercase rounded-2xl hover:bg-green-500 transition-all shadow-lg">
-                          🔀 CREA TABELLONE E AVVIA
+                          🔀 AVVIA TABELLONE
                         </button>
                       </>
                     )}
 
                     {tr.stato === 'in_corso' && (
-                      <button onClick={() => { setActiveTorneo(tr); setIsBracketModalOpen(true); }} className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl hover:bg-blue-500 transition-all shadow-lg">
-                        🏆 VEDI TABELLONE
+                      <button onClick={() => { setActiveTorneo(tr); setIsBracketModalOpen(true); }} className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl hover:bg-blue-500 transition-all shadow-lg flex justify-center items-center gap-2">
+                        <span>🏆</span> APRI TABELLONE LIVE
                       </button>
                     )}
 
                     {tr.stato === 'completato' && (
-                      <button onClick={() => { setActiveTorneo(tr); setIsBracketModalOpen(true); }} className="w-full py-4 bg-gray-700 text-white font-black uppercase rounded-2xl hover:bg-gray-600 transition-all">
-                        📜 RISULTATI FINALI
+                      <button onClick={() => { setActiveTorneo(tr); setIsBracketModalOpen(true); }} className="w-full py-4 bg-gray-700 text-white font-black uppercase rounded-2xl hover:bg-gray-600 transition-all flex justify-center items-center gap-2">
+                        <span>📜</span> RISULTATI FINALI
                       </button>
                     )}
 
-                    <button onClick={async () => { if(confirm("Eliminare definitivamente il torneo?")) { await supabase.from('tornei').delete().eq('id', tr.id); refreshDati(currentSalaId!); } }} className="w-full text-gray-600 text-[10px] font-bold uppercase hover:text-red-500 py-2 mt-2">
+                    {/* PULSANTE CONDIVISIONE BACHECA */}
+                    <button onClick={() => {
+                        const urlBacheca = `${window.location.origin}/bacheca/${params['nome-sala']}/${tr.id}`;
+                        alert(`Invia questo link ai giocatori per far loro seguire il tabellone in diretta sul cellulare:\n\n${urlBacheca}\n\n(La pagina bacheca sarà implementata a breve!)`);
+                      }} className="w-full py-3 bg-gray-900 border border-gray-700 text-gray-400 font-black uppercase rounded-2xl hover:text-white transition-all text-xs mt-2">
+                      🔗 LINK PER I SOCI (CELLULARI)
+                    </button>
+
+                    <button onClick={async () => { if(confirm("Eliminare definitivamente il torneo?")) { await supabase.from('tornei').delete().eq('id', tr.id); refreshDati(currentSalaId!); } }} className="w-full text-gray-600 text-[10px] font-bold uppercase hover:text-red-500 py-2 mt-1">
                       Elimina Torneo
                     </button>
                   </div>
@@ -799,54 +811,76 @@ export default function DashboardSala() {
         </div>
       )}
 
-      {/* MODALE TABELLONE SCONTRI DIRETTI */}
+      {/* NUOVO MODALE: TABELLONE AD ALBERO ORIZZONTALE (BRACKET) */}
       {isBracketModalOpen && activeTorneo && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95">
-          <div className="bg-gray-900 border-4 border-blue-600 p-8 rounded-[3rem] w-full max-w-5xl shadow-2xl flex flex-col max-h-[95vh] relative">
-            <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-xl transition-colors z-10 bg-black hover:bg-red-600 w-12 h-12 rounded-full flex items-center justify-center border-2 border-gray-700 shadow-lg">✕</button>
+          <div className="bg-gray-950 border-4 border-blue-600 p-8 rounded-[3rem] w-full max-w-[95vw] shadow-2xl flex flex-col max-h-[95vh] relative">
+            
+            {/* PULSANTE CHIUSURA X (Molto Visibile) */}
+            <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-3xl font-black transition-colors z-20 bg-black hover:bg-red-600 w-16 h-16 rounded-full flex items-center justify-center border-4 border-gray-700 shadow-2xl">✕</button>
 
-            <h3 className="text-4xl font-black text-blue-500 mb-2 uppercase italic text-center pr-12">{activeTorneo.nome}</h3>
-            <p className="text-gray-400 text-center font-bold mb-8 uppercase text-sm">{activeTorneo.stato === 'completato' ? '🏆 TABELLONE FINALE 🏆' : 'SCONTRI DIRETTI IN CORSO'}</p>
+            <h3 className="text-5xl font-black text-blue-500 mb-2 uppercase italic text-center">{activeTorneo.nome}</h3>
+            <p className="text-gray-400 text-center font-bold mb-8 uppercase tracking-widest">{activeTorneo.stato === 'completato' ? '🏆 TABELLONE FINALE 🏆' : 'SCONTRI DIRETTI IN CORSO'}</p>
 
-            <div className="flex-1 overflow-y-auto pr-2 space-y-6">
-              {activeTorneo.tabellone?.map((turno: any, turnoIndex: number) => (
-                <div key={turnoIndex} className="bg-black p-6 rounded-[2rem] border border-gray-800">
-                  <div className="w-max mx-auto bg-blue-900 text-blue-300 px-6 py-2 rounded-xl font-black uppercase text-sm tracking-widest border border-blue-700 mb-6 text-center shadow-lg">Turno {turnoIndex + 1}</div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* CONTENITORE ALBERO ORIZZONTALE */}
+            <div className="flex-1 overflow-x-auto overflow-y-auto bg-black p-8 rounded-3xl border-4 border-gray-900 shadow-inner custom-scrollbar relative">
+              <div className="flex flex-row min-w-max h-full min-h-[500px] gap-12">
+                {activeTorneo.tabellone?.map((turno: any, turnoIndex: number) => (
+                  <div key={turnoIndex} className="flex flex-col justify-around w-72 relative">
+                    
+                    {/* Header Turno Fissato in Alto */}
+                    <div className="absolute -top-4 w-full text-center border-b-2 border-gray-800 pb-2">
+                       <span className="bg-blue-900/50 text-blue-400 font-black uppercase tracking-widest px-4 py-1 rounded-lg text-xs">Turno {turnoIndex + 1}</span>
+                    </div>
+
+                    {/* Generazione Incontri */}
                     {turno.map((match: any) => (
-                      <div key={match.id} className={`p-4 rounded-2xl border-2 flex flex-col gap-2 ${match.vincitore ? 'border-green-900 bg-gray-900' : 'border-blue-900/50 bg-gray-950'}`}>
+                      <div key={match.id} className="relative w-full bg-gray-900 border border-gray-700 rounded-xl shadow-xl flex flex-col z-10 overflow-hidden mt-8 mb-8">
+                        
+                        {/* Giocatore 1 */}
                         <button 
                           onClick={() => { if(!match.vincitore && activeTorneo.stato !== 'completato') richiedePin((sid) => impostaVincitore(turnoIndex, match.id, match.p1, sid), "Vittoria Giocatore 1") }}
                           disabled={!!match.vincitore}
-                          className={`p-3 rounded-xl flex justify-between items-center transition-all ${match.vincitore?.id === match.p1.id ? 'bg-green-600 text-black font-black' : match.vincitore ? 'bg-gray-800 text-gray-600' : 'bg-gray-800 hover:bg-blue-900 text-white font-bold'}`}
+                          className={`p-4 border-b border-gray-800 flex justify-between items-center transition-all ${match.vincitore?.id === match.p1.id ? 'bg-green-600 text-black font-black' : match.vincitore ? 'bg-gray-800 text-gray-500' : 'bg-gray-900 hover:bg-blue-900 text-white font-bold'}`}
                         >
-                          <span className="uppercase italic">{match.p1.nome}</span>
+                          <span className="uppercase truncate w-full text-left">{match.p1.nome}</span>
                           {match.vincitore?.id === match.p1.id && <span>🏆</span>}
                         </button>
-                        <div className="text-center text-gray-700 font-black text-xs">VS</div>
+
+                        {/* Giocatore 2 (o BYE) */}
                         {match.p2 ? (
                           <button 
                             onClick={() => { if(!match.vincitore && activeTorneo.stato !== 'completato') richiedePin((sid) => impostaVincitore(turnoIndex, match.id, match.p2, sid), "Vittoria Giocatore 2") }}
                             disabled={!!match.vincitore}
-                            className={`p-3 rounded-xl flex justify-between items-center transition-all ${match.vincitore?.id === match.p2.id ? 'bg-green-600 text-black font-black' : match.vincitore ? 'bg-gray-800 text-gray-600' : 'bg-gray-800 hover:bg-blue-900 text-white font-bold'}`}
+                            className={`p-4 flex justify-between items-center transition-all ${match.vincitore?.id === match.p2.id ? 'bg-green-600 text-black font-black' : match.vincitore ? 'bg-gray-800 text-gray-500' : 'bg-gray-900 hover:bg-blue-900 text-white font-bold'}`}
                           >
-                            <span className="uppercase italic">{match.p2.nome}</span>
+                            <span className="uppercase truncate w-full text-left">{match.p2.nome}</span>
                             {match.vincitore?.id === match.p2.id && <span>🏆</span>}
                           </button>
                         ) : (
-                          <div className="p-3 rounded-xl bg-gray-900/50 border border-gray-800 text-gray-600 font-black text-center uppercase tracking-widest text-sm">PASSAGGIO AUTOMATICO (BYE)</div>
+                          <div className="p-4 text-gray-600 font-black text-center uppercase tracking-widest text-xs bg-gray-800/20">
+                            BYE (Passaggio Diretto)
+                          </div>
                         )}
                       </div>
                     ))}
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
 
-            {activeTorneo.stato === 'in_corso' && (
-              <button onClick={() => richiedePin((sid) => generaProssimoTurno(sid), "Genera Turno / Concludi")} className="w-full py-6 mt-8 bg-blue-600 text-white uppercase font-black rounded-3xl hover:bg-blue-500 transition-all shadow-[0_0_20px_rgba(37,99,235,0.5)] active:scale-95">AVANZA AL TURNO SUCCESSIVO / CONCLUDI TORNEO</button>
-            )}
-            <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="w-full py-4 mt-4 bg-gray-800 text-gray-400 uppercase font-black rounded-3xl hover:bg-gray-700 transition-all">CHIUDI TABELLONE</button>
+            {/* Azioni Fondo Tabellone */}
+            <div className="mt-8 flex gap-4">
+              {activeTorneo.stato === 'in_corso' && (
+                <button onClick={() => richiedePin((sid) => generaProssimoTurno(sid), "Genera Turno / Concludi")} className="flex-[3] py-6 bg-blue-600 text-white uppercase font-black rounded-3xl hover:bg-blue-500 transition-all shadow-[0_0_20px_rgba(37,99,235,0.5)] active:scale-95 text-xl">
+                  AVANZA AL TURNO SUCCESSIVO / CONCLUDI TORNEO
+                </button>
+              )}
+              <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="flex-[1] py-6 bg-gray-800 text-gray-400 uppercase font-black rounded-3xl hover:bg-gray-700 transition-all text-xl">
+                CHIUDI
+              </button>
+            </div>
+
           </div>
         </div>
       )}
