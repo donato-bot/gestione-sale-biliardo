@@ -13,7 +13,7 @@ export default function DashboardSala() {
   const router = useRouter();
   
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState<"hub" | "plancia" | "magazzino" | "report" | "soci" | "impostazioni" | "statistiche" | "staff">("hub");
+  const [activeView, setActiveView] = useState<"hub" | "plancia" | "magazzino" | "report" | "soci" | "impostazioni" | "statistiche" | "staff" | "tornei" | "prenotazioni">("hub");
   
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentSalaId, setCurrentSalaId] = useState<string | null>(null);
@@ -272,6 +272,8 @@ export default function DashboardSala() {
             <button onClick={() => setActiveView("report")} className="bg-gray-900 border-2 border-purple-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📊</div><h2 className="text-xl font-black uppercase">Cassa</h2></button>
             <button onClick={() => setActiveView("staff")} className="bg-gray-900 border-2 border-cyan-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🧑‍🍳</div><h2 className="text-xl font-black uppercase">Staff</h2></button>
             <button onClick={() => setActiveView("impostazioni")} className="bg-gray-900 border-2 border-gray-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">⚙️</div><h2 className="text-xl font-black uppercase">Tariffe</h2></button>
+            <button onClick={() => setActiveView("prenotazioni")} className="bg-gray-900 border-2 border-teal-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📅</div><h2 className="text-xl font-black uppercase">Prenota</h2></button>
+            <button onClick={() => setActiveView("tornei")} className="bg-gray-900 border-2 border-pink-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🏆</div><h2 className="text-xl font-black uppercase">Tornei</h2></button>
             <button onClick={() => { supabase.auth.signOut(); router.push('/login'); }} className="col-span-2 md:col-span-4 bg-red-950/30 border-2 border-red-600 p-6 rounded-[2rem] text-red-500 font-black uppercase mt-4">Esci dal Sistema</button>
           </div>
         </div>
@@ -429,6 +431,28 @@ export default function DashboardSala() {
             <div><label className="block text-yellow-500 font-black text-xs uppercase mb-4">Soci (€/h)</label><input type="number" value={tariffaSoci} onChange={(e) => setTariffaSoci(parseFloat(e.target.value))} className="w-full bg-black border border-yellow-900 p-6 rounded-2xl text-4xl text-white font-black" /></div>
           </div>
           <button onClick={() => richiedePin((sid) => salvaTariffe(sid), "Aggiornamento Tariffe")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA TARIFFE</button>
+        </div>
+      )}
+
+      {/* PRENOTAZIONI */}
+      {activeView === 'prenotazioni' && (
+        <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
+          <h3 className="text-3xl font-black text-teal-500 uppercase italic mb-8 border-b border-gray-800 pb-4">Gestione Prenotazioni</h3>
+          <div className="bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 shadow-2xl text-center">
+            <p className="text-gray-500 font-bold uppercase">Modulo Prenotazioni in costruzione...</p>
+            {/* Qui aggiungeremo il calendario e la lista */}
+          </div>
+        </div>
+      )}
+
+      {/* TORNEI */}
+      {activeView === 'tornei' && (
+        <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
+          <h3 className="text-3xl font-black text-pink-500 uppercase italic mb-8 border-b border-gray-800 pb-4">Gestione Tornei</h3>
+          <div className="bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 shadow-2xl text-center">
+            <p className="text-gray-500 font-bold uppercase">Modulo Tornei in costruzione...</p>
+            {/* Qui aggiungeremo il tabellone e le iscrizioni */}
+          </div>
         </div>
       )}
 
