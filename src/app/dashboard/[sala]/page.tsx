@@ -46,6 +46,7 @@ export default function DashboardSala() {
   const [isReserveModalOpen, setIsReserveModalOpen] = useState(false);
   const [isNewTorneoModalOpen, setIsNewTorneoModalOpen] = useState(false); 
   const [isManageIscrittiOpen, setIsManageIscrittiOpen] = useState(false); 
+  const [isBracketModalOpen, setIsBracketModalOpen] = useState(false); // NUOVO STATO: Modale Tabellone
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   
   const [pinBuffer, setPinBuffer] = useState("");
@@ -70,7 +71,7 @@ export default function DashboardSala() {
   const [newTorneoQuota, setNewTorneoQuota] = useState("");
   const [activeTorneo, setActiveTorneo] = useState<any>(null); 
   const [iscrittoSelezionato, setIscrittoSelezionato] = useState(""); 
-  const [iscrittoEsterno, setIscrittoEsterno] = useState(""); // Stato per l'input dell'Esterno
+  const [iscrittoEsterno, setIscrittoEsterno] = useState("");
 
   const [socioToRecharge, setSocioToRecharge] = useState<any>(null);
   const [summaryData, setSummaryData] = useState<any>(null);
@@ -121,7 +122,14 @@ export default function DashboardSala() {
         if (pDB) setProdotti(pDB);
         if (sociDB) setSoci(sociDB);
         if (staffDB) setListaStaff(staffDB);
-        if (torneiDB) setTornei(torneiDB); 
+        if (torneiDB) {
+          setTornei(torneiDB);
+          // Se c'è un activeTorneo aperto nei modali, aggiorniamo anche quello per vederlo in real-time
+          if(activeTorneo) {
+            const up = torneiDB.find(tx => tx.id === activeTorneo.id);
+            if(up) setActiveTorneo(up);
+          }
+        }
 
         if (rDB) {
           setRecenti(rDB);
@@ -205,13 +213,13 @@ export default function DashboardSala() {
       data_inizio: newTorneoData, 
       quota_iscrizione: parseFloat(newTorneoQuota) || 0,
       stato: 'iscrizioni',
-      iscritti: []
+      iscritti: [],
+      tabellone: []
     }]);
     alert("✅ Torneo Creato!");
     await refreshDati(currentSalaId!); setIsNewTorneoModalOpen(false); setNewTorneoNome(""); setNewTorneoData(""); setNewTorneoQuota("");
   };
 
-  // NORMALIZZATORE (Per gestire sia ID vecchi che i nuovi Oggetti JSON)
   const normalizeIscritti = (iscrittiArray: any[]) => {
     return (iscrittiArray || []).map(i => {
       if (typeof i === 'string') {
@@ -242,7 +250,6 @@ export default function DashboardSala() {
 
     await supabase.from('tornei').update({ iscritti: currentIscritti }).eq('id', activeTorneo.id);
     await refreshDati(currentSalaId!);
-    setActiveTorneo({ ...activeTorneo, iscritti: currentIscritti });
   };
 
   const rimuoviIscritto = async (idIscritto: string, staffId: string) => {
@@ -251,7 +258,6 @@ export default function DashboardSala() {
     currentIscritti = currentIscritti.filter(i => i.id !== idIscritto);
     await supabase.from('tornei').update({ iscritti: currentIscritti }).eq('id', activeTorneo.id);
     await refreshDati(currentSalaId!);
-    setActiveTorneo({ ...activeTorneo, iscritti: currentIscritti });
   };
 
   const confermaIscrizione = async (idIscritto: string, staffId: string) => {
@@ -260,7 +266,86 @@ export default function DashboardSala() {
     currentIscritti = currentIscritti.map(i => i.id === idIscritto ? { ...i, confermato: true } : i);
     await supabase.from('tornei').update({ iscritti: currentIscritti }).eq('id', activeTorneo.id);
     await refreshDati(currentSalaId!);
-    setActiveTorneo({ ...activeTorneo, iscritti: currentIscritti });
+  };
+
+  // --- LOGICA TABELLONE (BRACKETS) ---
+  const avviaTorneo = async (torneo: any, staffId: string) => {
+    const iscritti = normalizeIscritti(torneo.iscritti);
+    if (iscritti.length < 2) { alert("⚠️ Servono almeno 2 iscritti per avviare il torneo!"); return; }
+    if (iscritti.some(i => !i.confermato)) { alert("⚠️ Ci sono iscritti in attesa di conferma. Conferma tutti o rimuovili prima di avviare."); return; }
+
+    // Mescola in modo casuale
+    const shuffled = [...iscritti].sort(() => 0.5 - Math.random());
+    
+    // Crea Primo Turno (Round 1)
+    let round1 = [];
+    for (let i = 0; i < shuffled.length; i += 2) {
+      let p1 = shuffled[i];
+      let p2 = shuffled[i+1] || null; // Se dispari, l'ultimo non ha avversario
+      // Se c'è il BYE (nessun p2), p1 passa automaticamente
+      round1.push({ 
+        id: 'match_' + Date.now() + i, 
+        p1: p1, 
+        p2: p2, 
+        vincitore: p2 === null ? p1 : null // Vittoria a tavolino se non c'è avversario
+      });
+    }
+
+    const tabellone = [round1];
+    
+    await supabase.from('tornei').update({ stato: 'in_corso', tabellone: tabellone }).eq('id', torneo.id);
+    await refreshDati(currentSalaId!);
+  };
+
+  const impostaVincitore = async (roundIndex: number, matchId: string, vincitore: any, staffId: string) => {
+    if (!activeTorneo || !activeTorneo.tabellone) return;
+    let tab = [...activeTorneo.tabellone];
+    let match = tab[roundIndex].find((m: any) => m.id === matchId);
+    if (match) match.vincitore = vincitore;
+    
+    await supabase.from('tornei').update({ tabellone: tab }).eq('id', activeTorneo.id);
+    await refreshDati(currentSalaId!);
+  };
+
+  const generaProssimoTurno = async (staffId: string) => {
+    if (!activeTorneo || !activeTorneo.tabellone) return;
+    let tab = [...activeTorneo.tabellone];
+    const ultimoTurno = tab[tab.length - 1];
+    
+    // Controlla se tutti i match hanno un vincitore
+    if (ultimoTurno.some((m: any) => m.vincitore === null)) {
+      alert("⚠️ Devi assegnare il vincitore a tutti i match prima di procedere!");
+      return;
+    }
+
+    // Prendi tutti i vincitori
+    const vincitori = ultimoTurno.map((m: any) => m.vincitore);
+
+    // Se c'è un solo vincitore, il torneo è finito!
+    if (vincitori.length === 1) {
+      await supabase.from('tornei').update({ stato: 'completato', tabellone: tab }).eq('id', activeTorneo.id);
+      alert(`🎉 TORNEO CONCLUSO! IL CAMPIONE È ${vincitori[0].nome.toUpperCase()}! 🎉`);
+      await refreshDati(currentSalaId!);
+      setIsBracketModalOpen(false);
+      return;
+    }
+
+    // Genera il nuovo turno accoppiando i vincitori
+    let nuovoTurno = [];
+    for (let i = 0; i < vincitori.length; i += 2) {
+      let p1 = vincitori[i];
+      let p2 = vincitori[i+1] || null; 
+      nuovoTurno.push({ 
+        id: 'match_' + Date.now() + i, 
+        p1: p1, 
+        p2: p2, 
+        vincitore: p2 === null ? p1 : null 
+      });
+    }
+
+    tab.push(nuovoTurno);
+    await supabase.from('tornei').update({ tabellone: tab }).eq('id', activeTorneo.id);
+    await refreshDati(currentSalaId!);
   };
 
 
@@ -543,15 +628,37 @@ export default function DashboardSala() {
                     <h4 className="text-2xl font-black uppercase text-white italic mb-2">{tr.nome}</h4>
                     <p className="text-pink-400 font-mono font-bold text-lg mb-2">📅 Data: {new Date(tr.data_inizio).toLocaleDateString()}</p>
                     <p className="text-green-500 font-bold mb-4">💰 Quota: € {parseFloat(tr.quota_iscrizione).toFixed(2)}</p>
-                    <div className={`text-center py-2 rounded-xl font-black uppercase text-xs mb-6 ${tr.stato === 'iscrizioni' ? 'bg-yellow-900/50 text-yellow-500' : tr.stato === 'in_corso' ? 'bg-green-900/50 text-green-500' : 'bg-gray-800 text-gray-500'}`}>
-                      Stato: {tr.stato === 'iscrizioni' ? 'ISCRIZIONI APERTE' : tr.stato === 'in_corso' ? 'IN CORSO' : 'COMPLETATO'}
+                    <div className={`text-center py-2 rounded-xl font-black uppercase text-xs mb-6 ${tr.stato === 'iscrizioni' ? 'bg-yellow-900/50 text-yellow-500' : tr.stato === 'in_corso' ? 'bg-blue-900/50 text-blue-500' : 'bg-gray-800 text-gray-500'}`}>
+                      Stato: {tr.stato === 'iscrizioni' ? 'ISCRIZIONI APERTE' : tr.stato === 'in_corso' ? 'IN CORSO (TABELLONE)' : 'COMPLETATO'}
                     </div>
                   </div>
-                  <div>
-                    <button onClick={() => { setActiveTorneo(tr); setIsManageIscrittiOpen(true); }} className="w-full py-4 bg-pink-900/50 border border-pink-700 text-pink-300 font-black uppercase rounded-2xl hover:bg-pink-700 hover:text-white transition-all mb-2">
-                      Gestisci Iscritti ({(tr.iscritti || []).length})
-                    </button>
-                    <button onClick={async () => { if(confirm("Eliminare definitivamente il torneo?")) { await supabase.from('tornei').delete().eq('id', tr.id); refreshDati(currentSalaId!); } }} className="w-full text-gray-600 text-[10px] font-bold uppercase hover:text-red-500 py-2">
+                  <div className="flex flex-col gap-2">
+                    
+                    {/* PULSANTI CON LOGICA DI STATO */}
+                    {tr.stato === 'iscrizioni' && (
+                      <>
+                        <button onClick={() => { setActiveTorneo(tr); setIsManageIscrittiOpen(true); }} className="w-full py-4 bg-pink-900/50 border border-pink-700 text-pink-300 font-black uppercase rounded-2xl hover:bg-pink-700 hover:text-white transition-all">
+                          Gestisci Iscritti ({(tr.iscritti || []).length})
+                        </button>
+                        <button onClick={() => richiedePin((sid) => avviaTorneo(tr, sid), "Avvio Torneo")} className="w-full py-4 bg-green-600 text-black font-black uppercase rounded-2xl hover:bg-green-500 transition-all shadow-lg">
+                          🔀 CREA TABELLONE E AVVIA
+                        </button>
+                      </>
+                    )}
+
+                    {tr.stato === 'in_corso' && (
+                      <button onClick={() => { setActiveTorneo(tr); setIsBracketModalOpen(true); }} className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl hover:bg-blue-500 transition-all shadow-lg">
+                        🏆 VEDI TABELLONE
+                      </button>
+                    )}
+
+                    {tr.stato === 'completato' && (
+                      <button onClick={() => { setActiveTorneo(tr); setIsBracketModalOpen(true); }} className="w-full py-4 bg-gray-700 text-white font-black uppercase rounded-2xl hover:bg-gray-600 transition-all">
+                        📜 RISULTATI FINALI
+                      </button>
+                    )}
+
+                    <button onClick={async () => { if(confirm("Eliminare definitivamente il torneo?")) { await supabase.from('tornei').delete().eq('id', tr.id); refreshDati(currentSalaId!); } }} className="w-full text-gray-600 text-[10px] font-bold uppercase hover:text-red-500 py-2 mt-2">
                       Elimina Torneo
                     </button>
                   </div>
@@ -624,9 +731,7 @@ export default function DashboardSala() {
             <h3 className="text-3xl font-black text-pink-500 mb-2 uppercase italic text-center">{activeTorneo.nome}</h3>
             <p className="text-gray-400 text-center font-bold mb-6 uppercase text-sm">Gestione Iscritti (Totale: {(activeTorneo.iscritti || []).length})</p>
             
-            {/* ZONA INSERIMENTO A DUE COLONNE */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 border-b border-gray-800 pb-8">
-              {/* Colonna 1: Soci Tesserati */}
               <div className="space-y-3">
                 <p className="text-pink-500 font-bold uppercase text-xs text-center">Aggiungi Socio Tesserato</p>
                 <div className="flex gap-2">
@@ -644,7 +749,6 @@ export default function DashboardSala() {
                 </div>
               </div>
 
-              {/* Colonna 2: Giocatori Esterni */}
               <div className="space-y-3">
                 <p className="text-purple-500 font-bold uppercase text-xs text-center">Aggiungi Giocatore Esterno</p>
                 <div className="flex gap-2">
@@ -656,7 +760,6 @@ export default function DashboardSala() {
               </div>
             </div>
 
-            {/* Lista Iscritti */}
             <div className="flex-1 overflow-y-auto bg-black p-4 rounded-3xl border border-gray-800 pr-2">
               {(activeTorneo.iscritti || []).length === 0 ? (
                 <p className="text-center text-gray-600 font-bold uppercase mt-10">Ancora nessun iscritto.</p>
@@ -695,6 +798,79 @@ export default function DashboardSala() {
 
             <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="w-full py-6 mt-6 bg-gray-800 text-white uppercase font-black rounded-3xl hover:bg-gray-700 transition-all">
               CHIUDI GESTIONE
+            </button>
+          </div>
+        </div>
+      )}
+
+
+      {/* NUOVO MODALE: TABELLONE SCONTRI DIRETTI */}
+      {isBracketModalOpen && activeTorneo && (
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95">
+          <div className="bg-gray-900 border-4 border-blue-600 p-8 rounded-[3rem] w-full max-w-5xl shadow-2xl flex flex-col max-h-[95vh]">
+            <h3 className="text-4xl font-black text-blue-500 mb-2 uppercase italic text-center">{activeTorneo.nome}</h3>
+            <p className="text-gray-400 text-center font-bold mb-8 uppercase text-sm">
+              {activeTorneo.stato === 'completato' ? '🏆 TABELLONE FINALE 🏆' : 'SCONTRI DIRETTI IN CORSO'}
+            </p>
+
+            <div className="flex-1 overflow-y-auto pr-2 space-y-12">
+              {activeTorneo.tabellone?.map((turno: any, turnoIndex: number) => (
+                <div key={turnoIndex} className="bg-black p-6 rounded-[2rem] border border-gray-800 relative">
+                  <div className="absolute -top-4 left-6 bg-blue-900 text-blue-300 px-4 py-1 rounded-lg font-black uppercase text-xs tracking-widest border border-blue-700">
+                    Turno {turnoIndex + 1}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                    {turno.map((match: any) => (
+                      <div key={match.id} className={`p-4 rounded-2xl border-2 flex flex-col gap-2 ${match.vincitore ? 'border-green-900 bg-gray-900' : 'border-blue-900/50 bg-gray-950'}`}>
+                        
+                        {/* Giocatore 1 */}
+                        <button 
+                          onClick={() => { if(!match.vincitore && activeTorneo.stato !== 'completato') richiedePin((sid) => impostaVincitore(turnoIndex, match.id, match.p1, sid), "Vittoria Giocatore 1") }}
+                          disabled={!!match.vincitore}
+                          className={`p-3 rounded-xl flex justify-between items-center transition-all ${match.vincitore?.id === match.p1.id ? 'bg-green-600 text-black font-black' : match.vincitore ? 'bg-gray-800 text-gray-600' : 'bg-gray-800 hover:bg-blue-900 text-white font-bold'}`}
+                        >
+                          <span className="uppercase italic">{match.p1.nome}</span>
+                          {match.vincitore?.id === match.p1.id && <span>🏆</span>}
+                        </button>
+
+                        <div className="text-center text-gray-700 font-black text-xs">VS</div>
+
+                        {/* Giocatore 2 (o BYE) */}
+                        {match.p2 ? (
+                          <button 
+                            onClick={() => { if(!match.vincitore && activeTorneo.stato !== 'completato') richiedePin((sid) => impostaVincitore(turnoIndex, match.id, match.p2, sid), "Vittoria Giocatore 2") }}
+                            disabled={!!match.vincitore}
+                            className={`p-3 rounded-xl flex justify-between items-center transition-all ${match.vincitore?.id === match.p2.id ? 'bg-green-600 text-black font-black' : match.vincitore ? 'bg-gray-800 text-gray-600' : 'bg-gray-800 hover:bg-blue-900 text-white font-bold'}`}
+                          >
+                            <span className="uppercase italic">{match.p2.nome}</span>
+                            {match.vincitore?.id === match.p2.id && <span>🏆</span>}
+                          </button>
+                        ) : (
+                          <div className="p-3 rounded-xl bg-gray-900/50 border border-gray-800 text-gray-600 font-black text-center uppercase tracking-widest text-sm">
+                            PASSAGGIO AUTOMATICO (BYE)
+                          </div>
+                        )}
+
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Azioni Fondo Tabellone */}
+            {activeTorneo.stato === 'in_corso' && (
+              <button 
+                onClick={() => richiedePin((sid) => generaProssimoTurno(sid), "Genera Turno / Concludi")} 
+                className="w-full py-6 mt-8 bg-blue-600 text-white uppercase font-black rounded-3xl hover:bg-blue-500 transition-all shadow-[0_0_20px_rgba(37,99,235,0.5)] active:scale-95"
+              >
+                AVANZA AL TURNO SUCCESSIVO / CONCLUDI TORNEO
+              </button>
+            )}
+
+            <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="w-full py-4 mt-4 bg-gray-800 text-gray-400 uppercase font-black rounded-3xl hover:bg-gray-700 transition-all">
+              CHIUDI TABELLONE
             </button>
           </div>
         </div>
