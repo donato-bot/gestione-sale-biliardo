@@ -42,6 +42,7 @@ export default function DashboardSala() {
   const [isReserveModalOpen, setIsReserveModalOpen] = useState(false);
   const [isNewStaffModalOpen, setIsNewStaffModalOpen] = useState(false);
   const [isNewTableModalOpen, setIsNewTableModalOpen] = useState(false);
+  const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false); // REINTRODOTTO
   
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pinBuffer, setPinBuffer] = useState("");
@@ -57,6 +58,8 @@ export default function DashboardSala() {
   const [newSocioCognome, setNewSocioCognome] = useState("");
   const [newStaffNome, setNewStaffNome] = useState("");
   const [newStaffPin, setNewStaffPin] = useState("");
+  const [rechargeAmount, setRechargeAmount] = useState(""); // REINTRODOTTO
+  const [socioToRecharge, setSocioToRecharge] = useState<any>(null); // REINTRODOTTO
   
   const [summaryData, setSummaryData] = useState<any>(null);
   const [selectedSocioId, setSelectedSocioId] = useState(""); 
@@ -187,6 +190,15 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId); setIsNewSocioModalOpen(false); setNewSocioNome(""); setNewSocioCognome("");
   };
 
+  const salvaRicarica = async (staffId: string) => {
+    if (!socioToRecharge || !rechargeAmount) return;
+    const nuovoCredito = parseFloat(socioToRecharge.credito || 0) + parseFloat(rechargeAmount);
+    await supabase.from('soci').update({ credito: nuovoCredito }).eq('id', socioToRecharge.id);
+    alert("✅ Ricarica effettuata!");
+    await refreshDati(currentSalaId!);
+    setIsRechargeModalOpen(false); setRechargeAmount(""); setSocioToRecharge(null);
+  };
+
   const avviaSessione = async (staffId: string) => { 
     if (!activeTableId || !currentSalaId) return;
     let tariffaApplicata = selectedSocioId ? tariffaSoci : tariffaStandard;
@@ -242,7 +254,6 @@ export default function DashboardSala() {
             <button onClick={() => setActiveView("magazzino")} className="bg-gray-900 border-2 border-blue-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📦</div><h2 className="text-xl font-black uppercase">Magazzino</h2></button>
             <button onClick={() => setActiveView("soci")} className="bg-gray-900 border-2 border-yellow-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">👥</div><h2 className="text-xl font-black uppercase">Soci</h2></button>
             <button onClick={() => setActiveView("report")} className="bg-gray-900 border-2 border-purple-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📊</div><h2 className="text-xl font-black uppercase">Cassa</h2></button>
-            <button onClick={() => setActiveView("statistiche")} className="col-span-2 bg-gray-900 border-2 border-pink-600 p-8 rounded-[2.5rem] flex items-center justify-center gap-6 hover:bg-gray-800 transition-all active:scale-95 shadow-2xl"><div className="text-5xl">📈</div><div className="text-left"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Statistiche</h2></div></button>
             <button onClick={() => setActiveView("staff")} className="bg-gray-900 border-2 border-cyan-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🧑‍🍳</div><h2 className="text-xl font-black uppercase">Staff</h2></button>
             <button onClick={() => setActiveView("impostazioni")} className="bg-gray-900 border-2 border-gray-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">⚙️</div><h2 className="text-xl font-black uppercase">Tariffe</h2></button>
             <button onClick={() => { supabase.auth.signOut(); router.push('/login'); }} className="col-span-2 md:col-span-4 bg-red-950/30 border-2 border-red-600 p-6 rounded-[2rem] text-red-500 font-black uppercase mt-4">Esci dal Sistema</button>
@@ -259,7 +270,7 @@ export default function DashboardSala() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {tavoli.map((t) => (
               <div key={t.id} className={`p-8 rounded-[2.5rem] border-4 transition-colors ${t.stato === 'LIBERO' ? 'border-green-900 bg-gray-950' : t.stato === 'PRENOTATO' ? 'border-yellow-500 bg-yellow-900/30' : 'border-red-600 bg-gray-900 shadow-2xl'}`}>
-                <div className="flex justify-between items-center mb-8"><h3 className="text-4xl font-black italic">{t.nome}</h3><div className={`h-6 w-6 rounded-full ${t.stato === 'LIBERO' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div></div>
+                <div className="flex justify-between items-center mb-8"><h3 className="text-4xl font-black italic">{t.nome}</h3><div className={`h-6 w-6 rounded-full ${t.stato === 'LIBERO' ? 'bg-green-500' : t.stato === 'red-500 animate-pulse'}`}></div></div>
                 <div className="space-y-6 mb-10">
                   <div className="flex justify-between items-end border-b border-gray-800 pb-4"><span className="text-gray-500 text-xs font-bold uppercase tracking-widest">Tempo</span><span className="font-mono text-4xl font-black">{formattaCronometro(t.startTime)}</span></div>
                   <div className="flex justify-between items-end border-b border-gray-800 pb-4"><span className="text-orange-400 text-xs font-bold uppercase tracking-widest">Bar</span><span className="text-3xl font-black text-orange-400">€ {t.barTotal.toFixed(2)}</span></div>
@@ -283,7 +294,7 @@ export default function DashboardSala() {
         </div>
       )}
 
-      {/* MAGAZZINO (RIPRISTINATO) */}
+      {/* MAGAZZINO */}
       {activeView === 'magazzino' && (
         <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
           <button onClick={() => setIsNewProductModalOpen(true)} className="w-full mb-8 py-8 bg-blue-600 rounded-[2.5rem] text-white font-black text-2xl uppercase shadow-xl">+ AGGIUNGI PRODOTTO</button>
@@ -299,7 +310,7 @@ export default function DashboardSala() {
         </div>
       )}
 
-      {/* SOCI (RIPRISTINATO) */}
+      {/* SOCI (RIPRISTINATO CON RICARICA) */}
       {activeView === 'soci' && (
         <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
           <button onClick={() => setIsNewSocioModalOpen(true)} className="w-full mb-8 py-8 bg-yellow-600 text-black font-black text-2xl uppercase shadow-xl">+ NUOVO SOCIO</button>
@@ -308,10 +319,17 @@ export default function DashboardSala() {
               <thead className="bg-gray-800 text-gray-400 uppercase text-xs"><tr><th className="p-6">Socio</th><th className="p-6">Saldo Credito</th><th className="p-6 text-right">Azioni</th></tr></thead>
               <tbody className="divide-y divide-gray-800">
                 {soci.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-800/30">
+                  <tr key={s.id} className="hover:bg-gray-800/30 transition-all">
                     <td className="p-6 text-xl uppercase">{s.cognome} {s.nome}</td>
                     <td className="p-6 text-2xl text-green-500 italic">€ {parseFloat(s.credito || 0).toFixed(2)}</td>
-                    <td className="p-6 text-right"><button className="bg-gray-800 px-4 py-2 rounded-xl text-xs uppercase tracking-widest">Gestisci</button></td>
+                    <td className="p-6 text-right">
+                      <button 
+                        onClick={() => { setSocioToRecharge(s); setIsRechargeModalOpen(true); }}
+                        className="bg-green-600 text-black px-6 py-3 rounded-2xl text-xs font-black uppercase hover:bg-green-400 transition-all"
+                      >
+                        💰 Ricarica
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -320,37 +338,16 @@ export default function DashboardSala() {
         </div>
       )}
 
-      {/* CASSA / REPORT (RIPRISTINATO) */}
+      {/* CASSA / REPORT */}
       {activeView === 'report' && (
         <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 text-center">
-            <div className="bg-gray-900 p-8 rounded-[3rem] border-4 border-purple-600 shadow-2xl">
-              <p className="text-purple-400 font-black uppercase text-xs mb-2 tracking-widest">Totale Giornata</p>
-              <h3 className="text-6xl font-black italic">€ {incassoTotale.toFixed(2)}</h3>
-            </div>
-            <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-green-600">
-              <p className="text-green-500 font-black uppercase text-xs mb-2">Contanti</p>
-              <h3 className="text-4xl font-black italic">€ {incassoContanti.toFixed(2)}</h3>
-            </div>
-            <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-blue-600">
-              <p className="text-blue-500 font-black uppercase text-xs mb-2">POS</p>
-              <h3 className="text-4xl font-black italic">€ {incassoPOS.toFixed(2)}</h3>
-            </div>
+            <div className="bg-gray-900 p-8 rounded-[3rem] border-4 border-purple-600 shadow-2xl"><p className="text-purple-400 font-black uppercase text-xs mb-2 tracking-widest">Totale Giornata</p><h3 className="text-6xl font-black italic">€ {incassoTotale.toFixed(2)}</h3></div>
+            <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-green-600"><p className="text-green-500 font-black uppercase text-xs mb-2">Contanti</p><h3 className="text-4xl font-black italic">€ {incassoContanti.toFixed(2)}</h3></div>
+            <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-blue-600"><p className="text-blue-500 font-black uppercase text-xs mb-2">POS</p><h3 className="text-4xl font-black italic">€ {incassoPOS.toFixed(2)}</h3></div>
           </div>
           <div className="bg-gray-900/50 border border-gray-800 rounded-[2.5rem] overflow-hidden">
-            <table className="w-full text-left text-xs uppercase font-bold">
-              <thead className="bg-gray-800/80 text-gray-500"><tr><th className="p-5">Ora</th><th className="p-5">Giocatori</th><th className="p-5">Staff</th><th className="p-5 text-right">Importo</th></tr></thead>
-              <tbody className="divide-y divide-gray-800">
-                {recenti.map((r) => (
-                  <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
-                    <td className="p-5 font-mono">{new Date(r.fine).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-                    <td className="p-5">{r.giocatori?.join(" / ")}</td>
-                    <td className="p-5 text-cyan-500 font-black italic">{r.staff?.nome || "ADMIN"}</td>
-                    <td className="p-5 text-right font-black text-white text-lg">€ {parseFloat(r.costo_totale).toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <table className="w-full text-left text-xs uppercase font-bold"><thead className="bg-gray-800/80 text-gray-500"><tr><th className="p-5">Ora</th><th className="p-5">Giocatori</th><th className="p-5">Staff</th><th className="p-5 text-right">Importo</th></tr></thead><tbody className="divide-y divide-gray-800">{recenti.map((r) => (<tr key={r.id} className="hover:bg-gray-800/30 transition-colors"><td className="p-5 font-mono">{new Date(r.fine).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td><td className="p-5">{r.giocatori?.join(" / ")}</td><td className="p-5 text-cyan-500 font-black italic">{r.staff?.nome || "ADMIN"}</td><td className="p-5 text-right font-black text-white text-lg">€ {parseFloat(r.costo_totale).toFixed(2)}</td></tr>))}</tbody></table>
           </div>
         </div>
       )}
@@ -359,18 +356,11 @@ export default function DashboardSala() {
       {activeView === 'staff' && (
         <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
           <button onClick={() => setIsNewStaffModalOpen(true)} className="mb-8 w-full py-8 bg-cyan-600 rounded-[2rem] font-black text-xl uppercase tracking-widest shadow-xl text-black">+ REGISTRA NUOVO STAFF (PIN)</button>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {listaStaff.map((s) => (
-              <div key={s.id} className="bg-gray-900 p-8 rounded-[2.5rem] border-2 border-cyan-900 flex justify-between items-center shadow-xl">
-                <div><h4 className="text-2xl font-black uppercase text-white">{s.nome}</h4><p className="text-cyan-500 font-mono font-bold text-lg mt-1 tracking-[0.5em]">PIN: {s.pin}</p></div>
-                <button onClick={async () => { if(confirm("Eliminare?")) { await supabase.from('staff').delete().eq('id', s.id); refreshDati(currentSalaId!); } }} className="bg-red-950 text-red-500 p-4 rounded-2xl">🗑️</button>
-              </div>
-            ))}
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{listaStaff.map((s) => (<div key={s.id} className="bg-gray-900 p-8 rounded-[2.5rem] border-2 border-cyan-900 flex justify-between items-center shadow-xl"><div><h4 className="text-2xl font-black uppercase text-white">{s.nome}</h4><p className="text-cyan-500 font-mono font-bold text-lg mt-1 tracking-[0.5em]">PIN: {s.pin}</p></div><button onClick={async () => { if(confirm("Eliminare?")) { await supabase.from('staff').delete().eq('id', s.id); refreshDati(currentSalaId!); } }} className="bg-red-950 text-red-500 p-4 rounded-2xl">🗑️</button></div>))}</div>
         </div>
       )}
 
-      {/* --- MODALI (CON PIN PROTECTION) --- */}
+      {/* --- MODALI --- */}
       
       {/* PIN PAD */}
       {isPinModalOpen && (
@@ -378,9 +368,7 @@ export default function DashboardSala() {
           <div className="w-full max-w-md text-center">
             <h2 className="text-2xl font-black text-cyan-500 mb-8 italic uppercase tracking-widest">{pendingAction?.descrizione}</h2>
             <div className="flex justify-center gap-6 mb-12">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className={`w-6 h-6 rounded-full border-2 border-cyan-500 ${pinBuffer.length > i ? 'bg-cyan-500 shadow-[0_0_15px_#06b6d4]' : 'bg-transparent'}`}></div>
-              ))}
+              {[...Array(4)].map((_, i) => (<div key={i} className={`w-6 h-6 rounded-full border-2 border-cyan-500 ${pinBuffer.length > i ? 'bg-cyan-500 shadow-[0_0_15px_#06b6d4]' : 'bg-transparent'}`}></div>))}
             </div>
             <div className="grid grid-cols-3 gap-4">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "X"].map((btn) => (
@@ -395,19 +383,39 @@ export default function DashboardSala() {
         </div>
       )}
 
-      {/* MODALE NUOVO TAVOLO */}
+      {/* MODALE RICARICA (REINTRODOTTO) */}
+      {isRechargeModalOpen && socioToRecharge && (
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-gray-900 border-4 border-green-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl">
+            <h3 className="text-2xl font-black text-green-500 mb-2 uppercase italic tracking-tighter">Ricarica Credito</h3>
+            <p className="text-3xl font-black text-white mb-8 uppercase italic">{socioToRecharge.nome} {socioToRecharge.cognome}</p>
+            <label className="block text-gray-500 uppercase font-bold text-xs mb-4">Importo da aggiungere (€)</label>
+            <input 
+              type="number" 
+              value={rechargeAmount} 
+              onChange={(e)=>setRechargeAmount(e.target.value)} 
+              placeholder="Esempio: 20"
+              className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-5xl text-center text-green-500 mb-8 outline-none font-black" 
+            />
+            <button 
+              onClick={() => richiedePin((staffId) => salvaRicarica(staffId), `Ricarica Socio ${socioToRecharge.nome}`)} 
+              className="w-full py-8 bg-green-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95 transition-all"
+            >
+              CONFERMA RICARICA CON PIN
+            </button>
+            <button onClick={()=>setIsRechargeModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button>
+          </div>
+        </div>
+      )}
+
+      {/* MODALI NUOVI (TAVOLO, PRODOTTO, SOCIO, STAFF - IDENTICI A PRIMA) */}
       {isNewTableModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50"><div className="bg-gray-900 border-4 border-green-600 p-10 rounded-[3rem] w-full max-w-lg text-center"><h3 className="text-3xl font-black text-green-500 mb-8 uppercase italic">Configura Tavolo</h3><input type="number" value={newTableNumber} onChange={(e)=>setNewTableNumber(e.target.value)} placeholder="Numero Tavolo" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-4xl text-center text-white mb-8 outline-none" /><button onClick={() => richiedePin((staffId) => salvaNuovoTavolo(staffId), "Aggiunta Tavolo")} className="w-full py-8 bg-green-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl">CONFERMA CON PIN</button><button onClick={()=>setIsNewTableModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
-
-      {/* MODALE NUOVO PRODOTTO */}
       {isNewProductModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50"><div className="bg-gray-900 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg"><h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic text-center text-white">Nuovo Prodotto</h3><input value={newProdName} onChange={(e) => setNewProdName(e.target.value)} placeholder="Nome Prodotto" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none" /><input type="number" value={newProdPrice} onChange={(e) => setNewProdPrice(e.target.value)} placeholder="Prezzo Vendita (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none" /><input type="number" value={newProdStock} onChange={(e) => setNewProdStock(e.target.value)} placeholder="Quantità Iniziale" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none" /><button onClick={() => richiedePin((staffId) => salvaNuovoProdotto(staffId), "Nuovo Prodotto")} className="w-full py-8 bg-blue-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl">SALVA CON PIN</button><button onClick={()=>setIsNewProductModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
-
-      {/* MODALE NUOVO SOCIO */}
       {isNewSocioModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50"><div className="bg-gray-900 border-4 border-yellow-600 p-10 rounded-[3rem] w-full max-w-lg"><h3 className="text-3xl font-black text-yellow-500 mb-8 uppercase italic text-center text-white">Registra Socio</h3><input value={newSocioNome} onChange={(e) => setNewSocioNome(e.target.value)} placeholder="Nome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none" /><input value={newSocioCognome} onChange={(e) => setNewSocioCognome(e.target.value)} placeholder="Cognome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none" /><button onClick={() => richiedePin((staffId) => salvaNuovoSocio(staffId), "Registrazione Socio")} className="w-full py-8 bg-yellow-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl">SALVA CON PIN</button><button onClick={()=>setIsNewSocioModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
-
-      {/* ALTRI MODALI (START, BAR, SUMMARY - già visti ma necessari) */}
       {isStartModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50"><div className="bg-gray-950 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl"><h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic text-center">Avvia Tavolo</h3><select value={selectedSocioId} onChange={(e) => setSelectedSocioId(e.target.value)} className="w-full bg-gray-900 border-4 border-blue-900 p-6 rounded-2xl text-xl text-white mb-8 outline-none"><option value="">👤 Cliente Occasionale</option>{soci.map(s => (<option key={s.id} value={s.id}>🏆 Socio: {s.cognome} {s.nome}</option>))}</select><button onClick={() => richiedePin((staffId) => avviaSessione(staffId), "Avvio Partita")} className="w-full py-8 bg-blue-600 rounded-3xl font-black uppercase text-xl shadow-xl">CONFERMA CON PIN</button><button onClick={()=>setIsStartModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
-      {isBarModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50"><div className="bg-gray-950 border-4 border-orange-500 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-orange-500 mb-8 uppercase italic">Servizio Bar</h3><select value={selectedProdottoId} onChange={(e) => setSelectedProdottoId(e.target.value)} className="w-full bg-gray-900 p-8 rounded-2xl border border-gray-800 text-xl text-white mb-12 outline-none"><option value="">Scegli prodotto...</option>{prodotti.map(p => (<option key={p.id} value={p.id}>{p.nome} (€{p.prezzo_vendita})</option>))}</select><button onClick={() => richiedePin((staffId) => aggiungiBar(staffId), "Servizio Bar")} className="w-full py-8 bg-orange-600 rounded-3xl font-black uppercase text-xl shadow-xl">CONFERMA CON PIN</button><button onClick={()=>setIsBarModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
-      {isSummaryModalOpen && summaryData && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50"><div className="bg-gray-950 border-4 border-green-600 p-8 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-4xl font-black text-green-500 uppercase italic mb-8 italic">Chiusura Tavolo</h3><div className="bg-gray-900 p-6 rounded-3xl border border-gray-800 mb-8 font-bold text-left"><div className="flex justify-between text-xl uppercase mb-2 text-gray-400"><span>Tempo Biliardo</span><span>€ {summaryData.costoBiliardo.toFixed(2)}</span></div><div className="flex justify-between text-xl uppercase text-orange-400 mb-4"><span>Totale Bar</span><span>€ {summaryData.costoBar.toFixed(2)}</span></div><div className="border-t-2 border-gray-700 pt-6 flex justify-between items-center"><span className="text-3xl font-black italic text-white uppercase italic">Totale Conto</span><span className="text-5xl font-black text-green-500 italic">€ {summaryData.totale.toFixed(2)}</span></div></div><div className="flex flex-col gap-4"><button onClick={() => richiedePin((staffId) => confermaChiusura('contanti', staffId), "Pagamento Contanti")} className="w-full py-6 bg-green-600 rounded-3xl font-black uppercase text-xl shadow-xl">💵 PAGAMENTO CONTANTI</button><button onClick={() => richiedePin((staffId) => confermaChiusura('pos', staffId), "Pagamento POS")} className="w-full py-6 bg-blue-600 rounded-3xl font-black uppercase text-xl shadow-xl">💳 PAGAMENTO POS</button>{summaryData.socio_id && (<button onClick={() => richiedePin((staffId) => confermaChiusura('credito', staffId), "Pagamento Credito")} className="w-full py-6 bg-yellow-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl">💳 SCALA DA TESSERA</button>)}</div><button onClick={()=>setIsSummaryModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
+      {isBarModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50"><div className="bg-gray-950 border-4 border-orange-500 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-orange-500 mb-8 uppercase italic">Servizio Bar</h3><select value={selectedProdottoId} onChange={(e) => setSelectedProdottoId(e.target.value)} className="w-full bg-gray-900 p-8 rounded-2xl border border-gray-800 text-xl text-white mb-12 outline-none"><option value="">Scegli prodotto...</option>{prodotti.map(p => (<option key={p.id} value={p.id}>{p.nome} (€{p.prezzo_vendita})</option>))}</select><button onClick={() => richiedePin((staffId) => aggiungiBar(staffId), "Servizio Bar")} className="w-full py-8 bg-orange-600 rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">CONFERMA CON PIN</button><button onClick={()=>setIsBarModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
+      {isSummaryModalOpen && summaryData && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50"><div className="bg-gray-950 border-4 border-green-600 p-8 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-green-500 uppercase italic mb-8 italic">Chiusura Tavolo</h3><div className="bg-gray-900 p-6 rounded-3xl border border-gray-800 mb-8 font-bold text-left"><div className="flex justify-between text-xl uppercase mb-2 text-gray-400"><span>Tempo Biliardo</span><span>€ {summaryData.costoBiliardo.toFixed(2)}</span></div><div className="flex justify-between text-xl uppercase text-orange-400 mb-4"><span>Totale Bar</span><span>€ {summaryData.costoBar.toFixed(2)}</span></div><div className="border-t-2 border-gray-700 pt-6 flex justify-between items-center"><span className="text-3xl font-black italic text-white uppercase italic">Totale Conto</span><span className="text-5xl font-black text-green-500 italic">€ {summaryData.totale.toFixed(2)}</span></div></div><div className="flex flex-col gap-4"><button onClick={() => richiedePin((staffId) => confermaChiusura('contanti', staffId), "Pagamento Contanti")} className="w-full py-6 bg-green-600 rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">💵 PAGAMENTO CONTANTI</button><button onClick={() => richiedePin((staffId) => confermaChiusura('pos', staffId), "Pagamento POS")} className="w-full py-6 bg-blue-600 rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">💳 PAGAMENTO POS</button>{summaryData.socio_id && (<button onClick={() => richiedePin((staffId) => confermaChiusura('credito', staffId), "Pagamento Credito")} className="w-full py-6 bg-yellow-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">💳 SCALA DA TESSERA</button>)}</div><button onClick={()=>setIsSummaryModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
+      {isNewStaffModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50"><div className="bg-gray-900 border-4 border-cyan-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-cyan-500 mb-8 uppercase italic text-white">Nuovo Dipendente</h3><input value={newStaffNome} onChange={(e) => setNewStaffNome(e.target.value)} placeholder="Nome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 text-center" /><input type="password" maxLength={4} value={newStaffPin} onChange={(e) => setNewStaffPin(e.target.value)} placeholder="PIN di 4 Cifre" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-3xl font-mono text-cyan-400 tracking-[0.5em] mb-8 text-center" /><button onClick={salvaNuovoStaff} className="w-full py-8 bg-cyan-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl">SALVA</button></div></div>)}
 
     </div>
   );
