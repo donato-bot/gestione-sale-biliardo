@@ -27,6 +27,7 @@ export default function DashboardSala() {
   const [prodotti, setProdotti] = useState<any[]>([]);
   const [soci, setSoci] = useState<any[]>([]);
   const [listaStaff, setListaStaff] = useState<any[]>([]);
+  const [tornei, setTornei] = useState<any[]>([]); 
   
   const [incassoTotale, setIncassoTotale] = useState(0);
   const [incassoContanti, setIncassoContanti] = useState(0);
@@ -42,7 +43,9 @@ export default function DashboardSala() {
   const [isNewStaffModalOpen, setIsNewStaffModalOpen] = useState(false);
   const [isNewTableModalOpen, setIsNewTableModalOpen] = useState(false);
   const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
-  const [isReserveModalOpen, setIsReserveModalOpen] = useState(false); // PRENOTAZIONI
+  const [isReserveModalOpen, setIsReserveModalOpen] = useState(false);
+  const [isNewTorneoModalOpen, setIsNewTorneoModalOpen] = useState(false); 
+  const [isManageIscrittiOpen, setIsManageIscrittiOpen] = useState(false); // NUOVO STATO: Modale Iscritti
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   
   const [pinBuffer, setPinBuffer] = useState("");
@@ -60,6 +63,14 @@ export default function DashboardSala() {
   const [newStaffNome, setNewStaffNome] = useState("");
   const [newStaffPin, setNewStaffPin] = useState("");
   const [rechargeAmount, setRechargeAmount] = useState("");
+  
+  // Input Tornei
+  const [newTorneoNome, setNewTorneoNome] = useState("");
+  const [newTorneoData, setNewTorneoData] = useState("");
+  const [newTorneoQuota, setNewTorneoQuota] = useState("");
+  const [activeTorneo, setActiveTorneo] = useState<any>(null); // NUOVO: Torneo in gestione
+  const [iscrittoSelezionato, setIscrittoSelezionato] = useState(""); // NUOVO: Socio scelto per iscrizione
+
   const [socioToRecharge, setSocioToRecharge] = useState<any>(null);
   const [summaryData, setSummaryData] = useState<any>(null);
   const [selectedSocioId, setSelectedSocioId] = useState(""); 
@@ -104,10 +115,13 @@ export default function DashboardSala() {
         const { data: rDB } = await supabase.from('sessioni').select('*, staff(nome)').eq('sala_id', salaId).eq('stato', 'terminata').gte('fine', oggi.toISOString()).order('fine', { ascending: false });
         const { data: sociDB } = await supabase.from('soci').select('*').eq('sala_id', salaId).order('cognome', { ascending: true });
         const { data: staffDB } = await supabase.from('staff').select('*').eq('sala_id', salaId).order('nome', { ascending: true });
+        const { data: torneiDB } = await supabase.from('tornei').select('*').eq('sala_id', salaId).order('data_inizio', { ascending: false }); 
 
         if (pDB) setProdotti(pDB);
         if (sociDB) setSoci(sociDB);
         if (staffDB) setListaStaff(staffDB);
+        if (torneiDB) setTornei(torneiDB); 
+
         if (rDB) {
           setRecenti(rDB);
           let tot = 0, contanti = 0, pos = 0;
@@ -165,7 +179,7 @@ export default function DashboardSala() {
     setPendingAction({ callback, descrizione }); setIsPinModalOpen(true);
   };
 
-  // --- FUNZIONI PRENOTAZIONI ---
+  // --- FUNZIONI PRENOTAZIONI E TORNEI ---
   const prenotaTavolo = async (staffId: string) => {
     if (!activeTableId || !reserveName || !reserveTime) return;
     await supabase.from('tavoli').update({ 
@@ -181,6 +195,44 @@ export default function DashboardSala() {
     await supabase.from('tavoli').update({ stato: 'libero', prenotato_da: null, prenotato_alle: null }).eq('id', tavoloId);
     await refreshDati(currentSalaId!);
   };
+
+  const salvaNuovoTorneo = async (staffId: string) => {
+    if(!newTorneoNome || !newTorneoData) { alert("Inserisci Nome e Data!"); return; }
+    await supabase.from('tornei').insert([{ 
+      sala_id: currentSalaId, 
+      nome: newTorneoNome, 
+      data_inizio: newTorneoData, 
+      quota_iscrizione: parseFloat(newTorneoQuota) || 0,
+      stato: 'iscrizioni',
+      iscritti: []
+    }]);
+    alert("✅ Torneo Creato!");
+    await refreshDati(currentSalaId!); setIsNewTorneoModalOpen(false); setNewTorneoNome(""); setNewTorneoData(""); setNewTorneoQuota("");
+  };
+
+  // NUOVE FUNZIONI: Gestione Iscritti Torneo
+  const aggiungiIscritto = async (staffId: string) => {
+    if (!activeTorneo || !iscrittoSelezionato) return;
+    const currentIscritti = activeTorneo.iscritti || [];
+    if (currentIscritti.includes(iscrittoSelezionato)) {
+      alert("⚠️ Questo socio è già iscritto al torneo.");
+      return;
+    }
+    const updatedIscritti = [...currentIscritti, iscrittoSelezionato];
+    await supabase.from('tornei').update({ iscritti: updatedIscritti }).eq('id', activeTorneo.id);
+    await refreshDati(currentSalaId!);
+    setActiveTorneo({ ...activeTorneo, iscritti: updatedIscritti }); // Aggiorna stato locale
+    setIscrittoSelezionato("");
+  };
+
+  const rimuoviIscritto = async (socioId: string, staffId: string) => {
+    if (!activeTorneo) return;
+    const updatedIscritti = (activeTorneo.iscritti || []).filter((id: string) => id !== socioId);
+    await supabase.from('tornei').update({ iscritti: updatedIscritti }).eq('id', activeTorneo.id);
+    await refreshDati(currentSalaId!);
+    setActiveTorneo({ ...activeTorneo, iscritti: updatedIscritti }); // Aggiorna stato locale
+  };
+
 
   // --- ALTRE AZIONI DB ---
   const salvaNuovoStaff = async () => {
@@ -217,7 +269,7 @@ export default function DashboardSala() {
   const avviaSessione = async (staffId: string) => {
     const tariffa = selectedSocioId ? tariffaSoci : tariffaStandard;
     let giocatoriFinali = [...players];
-    if (players[0] === "" && reserveName !== "") giocatoriFinali[0] = reserveName; // Se veniamo da prenotazione
+    if (players[0] === "" && reserveName !== "") giocatoriFinali[0] = reserveName; 
     
     await supabase.from('sessioni').insert([{ tavolo_id: activeTableId, sala_id: currentSalaId, inizio: new Date().toISOString(), giocatori: giocatoriFinali.filter(p => p.trim() !== ""), tariffa_oraria: tariffa, stato: 'in_corso', socio_id: selectedSocioId || null, staff_id: staffId }]);
     await supabase.from('tavoli').update({ stato: 'occupato', prenotato_da: null, prenotato_alle: null }).eq('id', activeTableId);
@@ -440,7 +492,6 @@ export default function DashboardSala() {
           <h3 className="text-3xl font-black text-teal-500 uppercase italic mb-8 border-b border-gray-800 pb-4">Gestione Prenotazioni</h3>
           <div className="bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 shadow-2xl text-center">
             <p className="text-gray-500 font-bold uppercase">Modulo Prenotazioni in costruzione...</p>
-            {/* Qui aggiungeremo il calendario e la lista */}
           </div>
         </div>
       )}
@@ -448,11 +499,36 @@ export default function DashboardSala() {
       {/* TORNEI */}
       {activeView === 'tornei' && (
         <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
-          <h3 className="text-3xl font-black text-pink-500 uppercase italic mb-8 border-b border-gray-800 pb-4">Gestione Tornei</h3>
-          <div className="bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 shadow-2xl text-center">
-            <p className="text-gray-500 font-bold uppercase">Modulo Tornei in costruzione...</p>
-            {/* Qui aggiungeremo il tabellone e le iscrizioni */}
-          </div>
+          <button onClick={() => setIsNewTorneoModalOpen(true)} className="w-full mb-8 py-8 bg-pink-600 text-white font-black text-2xl uppercase shadow-xl">+ NUOVO TORNEO</button>
+          
+          {tornei.length === 0 ? (
+            <div className="bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 shadow-2xl text-center">
+              <p className="text-gray-500 font-bold uppercase">Nessun torneo programmato. Creane uno!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {tornei.map((tr) => (
+                <div key={tr.id} className="bg-gray-900 p-8 rounded-[2.5rem] border-2 border-pink-900 shadow-2xl flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-2xl font-black uppercase text-white italic mb-2">{tr.nome}</h4>
+                    <p className="text-pink-400 font-mono font-bold text-lg mb-2">📅 Data: {new Date(tr.data_inizio).toLocaleDateString()}</p>
+                    <p className="text-green-500 font-bold mb-4">💰 Quota: € {parseFloat(tr.quota_iscrizione).toFixed(2)}</p>
+                    <div className={`text-center py-2 rounded-xl font-black uppercase text-xs mb-6 ${tr.stato === 'iscrizioni' ? 'bg-yellow-900/50 text-yellow-500' : tr.stato === 'in_corso' ? 'bg-green-900/50 text-green-500' : 'bg-gray-800 text-gray-500'}`}>
+                      Stato: {tr.stato === 'iscrizioni' ? 'ISCRIZIONI APERTE' : tr.stato === 'in_corso' ? 'IN CORSO' : 'COMPLETATO'}
+                    </div>
+                  </div>
+                  <div>
+                    <button onClick={() => { setActiveTorneo(tr); setIsManageIscrittiOpen(true); }} className="w-full py-4 bg-pink-900/50 border border-pink-700 text-pink-300 font-black uppercase rounded-2xl hover:bg-pink-700 hover:text-white transition-all mb-2">
+                      Gestisci Iscritti ({(tr.iscritti || []).length})
+                    </button>
+                    <button onClick={async () => { if(confirm("Eliminare definitivamente il torneo?")) { await supabase.from('tornei').delete().eq('id', tr.id); refreshDati(currentSalaId!); } }} className="w-full text-gray-600 text-[10px] font-bold uppercase hover:text-red-500 py-2">
+                      Elimina Torneo
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -477,7 +553,7 @@ export default function DashboardSala() {
         </div>
       )}
 
-      {/* ---------------- MODALI DI INPUT ---------------- */}
+      {/* ---------------- MODALI DI INPUT E GESTIONE ---------------- */}
       
       {/* Prenotazione */}
       {isReserveModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95"><div className="bg-gray-900 border-4 border-yellow-500 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-3xl font-black text-yellow-500 mb-8 uppercase italic">Nuova Prenotazione</h3><input value={reserveName} onChange={(e)=>setReserveName(e.target.value)} placeholder="Nome Cliente" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-2xl text-white mb-4 outline-none text-center" /><input type="time" value={reserveTime} onChange={(e)=>setReserveTime(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-5xl font-mono text-yellow-400 mb-8 text-center outline-none" /><button onClick={() => richiedePin((sid) => prenotaTavolo(sid), "Registra Prenotazione")} className="w-full py-8 bg-yellow-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95">CONFERMA PRENOTAZIONE</button><button onClick={()=>setIsReserveModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
@@ -507,6 +583,62 @@ export default function DashboardSala() {
 
       {/* Nuovo Tavolo */}
       {isNewTableModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95"><div className="bg-gray-900 border-4 border-green-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-3xl font-black text-green-500 mb-8 uppercase italic">Configura Tavolo</h3><input type="number" value={newTableNumber} onChange={(e)=>setNewTableNumber(e.target.value)} placeholder="Numero" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-6xl text-center text-white mb-8 outline-none" /><button onClick={() => richiedePin((sid) => salvaNuovoTavolo(sid), "Configurazione Tavolo")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95">CONFERMA CON PIN</button><button onClick={()=>setIsNewTableModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Indietro</button></div></div>)}
+
+      {/* Nuovo Torneo */}
+      {isNewTorneoModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95"><div className="bg-gray-900 border-4 border-pink-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-pink-500 mb-8 uppercase italic">Nuovo Torneo</h3><input value={newTorneoNome} onChange={(e) => setNewTorneoNome(e.target.value)} placeholder="Nome del Torneo (es. Trofeo Invernale)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-pink-500 transition-all" /><input type="date" value={newTorneoData} onChange={(e) => setNewTorneoData(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white/70 mb-4 outline-none text-center focus:border-pink-500 transition-all" /><input type="number" value={newTorneoQuota} onChange={(e) => setNewTorneoQuota(e.target.value)} placeholder="Quota di Iscrizione (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-pink-500 transition-all" /><button onClick={() => richiedePin((sid) => salvaNuovoTorneo(sid), "Creazione Torneo")} className="w-full py-8 bg-pink-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">CREA TORNEO</button><button onClick={()=>setIsNewTorneoModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
+
+      {/* GESTIONE ISCRITTI TORNEO (NUOVO MODALE) */}
+      {isManageIscrittiOpen && activeTorneo && (
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95">
+          <div className="bg-gray-900 border-4 border-pink-600 p-8 rounded-[3rem] w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <h3 className="text-3xl font-black text-pink-500 mb-2 uppercase italic text-center">{activeTorneo.nome}</h3>
+            <p className="text-gray-400 text-center font-bold mb-6 uppercase text-sm">Gestione Iscritti (Totale: {(activeTorneo.iscritti || []).length})</p>
+            
+            {/* Form Aggiunta */}
+            <div className="flex gap-4 mb-8">
+              <select value={iscrittoSelezionato} onChange={(e) => setIscrittoSelezionato(e.target.value)} className="flex-1 bg-black border border-gray-800 p-4 rounded-2xl text-lg text-white outline-none focus:border-pink-500">
+                <option value="">Seleziona un socio da iscrivere...</option>
+                {soci.map(s => {
+                  // Non mostrare i soci già iscritti nel menu a tendina
+                  if ((activeTorneo.iscritti || []).includes(s.id)) return null;
+                  return <option key={s.id} value={s.id}>{s.cognome} {s.nome}</option>
+                })}
+              </select>
+              <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid), "Iscrizione Torneo")} className="px-8 bg-pink-600 text-white font-black uppercase rounded-2xl hover:bg-pink-500 active:scale-95 transition-all">
+                AGGIUNGI
+              </button>
+            </div>
+
+            {/* Lista Iscritti */}
+            <div className="flex-1 overflow-y-auto bg-black p-4 rounded-3xl border border-gray-800">
+              {(activeTorneo.iscritti || []).length === 0 ? (
+                <p className="text-center text-gray-600 font-bold uppercase mt-10">Ancora nessun iscritto.</p>
+              ) : (
+                <div className="space-y-3">
+                  {(activeTorneo.iscritti || []).map((idIscritto: string, index: number) => {
+                    const socioInfo = soci.find(s => s.id === idIscritto);
+                    return (
+                      <div key={idIscritto} className="flex justify-between items-center bg-gray-900 p-4 rounded-2xl border border-gray-800">
+                        <div className="flex items-center gap-4">
+                          <span className="text-pink-600 font-black text-xl w-8">{index + 1}.</span>
+                          <span className="text-white font-bold text-lg uppercase italic">{socioInfo ? `${socioInfo.cognome} ${socioInfo.nome}` : 'Socio rimosso dal DB'}</span>
+                        </div>
+                        <button onClick={() => richiedePin((sid) => rimuoviIscritto(idIscritto, sid), "Annulla Iscrizione")} className="bg-red-950 text-red-500 p-3 rounded-xl hover:bg-red-900 transition-colors">
+                          ❌
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="w-full py-6 mt-6 bg-gray-800 text-white uppercase font-black rounded-3xl hover:bg-gray-700 transition-all">
+              CHIUDI GESTIONE
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );
