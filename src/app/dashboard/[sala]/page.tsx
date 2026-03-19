@@ -557,16 +557,7 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!); setIsStartModalOpen(false); setReserveName("");
   };
 
-  const confermaChiusura = async (metodo: any, staffId: string) => {
-    if (metodo === 'credito') {
-      const socio = soci.find(s => s.id === summaryData.socio_id);
-      await supabase.from('soci').update({ credito: (socio.credito || 0) - summaryData.totale }).eq('id', socio.id);
-    }
-    await supabase.from('sessioni').update({ fine: new Date().toISOString(), stato: 'terminata', costo_totale: summaryData.totale.toFixed(2), metodo_pagamento: metodo, staff_id: staffId }).eq('id', summaryData.sessioneId);
-    await supabase.from('tavoli').update({ stato: 'libero' }).eq('id', summaryData.tavoloId);
-    await refreshDati(currentSalaId!); setIsSummaryModalOpen(false);
-  };
-
+  
   const aggiungiBar = async (staffId: string) => {
     const tavolo = tavoli.find(t => t.id === activeTableId);
     const prodotto = prodotti.find(p => p.id === selectedProdottoId);
