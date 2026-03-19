@@ -421,6 +421,9 @@ export default function DashboardSala() {
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-green-500 font-black text-2xl tracking-widest italic animate-pulse">CARICAMENTO TORRE DI CONTROLLO...</div>;
 
+  // Filtriamo i tavoli prenotati per la vista PRENOTAZIONI
+  const tavoliPrenotati = tavoli.filter(t => t.stato === 'PRENOTATO');
+
   return (
     <div className="min-h-screen bg-black text-white p-4 font-sans tracking-tighter overflow-x-hidden relative print:bg-white print:text-black">
       
@@ -611,13 +614,42 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* PRENOTAZIONI */}
+        {/* PRENOTAZIONI (NUOVO MODULO COMPLETATO) */}
         {activeView === 'prenotazioni' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
-            <h3 className="text-3xl font-black text-teal-500 uppercase italic mb-8 border-b border-gray-800 pb-4">Gestione Prenotazioni</h3>
-            <div className="bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 shadow-2xl text-center">
-              <p className="text-gray-500 font-bold uppercase">Modulo Prenotazioni in costruzione...</p>
-            </div>
+            <h3 className="text-3xl font-black text-teal-500 uppercase italic mb-8 border-b border-gray-800 pb-4 flex justify-between items-center">
+              Gestione Prenotazioni
+              <span className="bg-teal-900/30 text-teal-500 px-4 py-1 rounded-full text-sm">Oggi</span>
+            </h3>
+            
+            {tavoliPrenotati.length === 0 ? (
+              <div className="bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 shadow-2xl text-center">
+                <p className="text-gray-500 font-bold uppercase tracking-widest">Nessuna prenotazione attiva al momento.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {tavoliPrenotati.map((t) => (
+                  <div key={t.id} className="bg-gray-900 border-2 border-teal-600 p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-2xl font-black italic text-white">{t.nome}</h4>
+                        <span className="bg-teal-900 text-teal-300 px-3 py-1 rounded-lg text-xs font-black uppercase">Ore {t.prenotato_alle}</span>
+                      </div>
+                      <p className="text-gray-400 text-sm font-bold uppercase mb-1">A nome di:</p>
+                      <p className="text-xl font-black text-white uppercase mb-6 truncate">{t.prenotato_da}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setActiveTableId(t.id); setReserveName(t.prenotato_da); setIsStartModalOpen(true); }} className="flex-[2] bg-teal-600 text-black font-black uppercase py-3 rounded-xl hover:bg-teal-500 transition-colors">
+                        Avvia Partita
+                      </button>
+                      <button onClick={() => richiedePin((sid) => annullaPrenotazione(t.id, sid), "Annulla Prenotazione")} className="flex-[1] bg-gray-800 text-red-500 font-black uppercase py-3 rounded-xl hover:bg-red-900 transition-colors">
+                        Annulla
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
