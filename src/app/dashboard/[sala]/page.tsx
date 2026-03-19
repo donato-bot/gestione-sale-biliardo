@@ -40,7 +40,15 @@ export default function DashboardSala() {
   const [isBarModalOpen, setIsBarModalOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
+  
   const [isNewSocioModalOpen, setIsNewSocioModalOpen] = useState(false);
+  // NUOVI STATI: Modifica Socio
+  const [isEditSocioModalOpen, setIsEditSocioModalOpen] = useState(false);
+  const [editSocioId, setEditSocioId] = useState("");
+  const [editSocioNome, setEditSocioNome] = useState("");
+  const [editSocioCognome, setEditSocioCognome] = useState("");
+  const [editSocioTelefono, setEditSocioTelefono] = useState("");
+
   const [isNewStaffModalOpen, setIsNewStaffModalOpen] = useState(false);
   const [isNewTableModalOpen, setIsNewTableModalOpen] = useState(false);
   const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
@@ -420,6 +428,25 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!); setIsNewSocioModalOpen(false);
   };
 
+  // NUOVE FUNZIONI: Apri e Salva Modifica Socio
+  const apriModificaSocio = (socio: any) => {
+    setEditSocioId(socio.id);
+    setEditSocioNome(socio.nome || "");
+    setEditSocioCognome(socio.cognome || "");
+    setEditSocioTelefono(socio.telefono || ""); 
+    setIsEditSocioModalOpen(true);
+  };
+
+  const salvaModificaSocio = async (staffId: string) => {
+    await supabase.from('soci').update({ 
+      nome: editSocioNome, 
+      cognome: editSocioCognome,
+      telefono: editSocioTelefono
+    }).eq('id', editSocioId);
+    await refreshDati(currentSalaId!); 
+    setIsEditSocioModalOpen(false);
+  };
+
   const salvaRicarica = async (staffId: string) => {
     const nuovoCredito = parseFloat(socioToRecharge.credito || 0) + parseFloat(rechargeAmount);
     await supabase.from('soci').update({ credito: nuovoCredito }).eq('id', socioToRecharge.id);
@@ -464,32 +491,17 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!);
   };
 
-  // NUOVA FUNZIONE: Prepara il messaggio e apre WhatsApp
   const inviaLinkWhatsApp = (socio: any) => {
-    // 1. Genera il link esatto (Corretto il params.sala)
     const url = `${window.location.origin}/vip/${params.sala}/${socio.token}`;
-    
-    // 2. Prepara il testo del messaggio (puoi personalizzarlo come vuoi)
     const messaggioTesto = `Ciao ${socio.nome}, ecco la tua Tessera Digitale VIP per ${nomeSala}. Clicca qui per vedere il tuo credito e prenotare: ${url}`;
-    
-    // Codifica il testo per poterlo inserire in un URL in modo sicuro
     const messaggioCodificato = encodeURIComponent(messaggioTesto);
 
-    // 3. Verifica se il socio ha un numero di telefono salvato
     if (socio.telefono && socio.telefono.trim() !== "") {
-      // Rimuove eventuali spazi o trattini inseriti per sbaglio
       const numeroPulito = socio.telefono.replace(/\D/g, '');
-      
-      // Aggiungiamo il prefisso internazionale italiano (39) se non c'è già
       const prefisso = numeroPulito.startsWith('39') ? '' : '39';
-      
-      // Crea il link speciale di WhatsApp
       const waUrl = `https://wa.me/${prefisso}${numeroPulito}?text=${messaggioCodificato}`;
-      
-      // Apre WhatsApp Web o l'App Desktop in una nuova scheda
       window.open(waUrl, '_blank');
     } else {
-      // PIANO B: Se il socio non ha un telefono nel DB, copiamo il link negli appunti come facevi prima
       navigator.clipboard.writeText(url);
       alert(`⚠️ Nessun numero di telefono salvato per ${socio.nome}.\n\n✅ Link copiato negli appunti! Apri tu WhatsApp e incollalo.`);
     }
@@ -644,7 +656,7 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* SOCI (AGGIORNATO CON WHATSAPP) */}
+        {/* SOCI */}
         {activeView === 'soci' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <button onClick={() => setIsNewSocioModalOpen(true)} className="w-full mb-8 py-8 bg-yellow-600 text-black font-black text-2xl uppercase shadow-xl">+ NUOVO SOCIO</button>
@@ -661,7 +673,10 @@ export default function DashboardSala() {
                 <tbody className="divide-y divide-gray-800">
                   {soci.map((s) => (
                     <tr key={s.id} className="hover:bg-gray-800/30 transition-all">
-                      <td className="p-6 text-xl uppercase italic">{s.cognome} {s.nome}</td>
+                      <td className="p-6 text-xl uppercase italic">
+                        {s.cognome} {s.nome}
+                        {s.telefono && <p className="text-gray-500 text-xs mt-1 font-mono">{s.telefono}</p>}
+                      </td>
                       <td className="p-6 text-2xl text-green-500 italic">€ {parseFloat(s.credito || 0).toFixed(2)}</td>
                       <td className="p-6 text-center">
                         <button 
@@ -670,8 +685,19 @@ export default function DashboardSala() {
                           <span className="text-lg">💬</span> Invia WhatsApp
                         </button>
                       </td>
-                      <td className="p-6 text-right">
-                        <button onClick={() => { setSocioToRecharge(s); setIsRechargeModalOpen(true); }} className="bg-green-600 text-black px-8 py-4 rounded-2xl font-black uppercase shadow-lg active:scale-95">💰 RICARICA</button>
+                      <td className="p-6">
+                        <div className="flex justify-end items-center gap-3">
+                          <button 
+                            onClick={() => apriModificaSocio(s)} 
+                            className="bg-blue-900/50 border border-blue-700 text-blue-300 px-4 py-3 rounded-xl text-xs font-black uppercase hover:bg-blue-600 hover:text-white transition-all shadow-md">
+                            ✏️ Modifica
+                          </button>
+                          <button 
+                            onClick={() => { setSocioToRecharge(s); setIsRechargeModalOpen(true); }} 
+                            className="bg-green-600 text-black px-6 py-3 rounded-2xl font-black uppercase shadow-lg active:scale-95">
+                            💰 Ricarica
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -978,6 +1004,25 @@ export default function DashboardSala() {
 
       {/* Nuovo Socio */}
       {isNewSocioModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-yellow-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl animate-in zoom-in-95 text-center"><h3 className="text-3xl font-black text-yellow-500 mb-8 uppercase italic italic">Nuovo Socio</h3><input value={newSocioNome} onChange={(e) => setNewSocioNome(e.target.value)} placeholder="Nome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center" /><input value={newSocioCognome} onChange={(e) => setNewSocioCognome(e.target.value)} placeholder="Cognome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center" /><button onClick={() => richiedePin((sid) => salvaNuovoSocio(sid), "Registrazione Socio")} className="w-full py-8 bg-yellow-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">SALVA ANAGRAFICA</button><button onClick={()=>setIsNewSocioModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
+
+      {/* Modifica Socio */}
+      {isEditSocioModalOpen && (
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden">
+          <div className="bg-gray-900 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl animate-in zoom-in-95 text-center">
+            <h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic">Modifica Dati Socio</h3>
+            <input value={editSocioNome} onChange={(e) => setEditSocioNome(e.target.value)} placeholder="Nome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" />
+            <input value={editSocioCognome} onChange={(e) => setEditSocioCognome(e.target.value)} placeholder="Cognome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" />
+            <input value={editSocioTelefono} onChange={(e) => setEditSocioTelefono(e.target.value)} placeholder="Telefono (es. 3331234567)" type="tel" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-blue-500 transition-all" />
+            
+            <button onClick={() => richiedePin((sid) => salvaModificaSocio(sid), "Modifica Socio")} className="w-full py-8 bg-blue-600 text-white rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95 transition-all">
+              SALVA MODIFICHE
+            </button>
+            <button onClick={()=>setIsEditSocioModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">
+              Annulla
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Nuovo Tavolo */}
       {isNewTableModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-green-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-3xl font-black text-green-500 mb-8 uppercase italic">Configura Tavolo</h3><input type="number" value={newTableNumber} onChange={(e)=>setNewTableNumber(e.target.value)} placeholder="Numero" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-6xl text-center text-white mb-8 outline-none" /><button onClick={() => richiedePin((sid) => salvaNuovoTavolo(sid), "Configurazione Tavolo")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95">CONFERMA CON PIN</button><button onClick={()=>setIsNewTableModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Indietro</button></div></div>)}
