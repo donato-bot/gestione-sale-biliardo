@@ -21,9 +21,10 @@ export default function AppVIP() {
   const [sala, setSala] = useState<any>(null);
   const [socio, setSocio] = useState<any>(null);
   const [tornei, setTornei] = useState<any[]>([]);
+  const [bacheca, setBacheca] = useState<any[]>([]); // NUOVO STATO BACHECA
   
-  // Navigazione interna dell'App VIP
-  const [activeTab, setActiveTab] = useState<"home" | "tornei" | "prenota">("home");
+  // Navigazione interna dell'App VIP (AGGIUNTO 'bacheca')
+  const [activeTab, setActiveTab] = useState<"home" | "tornei" | "prenota" | "bacheca">("home");
 
   // Stati Form Prenotazione
   const [telefono, setTelefono] = useState("");
@@ -65,6 +66,15 @@ export default function AppVIP() {
 
         if (dataTornei) setTornei(dataTornei);
 
+        // 4. Trova i Post della Bacheca (CON LE REAZIONI)
+        const { data: dataBacheca } = await supabase
+          .from('bacheca')
+          .select('*, reazioni_bacheca(*)')
+          .eq('sala_id', dataSala.id)
+          .order('created_at', { ascending: false });
+
+        if (dataBacheca) setBacheca(dataBacheca);
+
       } catch (err) {
         console.error(err);
       } finally {
@@ -73,6 +83,41 @@ export default function AppVIP() {
     }
     fetchData();
   }, [nomeSalaDecoded, tokenSocio]);
+
+
+  // --- NUOVA LOGICA: GESTIONE REAZIONI BACHECA ---
+  const gestisciReazione = async (postId: string, emoji: string) => {
+    // Troviamo il post e cerchiamo se il socio ha già reagito
+    const post = bacheca.find(p => p.id === postId);
+    const reazioneEsistente = post.reazioni_bacheca?.find((r: any) => r.socio_id === socio.id);
+
+    try {
+      if (reazioneEsistente) {
+        if (reazioneEsistente.tipo === emoji) {
+          // Ha cliccato la stessa emoji: la rimuoviamo (Toglie il Mi Piace)
+          await supabase.from('reazioni_bacheca').delete().eq('id', reazioneEsistente.id);
+        } else {
+          // Ha cliccato un'emoji diversa: l'aggiorniamo
+          await supabase.from('reazioni_bacheca').update({ tipo: emoji }).eq('id', reazioneEsistente.id);
+        }
+      } else {
+        // Non aveva ancora reagito: inseriamo la nuova reazione
+        await supabase.from('reazioni_bacheca').insert([{ post_id: postId, socio_id: socio.id, tipo: emoji }]);
+      }
+
+      // Ricarichiamo la bacheca in background per aggiornare i contatori
+      const { data: dataBachecaAggiornata } = await supabase
+        .from('bacheca')
+        .select('*, reazioni_bacheca(*)')
+        .eq('sala_id', sala.id)
+        .order('created_at', { ascending: false });
+      
+      if (dataBachecaAggiornata) setBacheca(dataBachecaAggiornata);
+
+    } catch (error) {
+      console.error("Errore salvataggio reazione:", error);
+    }
+  };
 
   // --- LOGICA PRENOTAZIONE ---
   const inviaPrenotazione = async (e: React.FormEvent) => {
@@ -86,8 +131,8 @@ export default function AppVIP() {
     try {
       const { error } = await supabase.from('prenotazioni').insert([{
         sala_id: sala.id,
-        nome_cliente: `${socio.cognome} ${socio.nome}`, // AUTO-COMPILATO!
-        telefono: telefono || "Non fornito",
+        nome_cliente: `${socio.cognome} ${socio.nome}`,
+        telefono: telefono || socio.telefono || "Non fornito", // Usa il telefono del socio se presente
         data_ora: dataOra,
         note: note,
         stato: 'in_attesa'
@@ -118,7 +163,7 @@ export default function AppVIP() {
       id: socio.id,
       tipo: 'socio',
       nome: `${socio.cognome} ${socio.nome}`,
-      confermato: false // In attesa di approvazione del gestore
+      confermato: false
     };
 
     const iscrittiAggiornati = [...(torneo.iscritti || []), nuovoIscritto];
@@ -133,7 +178,6 @@ export default function AppVIP() {
       
       alert("✅ Richiesta di iscrizione inviata! Il gestore dovrà confermarla.");
       
-      // Aggiorna lo stato locale
       setTornei(tornei.map(t => t.id === torneo.id ? { ...t, iscritti: iscrittiAggiornati } : t));
     } catch (error) {
       console.error(error);
@@ -200,20 +244,79 @@ export default function AppVIP() {
             </div>
 
             {/* QUICK ACTIONS */}
-            <div className="grid grid-cols-2 gap-4 mt-6">
-              <button onClick={() => setActiveTab('prenota')} className="bg-gray-900 border border-gray-800 p-6 rounded-3xl flex flex-col items-center justify-center gap-3 hover:bg-gray-800 transition-all active:scale-95 shadow-lg">
-                <span className="text-3xl">📅</span>
-                <span className="font-black uppercase text-xs tracking-widest text-gray-300">Prenota Tavolo</span>
+            <div className="grid grid-cols-3 gap-3 mt-6">
+              <button onClick={() => setActiveTab('bacheca')} className="bg-orange-950/40 border border-orange-900/50 p-4 rounded-3xl flex flex-col items-center justify-center gap-2 hover:bg-orange-900/40 transition-all active:scale-95 shadow-lg">
+                <span className="text-2xl">📢</span>
+                <span className="font-black uppercase text-[10px] tracking-widest text-orange-400">News</span>
               </button>
-              <button onClick={() => setActiveTab('tornei')} className="bg-gray-900 border border-gray-800 p-6 rounded-3xl flex flex-col items-center justify-center gap-3 hover:bg-gray-800 transition-all active:scale-95 shadow-lg">
-                <span className="text-3xl">🏆</span>
-                <span className="font-black uppercase text-xs tracking-widest text-gray-300">Vedi Tornei</span>
+              <button onClick={() => setActiveTab('prenota')} className="bg-gray-900 border border-gray-800 p-4 rounded-3xl flex flex-col items-center justify-center gap-2 hover:bg-gray-800 transition-all active:scale-95 shadow-lg">
+                <span className="text-2xl">📅</span>
+                <span className="font-black uppercase text-[10px] tracking-widest text-gray-300">Prenota</span>
+              </button>
+              <button onClick={() => setActiveTab('tornei')} className="bg-gray-900 border border-gray-800 p-4 rounded-3xl flex flex-col items-center justify-center gap-2 hover:bg-gray-800 transition-all active:scale-95 shadow-lg">
+                <span className="text-2xl">🏆</span>
+                <span className="font-black uppercase text-[10px] tracking-widest text-gray-300">Tornei</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* TAB 2: TORNEI */}
+        {/* TAB 2: BACHECA / NEWS (NUOVO TAB) */}
+        {activeTab === 'bacheca' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <h2 className="text-xl font-black uppercase text-orange-500 mb-6 tracking-widest italic">Avvisi in Sala</h2>
+            
+            {bacheca.length === 0 ? (
+              <div className="bg-gray-900 p-8 rounded-[2rem] border border-gray-800 text-center shadow-lg">
+                <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">Nessuna comunicazione al momento.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {bacheca.map((post) => {
+                  const reazioni = post.reazioni_bacheca || [];
+                  const miaReazione = reazioni.find((r: any) => r.socio_id === socio.id)?.tipo;
+                  
+                  // Calcola i totali per ogni emoji
+                  const conteggio = reazioni.reduce((acc: any, curr: any) => { 
+                    acc[curr.tipo] = (acc[curr.tipo] || 0) + 1; 
+                    return acc; 
+                  }, {});
+
+                  return (
+                    <div key={post.id} className="bg-gray-900 border border-gray-800 rounded-[2rem] p-6 shadow-xl relative overflow-hidden">
+                      <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-3">
+                        🗓️ {new Date(post.created_at).toLocaleDateString()} - {new Date(post.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </p>
+                      
+                      <p className="text-lg text-white whitespace-pre-wrap mb-6 font-medium leading-relaxed">
+                        {post.testo}
+                      </p>
+                      
+                      {/* BARRA DELLE REAZIONI */}
+                      <div className="flex flex-wrap gap-3 border-t border-gray-800 pt-4">
+                        {['👍', '❤️', '🔥', '👏', '😂'].map(emoji => {
+                          const isSelected = miaReazione === emoji;
+                          return (
+                            <button 
+                              key={emoji}
+                              onClick={() => gestisciReazione(post.id, emoji)}
+                              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm transition-all active:scale-90 border-2 ${isSelected ? 'bg-orange-900/30 border-orange-500 text-white' : 'bg-black border-gray-800 text-gray-500 hover:border-gray-600'}`}
+                            >
+                              <span className={isSelected ? 'scale-110 transition-transform' : ''}>{emoji}</span>
+                              <span className={`font-black ${isSelected ? 'text-orange-400' : ''}`}>{conteggio[emoji] || 0}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: TORNEI */}
         {activeTab === 'tornei' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
             <h2 className="text-xl font-black uppercase text-purple-400 mb-4 tracking-widest italic">Tornei in Sala</h2>
@@ -272,7 +375,7 @@ export default function AppVIP() {
           </div>
         )}
 
-        {/* TAB 3: PRENOTA */}
+        {/* TAB 4: PRENOTA */}
         {activeTab === 'prenota' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
             <h2 className="text-xl font-black uppercase text-purple-400 mb-4 tracking-widest italic">Prenota il tuo Tavolo</h2>
@@ -299,7 +402,8 @@ export default function AppVIP() {
 
                 <div>
                   <label className="block text-gray-400 font-bold uppercase text-xs tracking-widest ml-2 mb-2">Recapito (Opzionale)</label>
-                  <input type="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Es. 333 1234567" className="w-full bg-black border border-gray-700 focus:border-purple-500 p-4 rounded-xl text-md text-white outline-none transition-all" />
+                  {/* Precompila il telefono se il socio lo ha già nel DB */}
+                  <input type="tel" value={telefono || socio.telefono || ""} onChange={(e) => setTelefono(e.target.value)} placeholder="Es. 333 1234567" className="w-full bg-black border border-gray-700 focus:border-purple-500 p-4 rounded-xl text-md text-white outline-none transition-all" />
                 </div>
 
                 <div>
@@ -317,19 +421,23 @@ export default function AppVIP() {
 
       </div>
 
-      {/* BOTTOM NAVIGATION BAR */}
-      <div className="fixed bottom-0 left-0 w-full bg-gray-950/90 backdrop-blur-md border-t border-gray-800 px-6 py-4 flex justify-between items-center z-50">
-        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center justify-center gap-1 flex-1 transition-colors ${activeTab === 'home' ? 'text-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
+      {/* BOTTOM NAVIGATION BAR (AGGIORNATA A 4 BOTTONI) */}
+      <div className="fixed bottom-0 left-0 w-full bg-gray-950/95 backdrop-blur-md border-t border-gray-800 px-2 py-4 flex justify-between items-center z-50">
+        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center justify-center gap-1 flex-1 transition-colors ${activeTab === 'home' ? 'text-purple-400' : 'text-gray-600 hover:text-gray-300'}`}>
           <span className="text-2xl">💳</span>
-          <span className="text-[10px] font-black uppercase tracking-widest">Home</span>
+          <span className="text-[9px] font-black uppercase tracking-widest">Home</span>
         </button>
-        <button onClick={() => setActiveTab('tornei')} className={`flex flex-col items-center justify-center gap-1 flex-1 transition-colors ${activeTab === 'tornei' ? 'text-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
+        <button onClick={() => setActiveTab('bacheca')} className={`flex flex-col items-center justify-center gap-1 flex-1 transition-colors ${activeTab === 'bacheca' ? 'text-orange-500' : 'text-gray-600 hover:text-gray-300'}`}>
+          <span className="text-2xl">📢</span>
+          <span className="text-[9px] font-black uppercase tracking-widest">News</span>
+        </button>
+        <button onClick={() => setActiveTab('tornei')} className={`flex flex-col items-center justify-center gap-1 flex-1 transition-colors ${activeTab === 'tornei' ? 'text-purple-400' : 'text-gray-600 hover:text-gray-300'}`}>
           <span className="text-2xl">🏆</span>
-          <span className="text-[10px] font-black uppercase tracking-widest">Tornei</span>
+          <span className="text-[9px] font-black uppercase tracking-widest">Tornei</span>
         </button>
-        <button onClick={() => setActiveTab('prenota')} className={`flex flex-col items-center justify-center gap-1 flex-1 transition-colors ${activeTab === 'prenota' ? 'text-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
+        <button onClick={() => setActiveTab('prenota')} className={`flex flex-col items-center justify-center gap-1 flex-1 transition-colors ${activeTab === 'prenota' ? 'text-purple-400' : 'text-gray-600 hover:text-gray-300'}`}>
           <span className="text-2xl">📅</span>
-          <span className="text-[10px] font-black uppercase tracking-widest">Prenota</span>
+          <span className="text-[9px] font-black uppercase tracking-widest">Prenota</span>
         </button>
       </div>
 
