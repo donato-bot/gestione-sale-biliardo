@@ -613,6 +613,39 @@ export default function DashboardSala() {
   };
 
   const eseguiStampa = () => {
+    // NUOVA FUNZIONE: Esportazione in CSV per Excel
+  const esportaCSV = () => {
+    if (primaNota.length === 0) {
+      alert("⚠️ Nessun movimento da esportare oggi.");
+      return;
+    }
+
+    // 1. Creiamo le intestazioni delle colonne
+    let csvContent = "Data e Ora;Causale;Operatore;Metodo Pagamento;Tipo Movimento;Importo (€)\n";
+
+    // 2. Inseriamo i dati riga per riga
+    primaNota.forEach(m => {
+      const dataOra = new Date(m.created_at).toLocaleString();
+      // Rimuoviamo eventuali punti e virgola dalla descrizione per non rompere le colonne Excel
+      const causale = m.descrizione.replace(/;/g, ','); 
+      const staff = m.staff?.nome || "ADMIN";
+      const metodo = m.metodo_pagamento.toUpperCase();
+      const tipo = m.tipo.toUpperCase();
+      const importo = parseFloat(m.importo).toFixed(2);
+
+      csvContent += `${dataOra};${causale};${staff};${metodo};${tipo};${importo}\n`;
+    });
+
+    // 3. Creiamo il file e forziamo il download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Prima_Nota_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
     window.print();
   };
 
@@ -869,10 +902,13 @@ export default function DashboardSala() {
         {activeView === 'report' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 text-center">
             
-            <button onClick={() => setIsNewUscitaModalOpen(true)} className="w-full mb-8 py-8 bg-red-600 text-white font-black text-2xl uppercase shadow-xl rounded-[2rem] hover:bg-red-500 transition-colors">
-              - REGISTRA SPESA / USCITA CASSA
-            </button>
+           <button onClick={() => setIsNewUscitaModalOpen(true)} className="w-full mb-8 py-8 bg-red-600 text-white font-black text-2xl uppercase shadow-xl rounded-[2rem] hover:bg-red-500 transition-colors">
+  - REGISTRA SPESA / USCITA CASSA
+           </button>
 
+           <button onClick={esportaCSV} className="w-full mb-12 py-6 bg-green-900/40 border-2 border-green-600 text-green-400 font-black text-xl uppercase shadow-xl rounded-[2rem] hover:bg-green-600 hover:text-black transition-all flex items-center justify-center gap-3">
+  <span>📥</span> SCARICA PRIMA NOTA (EXCEL / CSV)
+           </button>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
               <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-green-600">
                 <p className="text-green-500 font-black uppercase text-[10px] tracking-widest mb-2">Totale Entrate Oggi</p>
