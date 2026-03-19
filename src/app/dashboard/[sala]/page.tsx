@@ -234,7 +234,6 @@ export default function DashboardSala() {
     return filtered;
   };
 
-  // LOGICA PER LA PLANCIA: Trova le prenotazioni confermate di oggi per avvisare il gestore
   const getPrenotazioniConfermateOggi = () => {
     const oggi = new Date();
     oggi.setHours(0,0,0,0);
@@ -465,6 +464,13 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!);
   };
 
+  // NUOVA FUNZIONE: Copia il link VIP negli appunti
+  const copiaLinkVIP = (token: string, nomeSocio: string) => {
+    const url = `${window.location.origin}/vip/${params['nome-sala']}/${token}`;
+    navigator.clipboard.writeText(url);
+    alert(`✅ Link VIP copiato!\n\nOra incollalo su WhatsApp per inviarlo a ${nomeSocio}.`);
+  };
+
   const formattaCronometro = (startTime: number | null) => {
     if (!startTime) return "00:00:00";
     const diff = Math.max(0, now - startTime);
@@ -614,18 +620,32 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* SOCI */}
+        {/* SOCI (AGGIUNTO PULSANTE LINK VIP) */}
         {activeView === 'soci' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <button onClick={() => setIsNewSocioModalOpen(true)} className="w-full mb-8 py-8 bg-yellow-600 text-black font-black text-2xl uppercase shadow-xl">+ NUOVO SOCIO</button>
             <div className="bg-gray-900 border-2 border-gray-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
               <table className="w-full text-left font-bold">
-                <thead className="bg-gray-800 text-gray-400 uppercase text-xs"><tr><th className="p-6">Socio</th><th className="p-6">Credito Attuale</th><th className="p-6 text-right">Azione</th></tr></thead>
+                <thead className="bg-gray-800 text-gray-400 uppercase text-xs">
+                  <tr>
+                    <th className="p-6">Socio</th>
+                    <th className="p-6">Credito Attuale</th>
+                    <th className="p-6 text-center">App Personale</th>
+                    <th className="p-6 text-right">Azione</th>
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-gray-800">
                   {soci.map((s) => (
                     <tr key={s.id} className="hover:bg-gray-800/30 transition-all">
                       <td className="p-6 text-xl uppercase italic">{s.cognome} {s.nome}</td>
                       <td className="p-6 text-2xl text-green-500 italic">€ {parseFloat(s.credito || 0).toFixed(2)}</td>
+                      <td className="p-6 text-center">
+                        <button 
+                          onClick={() => copiaLinkVIP(s.token, `${s.nome} ${s.cognome}`)} 
+                          className="bg-purple-900/50 border border-purple-700 text-purple-300 px-4 py-2 rounded-xl text-xs font-black uppercase hover:bg-purple-600 hover:text-white transition-all shadow-md">
+                          📱 Invia Link
+                        </button>
+                      </td>
                       <td className="p-6 text-right">
                         <button onClick={() => { setSocioToRecharge(s); setIsRechargeModalOpen(true); }} className="bg-green-600 text-black px-8 py-4 rounded-2xl font-black uppercase shadow-lg active:scale-95">💰 RICARICA</button>
                       </td>
@@ -872,15 +892,18 @@ export default function DashboardSala() {
 
       {/* ---------------- MODALI ---------------- */}
       
-      {/* PIN PAD */}
+      {/* PIN PAD (STILE AGGIORNATO) - NASCOSTO IN STAMPA */}
       {isPinModalOpen && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[200] animate-in zoom-in-95 print:hidden">
           <div className="w-full max-w-[320px] bg-[#0B1021] border-4 border-pink-500 p-8 rounded-[3rem] shadow-[0_0_40px_rgba(236,72,153,0.2)] text-center relative">
+            
+            {/* Punti PIN in alto (Cyan) */}
             <div className="flex justify-center gap-4 mb-4">
               {[...Array(4)].map((_, i) => (
                 <div key={i} className={`w-6 h-6 rounded-full border-2 border-cyan-400 ${pinBuffer.length > i ? 'bg-cyan-400 shadow-[0_0_15px_#22d3ee]' : 'bg-transparent'}`}></div>
               ))}
             </div>
+
             <h2 className="text-3xl font-black text-pink-500 mb-1 italic uppercase tracking-tighter">{pendingAction?.descrizione}</h2>
             <p className="text-white font-bold text-[10px] uppercase tracking-widest mb-8">Inserire PIN per registrare</p>
             
