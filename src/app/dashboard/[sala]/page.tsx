@@ -464,13 +464,36 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!);
   };
 
-  // NUOVA FUNZIONE: Copia il link VIP negli appunti
-const copiaLinkVIP = (token: string, nomeSocio: string) => {
-  // Ho cambiato params['nome-sala'] con params.sala
-  const url = `${window.location.origin}/vip/${params.sala}/${token}`;
-  navigator.clipboard.writeText(url);
-  alert(`✅ Link VIP copiato!\n\nOra incollalo su WhatsApp per inviarlo a ${nomeSocio}.`);
-};
+  // NUOVA FUNZIONE: Prepara il messaggio e apre WhatsApp
+  const inviaLinkWhatsApp = (socio: any) => {
+    // 1. Genera il link esatto (Corretto il params.sala)
+    const url = `${window.location.origin}/vip/${params.sala}/${socio.token}`;
+    
+    // 2. Prepara il testo del messaggio (puoi personalizzarlo come vuoi)
+    const messaggioTesto = `Ciao ${socio.nome}, ecco la tua Tessera Digitale VIP per ${nomeSala}. Clicca qui per vedere il tuo credito e prenotare: ${url}`;
+    
+    // Codifica il testo per poterlo inserire in un URL in modo sicuro
+    const messaggioCodificato = encodeURIComponent(messaggioTesto);
+
+    // 3. Verifica se il socio ha un numero di telefono salvato
+    if (socio.telefono && socio.telefono.trim() !== "") {
+      // Rimuove eventuali spazi o trattini inseriti per sbaglio
+      const numeroPulito = socio.telefono.replace(/\D/g, '');
+      
+      // Aggiungiamo il prefisso internazionale italiano (39) se non c'è già
+      const prefisso = numeroPulito.startsWith('39') ? '' : '39';
+      
+      // Crea il link speciale di WhatsApp
+      const waUrl = `https://wa.me/${prefisso}${numeroPulito}?text=${messaggioCodificato}`;
+      
+      // Apre WhatsApp Web o l'App Desktop in una nuova scheda
+      window.open(waUrl, '_blank');
+    } else {
+      // PIANO B: Se il socio non ha un telefono nel DB, copiamo il link negli appunti come facevi prima
+      navigator.clipboard.writeText(url);
+      alert(`⚠️ Nessun numero di telefono salvato per ${socio.nome}.\n\n✅ Link copiato negli appunti! Apri tu WhatsApp e incollalo.`);
+    }
+  };
 
   const formattaCronometro = (startTime: number | null) => {
     if (!startTime) return "00:00:00";
@@ -621,7 +644,7 @@ const copiaLinkVIP = (token: string, nomeSocio: string) => {
           </div>
         )}
 
-        {/* SOCI (AGGIUNTO PULSANTE LINK VIP) */}
+        {/* SOCI (AGGIORNATO CON WHATSAPP) */}
         {activeView === 'soci' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <button onClick={() => setIsNewSocioModalOpen(true)} className="w-full mb-8 py-8 bg-yellow-600 text-black font-black text-2xl uppercase shadow-xl">+ NUOVO SOCIO</button>
@@ -642,9 +665,9 @@ const copiaLinkVIP = (token: string, nomeSocio: string) => {
                       <td className="p-6 text-2xl text-green-500 italic">€ {parseFloat(s.credito || 0).toFixed(2)}</td>
                       <td className="p-6 text-center">
                         <button 
-                          onClick={() => copiaLinkVIP(s.token, `${s.nome} ${s.cognome}`)} 
-                          className="bg-purple-900/50 border border-purple-700 text-purple-300 px-4 py-2 rounded-xl text-xs font-black uppercase hover:bg-purple-600 hover:text-white transition-all shadow-md">
-                          📱 Invia Link
+                          onClick={() => inviaLinkWhatsApp(s)} 
+                          className="bg-green-900/50 border border-green-700 text-green-300 px-4 py-2 rounded-xl text-xs font-black uppercase hover:bg-green-600 hover:text-white transition-all shadow-md flex items-center justify-center gap-2 mx-auto">
+                          <span className="text-lg">💬</span> Invia WhatsApp
                         </button>
                       </td>
                       <td className="p-6 text-right">
