@@ -897,8 +897,7 @@ export default function DashboardSala() {
             </div>
           </div>
         )}
-        
-        {activeView === 'report' && ({/* REPORT CASSA (PRIMA NOTA AGGIORNATA) */}
+        {/* REPORT CASSA (PRIMA NOTA AGGIORNATA) */}
         {activeView === 'report' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 text-center">
             
@@ -960,6 +959,7 @@ export default function DashboardSala() {
             </div>
           </div>
         )}
+        
         {/* STAFF */}
         {activeView === 'staff' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
