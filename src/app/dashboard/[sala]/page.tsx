@@ -13,7 +13,8 @@ export default function DashboardSala() {
   const router = useRouter();
   
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState<"hub" | "plancia" | "magazzino" | "report" | "soci" | "impostazioni" | "statistiche" | "staff" | "tornei" | "prenotazioni">("hub");
+  // AGGIUNTO 'bacheca' AI TIPI DI VISUALE
+  const [activeView, setActiveView] = useState<"hub" | "plancia" | "magazzino" | "report" | "soci" | "impostazioni" | "statistiche" | "staff" | "tornei" | "prenotazioni" | "bacheca">("hub");
   
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentSalaId, setCurrentSalaId] = useState<string | null>(null);
@@ -30,6 +31,10 @@ export default function DashboardSala() {
   const [tornei, setTornei] = useState<any[]>([]); 
   const [prenotazioniList, setPrenotazioniList] = useState<any[]>([]); 
   
+  // NUOVI STATI: Bacheca
+  const [bachecaPosts, setBachecaPosts] = useState<any[]>([]);
+  const [newPostText, setNewPostText] = useState("");
+
   const [incassoTotale, setIncassoTotale] = useState(0);
   const [incassoContanti, setIncassoContanti] = useState(0);
   const [incassoPOS, setIncassoPOS] = useState(0);
@@ -42,7 +47,6 @@ export default function DashboardSala() {
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   
   const [isNewSocioModalOpen, setIsNewSocioModalOpen] = useState(false);
-  // NUOVI STATI: Modifica Socio
   const [isEditSocioModalOpen, setIsEditSocioModalOpen] = useState(false);
   const [editSocioId, setEditSocioId] = useState("");
   const [editSocioNome, setEditSocioNome] = useState("");
@@ -134,13 +138,16 @@ export default function DashboardSala() {
         const { data: sociDB } = await supabase.from('soci').select('*').eq('sala_id', salaId).order('cognome', { ascending: true });
         const { data: staffDB } = await supabase.from('staff').select('*').eq('sala_id', salaId).order('nome', { ascending: true });
         const { data: torneiDB } = await supabase.from('tornei').select('*').eq('sala_id', salaId).order('data_inizio', { ascending: false }); 
-        
         const { data: prenDB } = await supabase.from('prenotazioni').select('*').eq('sala_id', salaId).order('data_ora', { ascending: true });
+        
+        // RECUPERA I POST DELLA BACHECA CON LE RELATIVE REAZIONI
+        const { data: bachecaDB } = await supabase.from('bacheca').select('*, reazioni_bacheca(*)').eq('sala_id', salaId).order('created_at', { ascending: false });
 
         if (pDB) setProdotti(pDB);
         if (sociDB) setSoci(sociDB);
         if (staffDB) setListaStaff(staffDB);
         if (prenDB) setPrenotazioniList(prenDB);
+        if (bachecaDB) setBachecaPosts(bachecaDB);
 
         if (torneiDB) {
           setTornei(torneiDB);
@@ -428,7 +435,6 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!); setIsNewSocioModalOpen(false);
   };
 
-  // NUOVE FUNZIONI: Apri e Salva Modifica Socio
   const apriModificaSocio = (socio: any) => {
     setEditSocioId(socio.id);
     setEditSocioNome(socio.nome || "");
@@ -489,6 +495,22 @@ export default function DashboardSala() {
   const annullaTransazione = async (id: string, staffId: string) => {
     await supabase.from('sessioni').delete().eq('id', id);
     await refreshDati(currentSalaId!);
+  };
+
+  // NUOVE FUNZIONI: BACHECA AVVISI
+  const salvaNuovoPost = async (staffId: string) => {
+    if (!newPostText.trim()) return;
+    await supabase.from('bacheca').insert([{ sala_id: currentSalaId, testo: newPostText.trim() }]);
+    setNewPostText("");
+    await refreshDati(currentSalaId!);
+    alert("✅ Avviso pubblicato in Bacheca!");
+  };
+
+  const eliminaPost = async (postId: string, staffId: string) => {
+    if (confirm("Vuoi davvero eliminare questo avviso?")) {
+      await supabase.from('bacheca').delete().eq('id', postId);
+      await refreshDati(currentSalaId!);
+    }
   };
 
   const inviaLinkWhatsApp = (socio: any) => {
@@ -552,12 +574,74 @@ export default function DashboardSala() {
               <button onClick={() => setActiveView("impostazioni")} className="bg-gray-900 border-2 border-gray-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">⚙️</div><h2 className="text-xl font-black uppercase">Tariffe</h2></button>
               <button onClick={() => setActiveView("prenotazioni")} className="bg-gray-900 border-2 border-teal-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📅</div><h2 className="text-xl font-black uppercase">Prenotazioni</h2></button>
               <button onClick={() => setActiveView("tornei")} className="bg-gray-900 border-2 border-pink-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🏆</div><h2 className="text-xl font-black uppercase">Tornei</h2></button>
-              <button onClick={() => { supabase.auth.signOut(); router.push('/login'); }} className="col-span-2 md:col-span-4 bg-red-950/30 border-2 border-red-600 p-6 rounded-[2rem] text-red-500 font-black uppercase mt-4">Esci dal Sistema</button>
+              
+              {/* NUOVO BOTTONE BACHECA NELL'HUB */}
+              <button onClick={() => setActiveView("bacheca")} className="bg-gray-900 border-2 border-orange-500 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📢</div><h2 className="text-xl font-black uppercase">Bacheca</h2></button>
+
+              <button onClick={() => { supabase.auth.signOut(); router.push('/login'); }} className="col-span-1 md:col-span-3 bg-red-950/30 border-2 border-red-600 p-6 rounded-[2rem] text-red-500 font-black uppercase mt-0 flex items-center justify-center">Esci dal Sistema</button>
             </div>
           </div>
         )}
 
         {activeView !== "hub" && (<button onClick={() => setActiveView("hub")} className="w-full max-w-6xl mx-auto bg-gray-900 border-2 border-gray-700 text-white py-6 rounded-[2rem] mb-8 font-black uppercase italic flex items-center justify-center gap-4 transition-all">🔙 MENU PRINCIPALE</button>)}
+
+        {/* BACHECA AVVISI (NUOVA SEZIONE) */}
+        {activeView === 'bacheca' && (
+          <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-8">
+            <h3 className="text-4xl font-black text-orange-500 uppercase italic mb-8 text-center drop-shadow-md">Bacheca Avvisi</h3>
+            
+            <div className="bg-gray-900 p-6 rounded-[2rem] border-2 border-orange-900 mb-10 shadow-xl">
+              <textarea 
+                value={newPostText} 
+                onChange={(e) => setNewPostText(e.target.value)} 
+                placeholder="Scrivi un nuovo avviso per i soci... (es. Risultati del torneo, nuove promozioni al bar, chiusura per festività)" 
+                className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-lg text-white mb-4 outline-none resize-none h-32 focus:border-orange-500 transition-colors" 
+              />
+              <button 
+                onClick={() => richiedePin((sid) => salvaNuovoPost(sid), "Pubblica in Bacheca")} 
+                className="w-full py-5 bg-orange-600 text-white font-black uppercase text-xl rounded-2xl shadow-xl active:scale-95 transition-all">
+                📣 PUBBLICA AVVISO
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {bachecaPosts.length === 0 ? (
+                <div className="bg-gray-900 p-10 rounded-[3rem] border-2 border-gray-800 shadow-2xl text-center">
+                  <p className="text-gray-500 font-bold uppercase tracking-widest text-lg">Nessun avviso pubblicato.</p>
+                </div>
+              ) : (
+                bachecaPosts.map((post) => {
+                  const reazioni = post.reazioni_bacheca || [];
+                  const conteggio = reazioni.reduce((acc: any, curr: any) => { 
+                    acc[curr.tipo] = (acc[curr.tipo] || 0) + 1; 
+                    return acc; 
+                  }, {});
+
+                  return (
+                    <div key={post.id} className="bg-gray-950 border border-gray-800 p-6 rounded-3xl shadow-lg relative">
+                      <button onClick={() => richiedePin((sid) => eliminaPost(post.id, sid), "Elimina Avviso")} className="absolute top-4 right-4 text-red-900 hover:text-red-500 transition-colors p-2 text-xl">🗑️</button>
+                      <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-3">🗓️ {new Date(post.created_at).toLocaleDateString()} - {new Date(post.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                      <p className="text-xl text-white whitespace-pre-wrap mb-6">{post.testo}</p>
+                      
+                      {/* Recap Reazioni per il Gestore */}
+                      <div className="flex flex-wrap gap-2 border-t border-gray-800 pt-4">
+                        {Object.entries(conteggio).length === 0 ? (
+                          <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">Nessuna reazione ancora</span>
+                        ) : (
+                          Object.entries(conteggio).map(([emoji, count]) => (
+                            <span key={emoji} className="bg-gray-900 px-3 py-1 rounded-full text-sm border border-gray-700">
+                              {emoji} <span className="font-bold text-white ml-1">{count as number}</span>
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
 
         {/* PLANCIA CON ALERT PRENOTAZIONI */}
         {activeView === 'plancia' && (
