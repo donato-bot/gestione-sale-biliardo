@@ -56,7 +56,7 @@ export default function DashboardSala() {
   // STATO: OPERATORE LOGGATO
   const [activeStaff, setActiveStaff] = useState<any>(null);
 
-  // Stati Filtri Prenotazioni (IMPOSTATI DI DEFAULT SU "TUTTE")
+  // Stati Filtri Prenotazioni
   const [filtroStatoPrenotazione, setFiltroStatoPrenotazione] = useState<"da_impostare" | "impostate" | "tutte">("tutte");
   const [filtroTempoPrenotazione, setFiltroTempoPrenotazione] = useState<"oggi" | "settimana" | "mese" | "tutte">("tutte");
 
@@ -232,6 +232,17 @@ export default function DashboardSala() {
     }
 
     return filtered;
+  };
+
+  // LOGICA PER LA PLANCIA: Trova le prenotazioni confermate di oggi per avvisare il gestore
+  const getPrenotazioniConfermateOggi = () => {
+    const oggi = new Date();
+    oggi.setHours(0,0,0,0);
+    return prenotazioniList.filter(p => {
+      const d = new Date(p.data_ora);
+      d.setHours(0,0,0,0);
+      return d.getTime() === oggi.getTime() && p.stato === 'confermata';
+    }).sort((a,b) => new Date(a.data_ora).getTime() - new Date(b.data_ora).getTime());
   };
 
   const gestisciStatoPrenotazione = async (id: string, nuovoStato: 'confermata' | 'rifiutata', staffId: string) => {
@@ -506,9 +517,30 @@ export default function DashboardSala() {
 
         {activeView !== "hub" && (<button onClick={() => setActiveView("hub")} className="w-full max-w-6xl mx-auto bg-gray-900 border-2 border-gray-700 text-white py-6 rounded-[2rem] mb-8 font-black uppercase italic flex items-center justify-center gap-4 transition-all">🔙 MENU PRINCIPALE</button>)}
 
-        {/* PLANCIA */}
+        {/* PLANCIA CON ALERT PRENOTAZIONI */}
         {activeView === 'plancia' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
+            
+            {/* ALERT PRENOTAZIONI CONFERMATE OGGI */}
+            {getPrenotazioniConfermateOggi().length > 0 && (
+              <div className="mb-8 bg-teal-900/30 border-2 border-teal-600 rounded-3xl p-6 shadow-lg animate-in fade-in">
+                <h3 className="text-teal-400 font-black uppercase mb-4 flex items-center gap-2 tracking-widest text-sm">
+                  <span className="text-xl">📅</span> Prenotazioni Confermate in arrivo oggi
+                </h3>
+                <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
+                  {getPrenotazioniConfermateOggi().map(p => (
+                    <div key={p.id} className="min-w-[250px] bg-black p-4 rounded-2xl border border-teal-800 flex flex-col justify-between">
+                      <div>
+                        <p className="font-black text-white uppercase truncate">{p.nome_cliente}</p>
+                        <p className="text-teal-500 font-mono text-2xl font-black">{new Date(p.data_ora).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                      </div>
+                      <p className="text-gray-500 text-xs truncate mt-2 uppercase font-bold tracking-widest">Tel: {p.telefono}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button onClick={() => setIsNewTableModalOpen(true)} className="w-full mb-8 py-8 bg-gray-900 border-4 border-dashed border-green-900 rounded-[2.5rem] text-green-500 font-black text-2xl uppercase italic">+ AGGIUNGI TAVOLO</button>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {tavoli.map((t) => (
@@ -659,7 +691,7 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* PRENOTAZIONI (FILTRI SETTATI SU TUTTE DI DEFAULT) */}
+        {/* PRENOTAZIONI */}
         {activeView === 'prenotazioni' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <h3 className="text-4xl font-black text-teal-500 uppercase italic mb-8 text-center drop-shadow-md">Gestione Prenotazioni</h3>
@@ -874,7 +906,7 @@ export default function DashboardSala() {
         </div>
       )}
 
-      {/* Prenotazione Tavolo Manuale (Da Plancia) */}
+      {/* Prenotazione Tavolo Manuale */}
       {isReserveModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-yellow-500 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-3xl font-black text-yellow-500 mb-8 uppercase italic">Blocca Tavolo</h3><input value={reserveName} onChange={(e)=>setReserveName(e.target.value)} placeholder="Nome Cliente" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-2xl text-white mb-4 outline-none text-center" /><input type="time" value={reserveTime} onChange={(e)=>setReserveTime(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-5xl font-mono text-yellow-400 mb-8 text-center outline-none" /><button onClick={() => richiedePin((sid) => prenotaTavolo(sid), "Registra Prenotazione")} className="w-full py-8 bg-yellow-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95">CONFERMA PRENOTAZIONE</button><button onClick={()=>setIsReserveModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
 
       {/* Avvia Partita */}
