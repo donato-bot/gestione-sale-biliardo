@@ -28,7 +28,7 @@ export default function DashboardSala() {
   const [soci, setSoci] = useState<any[]>([]);
   const [listaStaff, setListaStaff] = useState<any[]>([]);
   const [tornei, setTornei] = useState<any[]>([]); 
-  const [prenotazioniList, setPrenotazioniList] = useState<any[]>([]); // NUOVO STATO: Lista Prenotazioni Pubbliche
+  const [prenotazioniList, setPrenotazioniList] = useState<any[]>([]); 
   
   const [incassoTotale, setIncassoTotale] = useState(0);
   const [incassoContanti, setIncassoContanti] = useState(0);
@@ -56,9 +56,9 @@ export default function DashboardSala() {
   // STATO: OPERATORE LOGGATO
   const [activeStaff, setActiveStaff] = useState<any>(null);
 
-  // Stati Filtri Prenotazioni
-  const [filtroStatoPrenotazione, setFiltroStatoPrenotazione] = useState<"da_impostare" | "impostate" | "tutte">("da_impostare");
-  const [filtroTempoPrenotazione, setFiltroTempoPrenotazione] = useState<"oggi" | "settimana" | "mese" | "tutte">("oggi");
+  // Stati Filtri Prenotazioni (IMPOSTATI DI DEFAULT SU "TUTTE")
+  const [filtroStatoPrenotazione, setFiltroStatoPrenotazione] = useState<"da_impostare" | "impostate" | "tutte">("tutte");
+  const [filtroTempoPrenotazione, setFiltroTempoPrenotazione] = useState<"oggi" | "settimana" | "mese" | "tutte">("tutte");
 
   // Input
   const [reserveName, setReserveName] = useState("");
@@ -127,7 +127,6 @@ export default function DashboardSala() {
         const { data: staffDB } = await supabase.from('staff').select('*').eq('sala_id', salaId).order('nome', { ascending: true });
         const { data: torneiDB } = await supabase.from('tornei').select('*').eq('sala_id', salaId).order('data_inizio', { ascending: false }); 
         
-        // FETCH PRENOTAZIONI
         const { data: prenDB } = await supabase.from('prenotazioni').select('*').eq('sala_id', salaId).order('data_ora', { ascending: true });
 
         if (pDB) setProdotti(pDB);
@@ -201,21 +200,17 @@ export default function DashboardSala() {
     setPendingAction({ callback, descrizione }); setIsPinModalOpen(true);
   };
 
-  // --- LOGICA GESTIONE PRENOTAZIONI PUBBLICHE ---
   const getPrenotazioniFiltrate = () => {
     let filtered = [...prenotazioniList];
     const oggi = new Date();
     oggi.setHours(0,0,0,0);
     
-    // Filtro per Stato
     if (filtroStatoPrenotazione === 'da_impostare') {
       filtered = filtered.filter(p => p.stato === 'in_attesa');
     } else if (filtroStatoPrenotazione === 'impostate') {
       filtered = filtered.filter(p => p.stato === 'confermata');
     }
-    // se 'tutte', non filtriamo per stato (escludiamo solo le rifiutate di default o le includiamo a piacere)
 
-    // Filtro per Tempo
     if (filtroTempoPrenotazione === 'oggi') {
       filtered = filtered.filter(p => {
         const d = new Date(p.data_ora);
@@ -244,7 +239,6 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!);
   };
 
-  // --- FUNZIONI TAVOLI E TORNEI ---
   const prenotaTavolo = async (staffId: string) => {
     if (!activeTableId || !reserveName || !reserveTime) return;
     await supabase.from('tavoli').update({ 
@@ -503,10 +497,7 @@ export default function DashboardSala() {
               <button onClick={() => setActiveView("report")} className="bg-gray-900 border-2 border-purple-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📊</div><h2 className="text-xl font-black uppercase">Cassa</h2></button>
               <button onClick={() => setActiveView("staff")} className="bg-gray-900 border-2 border-cyan-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🧑‍🍳</div><h2 className="text-xl font-black uppercase">Staff</h2></button>
               <button onClick={() => setActiveView("impostazioni")} className="bg-gray-900 border-2 border-gray-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">⚙️</div><h2 className="text-xl font-black uppercase">Tariffe</h2></button>
-              
-              {/* BOTTONE RINOMINATO IN "PRENOTAZIONI" */}
               <button onClick={() => setActiveView("prenotazioni")} className="bg-gray-900 border-2 border-teal-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📅</div><h2 className="text-xl font-black uppercase">Prenotazioni</h2></button>
-              
               <button onClick={() => setActiveView("tornei")} className="bg-gray-900 border-2 border-pink-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🏆</div><h2 className="text-xl font-black uppercase">Tornei</h2></button>
               <button onClick={() => { supabase.auth.signOut(); router.push('/login'); }} className="col-span-2 md:col-span-4 bg-red-950/30 border-2 border-red-600 p-6 rounded-[2rem] text-red-500 font-black uppercase mt-4">Esci dal Sistema</button>
             </div>
@@ -668,15 +659,13 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* PRENOTAZIONI (NUOVO MODULO GLOBALE CON FILTRI) */}
+        {/* PRENOTAZIONI (FILTRI SETTATI SU TUTTE DI DEFAULT) */}
         {activeView === 'prenotazioni' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <h3 className="text-4xl font-black text-teal-500 uppercase italic mb-8 text-center drop-shadow-md">Gestione Prenotazioni</h3>
             
-            {/* AREA FILTRI */}
             <div className="bg-gray-900 p-6 rounded-[2rem] border-2 border-teal-900 mb-8 shadow-xl flex flex-col md:flex-row gap-6 justify-between items-center">
               
-              {/* Filtri STATO */}
               <div className="flex gap-2 bg-black p-2 rounded-2xl border border-gray-800">
                 <button 
                   onClick={() => setFiltroStatoPrenotazione('da_impostare')} 
@@ -698,7 +687,6 @@ export default function DashboardSala() {
                 </button>
               </div>
 
-              {/* Filtri TEMPO */}
               <div className="flex gap-2 bg-black p-2 rounded-2xl border border-gray-800 flex-wrap justify-center">
                 <button 
                   onClick={() => setFiltroTempoPrenotazione('oggi')} 
@@ -727,7 +715,6 @@ export default function DashboardSala() {
               </div>
             </div>
 
-            {/* GRIGLIA RISULTATI */}
             {getPrenotazioniFiltrate().length === 0 ? (
               <div className="bg-gray-900 p-10 rounded-[3rem] border-2 border-gray-800 shadow-2xl text-center">
                 <p className="text-gray-500 font-bold uppercase tracking-widest text-lg">Nessuna prenotazione attiva al momento.</p>
@@ -760,7 +747,6 @@ export default function DashboardSala() {
                         </div>
                       </div>
 
-                      {/* BOTTONI AZIONE */}
                       <div className="flex gap-2 mt-auto">
                         {isDaImpostare ? (
                           <>
@@ -854,18 +840,15 @@ export default function DashboardSala() {
 
       {/* ---------------- MODALI ---------------- */}
       
-      {/* PIN PAD (STILE AGGIORNATO) - NASCOSTO IN STAMPA */}
+      {/* PIN PAD */}
       {isPinModalOpen && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[200] animate-in zoom-in-95 print:hidden">
           <div className="w-full max-w-[320px] bg-[#0B1021] border-4 border-pink-500 p-8 rounded-[3rem] shadow-[0_0_40px_rgba(236,72,153,0.2)] text-center relative">
-            
-            {/* Punti PIN in alto (Cyan) */}
             <div className="flex justify-center gap-4 mb-4">
               {[...Array(4)].map((_, i) => (
                 <div key={i} className={`w-6 h-6 rounded-full border-2 border-cyan-400 ${pinBuffer.length > i ? 'bg-cyan-400 shadow-[0_0_15px_#22d3ee]' : 'bg-transparent'}`}></div>
               ))}
             </div>
-
             <h2 className="text-3xl font-black text-pink-500 mb-1 italic uppercase tracking-tighter">{pendingAction?.descrizione}</h2>
             <p className="text-white font-bold text-[10px] uppercase tracking-widest mb-8">Inserire PIN per registrare</p>
             
@@ -979,7 +962,7 @@ export default function DashboardSala() {
         </div>
       )}
 
-      {/* MODALE TABELLONE AD ALBERO ORIZZONTALE - OTTIMIZZATO PER STAMPA */}
+      {/* MODALE TABELLONE AD ALBERO ORIZZONTALE */}
       {isBracketModalOpen && activeTorneo && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:relative print:bg-white print:text-black print:p-0 print:block">
           
@@ -987,7 +970,6 @@ export default function DashboardSala() {
             
             <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-3xl font-black transition-colors z-20 bg-black hover:bg-red-600 w-16 h-16 rounded-full flex items-center justify-center border-4 border-gray-700 shadow-2xl print:hidden">✕</button>
 
-            {/* BOTTONE STAMPA */}
             <button onClick={eseguiStampa} className="absolute top-6 left-6 bg-yellow-500 text-black font-black uppercase tracking-widest px-6 py-4 rounded-2xl hover:bg-yellow-400 transition-all shadow-xl z-20 print:hidden flex items-center gap-2">
               🖨️ Stampa Tabellone
             </button>
@@ -1044,7 +1026,7 @@ export default function DashboardSala() {
                 </button>
               )}
               <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="flex-[1] py-6 bg-gray-800 text-gray-400 uppercase font-black rounded-3xl hover:bg-gray-700 transition-all text-xl">
-                CHIUDI
+                CHIUDI TABELLONE
               </button>
             </div>
 
