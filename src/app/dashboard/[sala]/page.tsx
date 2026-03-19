@@ -52,7 +52,7 @@ export default function DashboardSala() {
   const [pinBuffer, setPinBuffer] = useState("");
   const [pendingAction, setPendingAction] = useState<any>(null);
 
-  // NUOVO STATO: OPERATORE LOGGATO (Risolve il problema del PIN petulante)
+  // STATO: OPERATORE LOGGATO
   const [activeStaff, setActiveStaff] = useState<any>(null);
 
   // Input
@@ -167,7 +167,6 @@ export default function DashboardSala() {
     } catch (e) { console.error(e); }
   }
 
-  // --- LOGICA PIN "INTELLIGENTE" ---
   const handlePinDigit = (digit: string) => {
     if (pinBuffer.length < 4) {
       const newBuffer = pinBuffer + digit;
@@ -176,7 +175,7 @@ export default function DashboardSala() {
         const staff = listaStaff.find(s => s.pin === newBuffer);
         if (staff) {
           const action = pendingAction;
-          setActiveStaff(staff); // Salva in sessione!
+          setActiveStaff(staff); 
           setPinBuffer(""); setIsPinModalOpen(false); setPendingAction(null);
           if (action) action.callback(staff.id);
         } else {
@@ -188,17 +187,10 @@ export default function DashboardSala() {
 
   const richiedePin = (callback: (staffId: string) => void, descrizione: string) => {
     if (listaStaff.length === 0) { alert("⚠️ Crea Staff."); setActiveView("staff"); return; }
-    
-    // SE LOGGATO, SALTA IL PIN E AGISCE SUBITO
-    if (activeStaff) {
-      callback(activeStaff.id);
-      return;
-    }
-    
+    if (activeStaff) { callback(activeStaff.id); return; }
     setPendingAction({ callback, descrizione }); setIsPinModalOpen(true);
   };
 
-  // --- FUNZIONI PRENOTAZIONI E TORNEI ---
   const prenotaTavolo = async (staffId: string) => {
     if (!activeTableId || !reserveName || !reserveTime) return;
     await supabase.from('tavoli').update({ 
@@ -748,96 +740,105 @@ export default function DashboardSala() {
       {/* Nuovo Torneo */}
       {isNewTorneoModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95"><div className="bg-gray-900 border-4 border-pink-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-pink-500 mb-8 uppercase italic">Nuovo Torneo</h3><input value={newTorneoNome} onChange={(e) => setNewTorneoNome(e.target.value)} placeholder="Nome del Torneo (es. Trofeo Invernale)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-pink-500 transition-all" /><input type="date" value={newTorneoData} onChange={(e) => setNewTorneoData(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white/70 mb-4 outline-none text-center focus:border-pink-500 transition-all" /><input type="number" value={newTorneoQuota} onChange={(e) => setNewTorneoQuota(e.target.value)} placeholder="Quota di Iscrizione (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-pink-500 transition-all" /><button onClick={() => richiedePin((sid) => salvaNuovoTorneo(sid), "Creazione Torneo")} className="w-full py-8 bg-pink-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">CREA TORNEO</button><button onClick={()=>setIsNewTorneoModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
 
-      {/* GESTIONE ISCRITTI TORNEO */}
+      {/* GESTIONE ISCRITTI TORNEO (NUOVO LAYOUT SPLIT) */}
       {isManageIscrittiOpen && activeTorneo && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95">
-          <div className="bg-gray-900 border-4 border-pink-600 p-8 rounded-[3rem] w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] relative">
-            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-xl transition-colors z-10 bg-black hover:bg-red-600 w-12 h-12 rounded-full flex items-center justify-center border-2 border-gray-700 shadow-lg">✕</button>
+          <div className="bg-gray-950 border-4 border-pink-600 p-8 rounded-[3rem] w-full max-w-6xl shadow-2xl flex flex-col h-[90vh] relative">
+            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-3xl font-black transition-colors z-20 bg-black hover:bg-red-600 w-16 h-16 rounded-full flex items-center justify-center border-4 border-gray-700 shadow-2xl">✕</button>
 
-            <h3 className="text-3xl font-black text-pink-500 mb-2 uppercase italic text-center">{activeTorneo.nome}</h3>
-            <p className="text-gray-400 text-center font-bold mb-6 uppercase text-sm">Gestione Iscritti (Totale: {(activeTorneo.iscritti || []).length})</p>
+            <h3 className="text-4xl font-black text-pink-500 mb-2 uppercase italic text-center pr-16">{activeTorneo.nome}</h3>
+            <p className="text-gray-400 text-center font-bold mb-8 uppercase tracking-widest text-sm">Gestione Iscritti (Totale: {(activeTorneo.iscritti || []).length})</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 border-b border-gray-800 pb-8">
-              <div className="space-y-3">
-                <p className="text-pink-500 font-bold uppercase text-xs text-center">Aggiungi Socio Tesserato</p>
-                <div className="flex gap-2">
-                  <select value={iscrittoSelezionato} onChange={(e) => setIscrittoSelezionato(e.target.value)} className="flex-1 bg-black border border-gray-800 p-4 rounded-xl text-lg text-white outline-none focus:border-pink-500 transition-all">
-                    <option value="">Seleziona un socio...</option>
-                    {soci.map(s => {
-                      const current = normalizeIscritti(activeTorneo.iscritti);
-                      if (current.find((i:any) => i.id === s.id)) return null;
-                      return <option key={s.id} value={s.id}>{s.cognome} {s.nome}</option>
-                    })}
-                  </select>
-                  <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid, 'socio'), "Iscrizione Socio")} className="px-6 bg-pink-600 text-white font-black uppercase rounded-xl hover:bg-pink-500 active:scale-95 transition-all">➕ SOCIO</button>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 overflow-hidden">
+              
+              {/* COLONNA SINISTRA: LISTA ISCRITTI */}
+              <div className="lg:col-span-7 flex flex-col bg-black rounded-[2rem] border-2 border-gray-800 overflow-hidden">
+                <div className="bg-gray-900 p-4 border-b border-gray-800 text-center font-black uppercase text-gray-500 tracking-widest text-xs">
+                  Elenco Partecipanti
                 </div>
-              </div>
-
-              <div className="space-y-3">
-                <p className="text-purple-500 font-bold uppercase text-xs text-center">Aggiungi Giocatore Esterno</p>
-                <div className="flex gap-2">
-                  <input type="text" value={iscrittoEsterno} onChange={(e) => setIscrittoEsterno(e.target.value)} placeholder="Nome e Cognome..." className="flex-1 bg-black border border-gray-800 p-4 rounded-xl text-lg text-white outline-none focus:border-purple-500 transition-all" />
-                  <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid, 'esterno'), "Iscrizione Esterno")} className="px-6 bg-purple-600 text-white font-black uppercase rounded-xl hover:bg-purple-500 active:scale-95 transition-all">➕ ESTERNO</button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto bg-black p-4 rounded-3xl border border-gray-800 pr-2">
-              {(activeTorneo.iscritti || []).length === 0 ? (
-                <p className="text-center text-gray-600 font-bold uppercase mt-10">Ancora nessun iscritto.</p>
-              ) : (
-                <div className="space-y-3">
-                  {normalizeIscritti(activeTorneo.iscritti).map((iscritto: any, index: number) => (
-                      <div key={iscritto.id} className={`flex justify-between items-center p-4 rounded-2xl border ${iscritto.confermato ? 'bg-gray-900 border-gray-800' : 'bg-yellow-900/20 border-yellow-700/50'}`}>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                  {(activeTorneo.iscritti || []).length === 0 ? (
+                    <p className="text-center text-gray-600 font-bold uppercase mt-10">Nessun giocatore iscritto.</p>
+                  ) : (
+                    normalizeIscritti(activeTorneo.iscritti).map((iscritto: any, index: number) => (
+                      <div key={iscritto.id} className="flex justify-between items-center p-4 rounded-2xl border border-gray-800 bg-gray-900">
                         <div className="flex items-center gap-4">
                           <span className="text-pink-600 font-black text-xl w-6">{index + 1}.</span>
-                          <span className="text-white font-bold text-lg uppercase italic">{iscritto.nome}</span>
-                          <span className={`text-[10px] px-2 py-1 rounded uppercase font-black tracking-widest ${iscritto.tipo === 'socio' ? 'bg-pink-900 text-pink-300' : 'bg-purple-900 text-purple-300'}`}>{iscritto.tipo}</span>
-                          {!iscritto.confermato && <span className="text-[10px] px-2 py-1 bg-yellow-600 text-black rounded uppercase font-black animate-pulse">RICHIESTA IN ATTESA</span>}
+                          <span className="text-white font-black text-xl uppercase italic">{iscritto.nome}</span>
+                          {/* BADGE ESATTI COME DA MOCKUP */}
+                          <span className={`text-[10px] px-3 py-1 rounded uppercase font-black tracking-widest ${iscritto.tipo === 'socio' ? 'bg-pink-600 text-white' : 'bg-purple-600 text-white'}`}>
+                            {iscritto.tipo}
+                          </span>
                         </div>
-                        <div className="flex gap-2">
-                          {!iscritto.confermato && <button onClick={() => richiedePin((sid) => confermaIscrizione(iscritto.id, sid), "Conferma Iscrizione")} className="bg-green-600 text-black font-black text-xs px-4 rounded-xl hover:bg-green-500 transition-colors uppercase">Conferma</button>}
-                          <button onClick={() => richiedePin((sid) => rimuoviIscritto(iscritto.id, sid), "Annulla Iscrizione")} className="bg-red-950 text-red-500 p-3 rounded-xl hover:bg-red-900 transition-colors">❌</button>
-                        </div>
+                        <button onClick={() => richiedePin((sid) => rimuoviIscritto(iscritto.id, sid), "Annulla Iscrizione")} className="bg-red-950 text-red-500 p-3 rounded-xl hover:bg-red-900 transition-colors">✕</button>
                       </div>
-                    )
+                    ))
                   )}
                 </div>
-              )}
+              </div>
+
+              {/* COLONNA DESTRA: FORM DI INSERIMENTO */}
+              <div className="lg:col-span-5 flex flex-col gap-6 overflow-y-auto pr-2">
+                
+                {/* Form Esterni */}
+                <div className="bg-gray-900 p-6 rounded-[2rem] border border-gray-800 flex flex-col justify-center">
+                  <p className="text-purple-400 font-black uppercase text-xs tracking-widest text-center mb-4">Aggiungi Giocatore Esterno</p>
+                  <div className="flex flex-col gap-4">
+                    <input type="text" value={iscrittoEsterno} onChange={(e) => setIscrittoEsterno(e.target.value)} placeholder="Nome e Cognome..." className="w-full bg-black border border-gray-700 p-4 rounded-xl text-lg text-white outline-none focus:border-purple-500 transition-all text-center" />
+                    <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid, 'esterno'), "Iscrizione Esterno")} className="w-full py-4 bg-purple-600 text-white font-black uppercase rounded-xl hover:bg-purple-500 active:scale-95 transition-all text-lg">
+                      ➕ ESTERNO
+                    </button>
+                  </div>
+                </div>
+
+                {/* Form Soci */}
+                <div className="bg-gray-900 p-6 rounded-[2rem] border border-gray-800 flex flex-col justify-center">
+                  <p className="text-pink-400 font-black uppercase text-xs tracking-widest text-center mb-4">Aggiungi Socio Tesserato</p>
+                  <div className="flex flex-col gap-4">
+                    <select value={iscrittoSelezionato} onChange={(e) => setIscrittoSelezionato(e.target.value)} className="w-full bg-black border border-gray-700 p-4 rounded-xl text-lg text-white outline-none focus:border-pink-500 transition-all text-center">
+                      <option value="">Seleziona un socio...</option>
+                      {soci.map(s => {
+                        const current = normalizeIscritti(activeTorneo.iscritti);
+                        if (current.find((i:any) => i.id === s.id)) return null;
+                        return <option key={s.id} value={s.id}>{s.cognome} {s.nome}</option>
+                      })}
+                    </select>
+                    <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid, 'socio'), "Iscrizione Socio")} className="w-full py-4 bg-pink-600 text-white font-black uppercase rounded-xl hover:bg-pink-500 active:scale-95 transition-all text-lg">
+                      ➕ SOCIO
+                    </button>
+                  </div>
+                </div>
+
+              </div>
             </div>
 
-            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="w-full py-6 mt-6 bg-gray-800 text-white uppercase font-black rounded-3xl hover:bg-gray-700 transition-all">CHIUDI GESTIONE</button>
+            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="w-full py-6 mt-8 bg-gray-800 text-white uppercase font-black rounded-3xl hover:bg-gray-700 transition-all tracking-widest">CHIUDI GESTIONE</button>
           </div>
         </div>
       )}
 
-      {/* NUOVO MODALE: TABELLONE AD ALBERO ORIZZONTALE (BRACKET) */}
+      {/* MODALE TABELLONE AD ALBERO ORIZZONTALE (BRACKET) */}
       {isBracketModalOpen && activeTorneo && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95">
           <div className="bg-gray-950 border-4 border-blue-600 p-8 rounded-[3rem] w-full max-w-[95vw] shadow-2xl flex flex-col max-h-[95vh] relative">
             
-            {/* PULSANTE CHIUSURA X (Molto Visibile) */}
             <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-3xl font-black transition-colors z-20 bg-black hover:bg-red-600 w-16 h-16 rounded-full flex items-center justify-center border-4 border-gray-700 shadow-2xl">✕</button>
 
             <h3 className="text-5xl font-black text-blue-500 mb-2 uppercase italic text-center">{activeTorneo.nome}</h3>
             <p className="text-gray-400 text-center font-bold mb-8 uppercase tracking-widest">{activeTorneo.stato === 'completato' ? '🏆 TABELLONE FINALE 🏆' : 'SCONTRI DIRETTI IN CORSO'}</p>
 
-            {/* CONTENITORE ALBERO ORIZZONTALE */}
             <div className="flex-1 overflow-x-auto overflow-y-auto bg-black p-8 rounded-3xl border-4 border-gray-900 shadow-inner custom-scrollbar relative">
               <div className="flex flex-row min-w-max h-full min-h-[500px] gap-12">
                 {activeTorneo.tabellone?.map((turno: any, turnoIndex: number) => (
                   <div key={turnoIndex} className="flex flex-col justify-around w-72 relative">
                     
-                    {/* Header Turno Fissato in Alto */}
                     <div className="absolute -top-4 w-full text-center border-b-2 border-gray-800 pb-2">
                        <span className="bg-blue-900/50 text-blue-400 font-black uppercase tracking-widest px-4 py-1 rounded-lg text-xs">Turno {turnoIndex + 1}</span>
                     </div>
 
-                    {/* Generazione Incontri */}
                     {turno.map((match: any) => (
                       <div key={match.id} className="relative w-full bg-gray-900 border border-gray-700 rounded-xl shadow-xl flex flex-col z-10 overflow-hidden mt-8 mb-8">
                         
-                        {/* Giocatore 1 */}
                         <button 
                           onClick={() => { if(!match.vincitore && activeTorneo.stato !== 'completato') richiedePin((sid) => impostaVincitore(turnoIndex, match.id, match.p1, sid), "Vittoria Giocatore 1") }}
                           disabled={!!match.vincitore}
@@ -847,7 +848,6 @@ export default function DashboardSala() {
                           {match.vincitore?.id === match.p1.id && <span>🏆</span>}
                         </button>
 
-                        {/* Giocatore 2 (o BYE) */}
                         {match.p2 ? (
                           <button 
                             onClick={() => { if(!match.vincitore && activeTorneo.stato !== 'completato') richiedePin((sid) => impostaVincitore(turnoIndex, match.id, match.p2, sid), "Vittoria Giocatore 2") }}
@@ -869,7 +869,6 @@ export default function DashboardSala() {
               </div>
             </div>
 
-            {/* Azioni Fondo Tabellone */}
             <div className="mt-8 flex gap-4">
               {activeTorneo.stato === 'in_corso' && (
                 <button onClick={() => richiedePin((sid) => generaProssimoTurno(sid), "Genera Turno / Concludi")} className="flex-[3] py-6 bg-blue-600 text-white uppercase font-black rounded-3xl hover:bg-blue-500 transition-all shadow-[0_0_20px_rgba(37,99,235,0.5)] active:scale-95 text-xl">
@@ -877,7 +876,7 @@ export default function DashboardSala() {
                 </button>
               )}
               <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="flex-[1] py-6 bg-gray-800 text-gray-400 uppercase font-black rounded-3xl hover:bg-gray-700 transition-all text-xl">
-                CHIUDI
+                CHIUDI TABELLONE
               </button>
             </div>
 
