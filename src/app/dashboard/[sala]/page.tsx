@@ -897,18 +897,19 @@ export default function DashboardSala() {
             </div>
           </div>
         )}
-
-        {/* REPORT CASSA (PRIMA NOTA AGGIORNATA) */}
+        
+        {activeView === 'report' && ({/* REPORT CASSA (PRIMA NOTA AGGIORNATA) */}
         {activeView === 'report' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 text-center">
             
-           <button onClick={() => setIsNewUscitaModalOpen(true)} className="w-full mb-8 py-8 bg-red-600 text-white font-black text-2xl uppercase shadow-xl rounded-[2rem] hover:bg-red-500 transition-colors">
-  - REGISTRA SPESA / USCITA CASSA
-           </button>
+            <button onClick={() => setIsNewUscitaModalOpen(true)} className="w-full mb-8 py-8 bg-red-600 text-white font-black text-2xl uppercase shadow-xl rounded-[2rem] hover:bg-red-500 transition-colors">
+              - REGISTRA SPESA / USCITA CASSA
+            </button>
 
-           <button onClick={esportaCSV} className="w-full mb-12 py-6 bg-green-900/40 border-2 border-green-600 text-green-400 font-black text-xl uppercase shadow-xl rounded-[2rem] hover:bg-green-600 hover:text-black transition-all flex items-center justify-center gap-3">
-  <span>📥</span> SCARICA PRIMA NOTA (EXCEL / CSV)
-           </button>
+            <button onClick={esportaCSV} className="w-full mb-12 py-6 bg-green-900/40 border-2 border-green-600 text-green-400 font-black text-xl uppercase shadow-xl rounded-[2rem] hover:bg-green-600 hover:text-black transition-all flex items-center justify-center gap-3">
+              <span>📥</span> SCARICA PRIMA NOTA (EXCEL / CSV)
+            </button>
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
               <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-green-600">
                 <p className="text-green-500 font-black uppercase text-[10px] tracking-widest mb-2">Totale Entrate Oggi</p>
@@ -958,9 +959,7 @@ export default function DashboardSala() {
               </table>
             </div>
           </div>
-        )}  
-       /* )}*/
-
+        )}
         {/* STAFF */}
         {activeView === 'staff' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
