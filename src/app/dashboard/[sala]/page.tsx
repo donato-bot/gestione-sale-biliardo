@@ -28,6 +28,7 @@ export default function DashboardSala() {
   const [soci, setSoci] = useState<any[]>([]);
   const [listaStaff, setListaStaff] = useState<any[]>([]);
   const [tornei, setTornei] = useState<any[]>([]); 
+  const [prenotazioniList, setPrenotazioniList] = useState<any[]>([]); // NUOVO STATO: Lista Prenotazioni Pubbliche
   
   const [incassoTotale, setIncassoTotale] = useState(0);
   const [incassoContanti, setIncassoContanti] = useState(0);
@@ -54,6 +55,10 @@ export default function DashboardSala() {
 
   // STATO: OPERATORE LOGGATO
   const [activeStaff, setActiveStaff] = useState<any>(null);
+
+  // Stati Filtri Prenotazioni
+  const [filtroStatoPrenotazione, setFiltroStatoPrenotazione] = useState<"da_impostare" | "impostate" | "tutte">("da_impostare");
+  const [filtroTempoPrenotazione, setFiltroTempoPrenotazione] = useState<"oggi" | "settimana" | "mese" | "tutte">("oggi");
 
   // Input
   const [reserveName, setReserveName] = useState("");
@@ -121,10 +126,15 @@ export default function DashboardSala() {
         const { data: sociDB } = await supabase.from('soci').select('*').eq('sala_id', salaId).order('cognome', { ascending: true });
         const { data: staffDB } = await supabase.from('staff').select('*').eq('sala_id', salaId).order('nome', { ascending: true });
         const { data: torneiDB } = await supabase.from('tornei').select('*').eq('sala_id', salaId).order('data_inizio', { ascending: false }); 
+        
+        // FETCH PRENOTAZIONI
+        const { data: prenDB } = await supabase.from('prenotazioni').select('*').eq('sala_id', salaId).order('data_ora', { ascending: true });
 
         if (pDB) setProdotti(pDB);
         if (sociDB) setSoci(sociDB);
         if (staffDB) setListaStaff(staffDB);
+        if (prenDB) setPrenotazioniList(prenDB);
+
         if (torneiDB) {
           setTornei(torneiDB);
           if(activeTorneo) {
@@ -191,6 +201,50 @@ export default function DashboardSala() {
     setPendingAction({ callback, descrizione }); setIsPinModalOpen(true);
   };
 
+  // --- LOGICA GESTIONE PRENOTAZIONI PUBBLICHE ---
+  const getPrenotazioniFiltrate = () => {
+    let filtered = [...prenotazioniList];
+    const oggi = new Date();
+    oggi.setHours(0,0,0,0);
+    
+    // Filtro per Stato
+    if (filtroStatoPrenotazione === 'da_impostare') {
+      filtered = filtered.filter(p => p.stato === 'in_attesa');
+    } else if (filtroStatoPrenotazione === 'impostate') {
+      filtered = filtered.filter(p => p.stato === 'confermata');
+    }
+    // se 'tutte', non filtriamo per stato (escludiamo solo le rifiutate di default o le includiamo a piacere)
+
+    // Filtro per Tempo
+    if (filtroTempoPrenotazione === 'oggi') {
+      filtered = filtered.filter(p => {
+        const d = new Date(p.data_ora);
+        d.setHours(0,0,0,0);
+        return d.getTime() === oggi.getTime();
+      });
+    } else if (filtroTempoPrenotazione === 'settimana') {
+      const prossimaSettimana = new Date(oggi);
+      prossimaSettimana.setDate(oggi.getDate() + 7);
+      filtered = filtered.filter(p => {
+        const d = new Date(p.data_ora);
+        return d >= oggi && d <= prossimaSettimana;
+      });
+    } else if (filtroTempoPrenotazione === 'mese') {
+      filtered = filtered.filter(p => {
+        const d = new Date(p.data_ora);
+        return d.getMonth() === oggi.getMonth() && d.getFullYear() === oggi.getFullYear();
+      });
+    }
+
+    return filtered;
+  };
+
+  const gestisciStatoPrenotazione = async (id: string, nuovoStato: 'confermata' | 'rifiutata', staffId: string) => {
+    await supabase.from('prenotazioni').update({ stato: nuovoStato }).eq('id', id);
+    await refreshDati(currentSalaId!);
+  };
+
+  // --- FUNZIONI TAVOLI E TORNEI ---
   const prenotaTavolo = async (staffId: string) => {
     if (!activeTableId || !reserveName || !reserveTime) return;
     await supabase.from('tavoli').update({ 
@@ -202,7 +256,7 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!); setIsReserveModalOpen(false); setReserveName(""); setReserveTime("");
   };
 
-  const annullaPrenotazione = async (tavoloId: string, staffId: string) => {
+  const annullaPrenotazioneTavolo = async (tavoloId: string, staffId: string) => {
     await supabase.from('tavoli').update({ stato: 'libero', prenotato_da: null, prenotato_alle: null }).eq('id', tavoloId);
     await refreshDati(currentSalaId!);
   };
@@ -421,9 +475,6 @@ export default function DashboardSala() {
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-green-500 font-black text-2xl tracking-widest italic animate-pulse">CARICAMENTO TORRE DI CONTROLLO...</div>;
 
-  // Filtriamo i tavoli prenotati per la vista PRENOTAZIONI
-  const tavoliPrenotati = tavoli.filter(t => t.stato === 'PRENOTATO');
-
   return (
     <div className="min-h-screen bg-black text-white p-4 font-sans tracking-tighter overflow-x-hidden relative print:bg-white print:text-black">
       
@@ -452,7 +503,10 @@ export default function DashboardSala() {
               <button onClick={() => setActiveView("report")} className="bg-gray-900 border-2 border-purple-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📊</div><h2 className="text-xl font-black uppercase">Cassa</h2></button>
               <button onClick={() => setActiveView("staff")} className="bg-gray-900 border-2 border-cyan-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🧑‍🍳</div><h2 className="text-xl font-black uppercase">Staff</h2></button>
               <button onClick={() => setActiveView("impostazioni")} className="bg-gray-900 border-2 border-gray-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">⚙️</div><h2 className="text-xl font-black uppercase">Tariffe</h2></button>
-              <button onClick={() => setActiveView("prenotazioni")} className="bg-gray-900 border-2 border-teal-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📅</div><h2 className="text-xl font-black uppercase">Prenota</h2></button>
+              
+              {/* BOTTONE RINOMINATO IN "PRENOTAZIONI" */}
+              <button onClick={() => setActiveView("prenotazioni")} className="bg-gray-900 border-2 border-teal-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📅</div><h2 className="text-xl font-black uppercase">Prenotazioni</h2></button>
+              
               <button onClick={() => setActiveView("tornei")} className="bg-gray-900 border-2 border-pink-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🏆</div><h2 className="text-xl font-black uppercase">Tornei</h2></button>
               <button onClick={() => { supabase.auth.signOut(); router.push('/login'); }} className="col-span-2 md:col-span-4 bg-red-950/30 border-2 border-red-600 p-6 rounded-[2rem] text-red-500 font-black uppercase mt-4">Esci dal Sistema</button>
             </div>
@@ -495,7 +549,7 @@ export default function DashboardSala() {
                   {t.stato === 'PRENOTATO' && (
                     <div className="flex gap-4">
                       <button onClick={() => { setActiveTableId(t.id); setReserveName(t.prenotato_da); setIsStartModalOpen(true); }} className="flex-[3] py-8 bg-green-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">INIZIA PARTITA</button>
-                      <button onClick={() => richiedePin((sid) => annullaPrenotazione(t.id, sid), "Annulla Prenotazione")} className="flex-1 py-8 bg-gray-800 text-red-500 rounded-3xl text-xl shadow-xl active:scale-95">❌</button>
+                      <button onClick={() => richiedePin((sid) => annullaPrenotazioneTavolo(t.id, sid), "Annulla Prenotazione")} className="flex-1 py-8 bg-gray-800 text-red-500 rounded-3xl text-xl shadow-xl active:scale-95">❌</button>
                     </div>
                   )}
 
@@ -614,40 +668,118 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* PRENOTAZIONI (NUOVO MODULO COMPLETATO) */}
+        {/* PRENOTAZIONI (NUOVO MODULO GLOBALE CON FILTRI) */}
         {activeView === 'prenotazioni' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
-            <h3 className="text-3xl font-black text-teal-500 uppercase italic mb-8 border-b border-gray-800 pb-4 flex justify-between items-center">
-              Gestione Prenotazioni
-              <span className="bg-teal-900/30 text-teal-500 px-4 py-1 rounded-full text-sm">Oggi</span>
-            </h3>
+            <h3 className="text-4xl font-black text-teal-500 uppercase italic mb-8 text-center drop-shadow-md">Gestione Prenotazioni</h3>
             
-            {tavoliPrenotati.length === 0 ? (
-              <div className="bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 shadow-2xl text-center">
-                <p className="text-gray-500 font-bold uppercase tracking-widest">Nessuna prenotazione attiva al momento.</p>
+            {/* AREA FILTRI */}
+            <div className="bg-gray-900 p-6 rounded-[2rem] border-2 border-teal-900 mb-8 shadow-xl flex flex-col md:flex-row gap-6 justify-between items-center">
+              
+              {/* Filtri STATO */}
+              <div className="flex gap-2 bg-black p-2 rounded-2xl border border-gray-800">
+                <button 
+                  onClick={() => setFiltroStatoPrenotazione('da_impostare')} 
+                  className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroStatoPrenotazione === 'da_impostare' ? 'bg-teal-600 text-black' : 'text-gray-500 hover:text-teal-400'}`}
+                >
+                  Da Impostare
+                </button>
+                <button 
+                  onClick={() => setFiltroStatoPrenotazione('impostate')} 
+                  className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroStatoPrenotazione === 'impostate' ? 'bg-teal-600 text-black' : 'text-gray-500 hover:text-teal-400'}`}
+                >
+                  Impostate
+                </button>
+                <button 
+                  onClick={() => setFiltroStatoPrenotazione('tutte')} 
+                  className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroStatoPrenotazione === 'tutte' ? 'bg-teal-600 text-black' : 'text-gray-500 hover:text-teal-400'}`}
+                >
+                  Tutte
+                </button>
+              </div>
+
+              {/* Filtri TEMPO */}
+              <div className="flex gap-2 bg-black p-2 rounded-2xl border border-gray-800 flex-wrap justify-center">
+                <button 
+                  onClick={() => setFiltroTempoPrenotazione('oggi')} 
+                  className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroTempoPrenotazione === 'oggi' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}
+                >
+                  Oggi
+                </button>
+                <button 
+                  onClick={() => setFiltroTempoPrenotazione('settimana')} 
+                  className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroTempoPrenotazione === 'settimana' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}
+                >
+                  Settimana
+                </button>
+                <button 
+                  onClick={() => setFiltroTempoPrenotazione('mese')} 
+                  className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroTempoPrenotazione === 'mese' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}
+                >
+                  Mese
+                </button>
+                <button 
+                  onClick={() => setFiltroTempoPrenotazione('tutte')} 
+                  className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroTempoPrenotazione === 'tutte' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}
+                >
+                  Tutte
+                </button>
+              </div>
+            </div>
+
+            {/* GRIGLIA RISULTATI */}
+            {getPrenotazioniFiltrate().length === 0 ? (
+              <div className="bg-gray-900 p-10 rounded-[3rem] border-2 border-gray-800 shadow-2xl text-center">
+                <p className="text-gray-500 font-bold uppercase tracking-widest text-lg">Nessuna prenotazione attiva al momento.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {tavoliPrenotati.map((t) => (
-                  <div key={t.id} className="bg-gray-900 border-2 border-teal-600 p-6 rounded-3xl shadow-xl flex flex-col justify-between">
-                    <div>
-                      <div className="flex justify-between items-center mb-4">
-                        <h4 className="text-2xl font-black italic text-white">{t.nome}</h4>
-                        <span className="bg-teal-900 text-teal-300 px-3 py-1 rounded-lg text-xs font-black uppercase">Ore {t.prenotato_alle}</span>
+                {getPrenotazioniFiltrate().map((p) => {
+                  const dataPrenotazione = new Date(p.data_ora);
+                  const isDaImpostare = p.stato === 'in_attesa';
+                  
+                  return (
+                    <div key={p.id} className={`border-2 p-6 rounded-3xl shadow-xl flex flex-col justify-between transition-colors ${isDaImpostare ? 'bg-gray-900 border-teal-600' : 'bg-gray-950 border-gray-800'}`}>
+                      <div>
+                        <div className="flex justify-between items-start mb-4">
+                          <h4 className="text-2xl font-black italic text-white uppercase truncate pr-2">{p.nome_cliente}</h4>
+                          <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase whitespace-nowrap ${isDaImpostare ? 'bg-teal-900 text-teal-300 animate-pulse' : p.stato === 'confermata' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
+                            {p.stato.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <div className="mb-4">
+                          <p className="text-teal-500 font-bold uppercase text-xs tracking-widest">Data e Ora</p>
+                          <p className="text-xl font-mono font-black text-white">
+                            {dataPrenotazione.toLocaleDateString()} - {dataPrenotazione.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </p>
+                        </div>
+                        <div className="mb-6">
+                          <p className="text-gray-500 font-bold uppercase text-xs tracking-widest">Telefono / Note</p>
+                          <p className="text-md text-gray-300 font-bold">{p.telefono}</p>
+                          {p.note && <p className="text-sm text-gray-400 italic mt-1 bg-black p-2 rounded-lg border border-gray-800">{p.note}</p>}
+                        </div>
                       </div>
-                      <p className="text-gray-400 text-sm font-bold uppercase mb-1">A nome di:</p>
-                      <p className="text-xl font-black text-white uppercase mb-6 truncate">{t.prenotato_da}</p>
+
+                      {/* BOTTONI AZIONE */}
+                      <div className="flex gap-2 mt-auto">
+                        {isDaImpostare ? (
+                          <>
+                            <button onClick={() => richiedePin((sid) => gestisciStatoPrenotazione(p.id, 'confermata', sid), "Conferma Prenotazione")} className="flex-[2] bg-teal-600 text-black font-black uppercase py-3 rounded-xl hover:bg-teal-500 transition-colors shadow-lg">
+                              Conferma
+                            </button>
+                            <button onClick={() => richiedePin((sid) => gestisciStatoPrenotazione(p.id, 'rifiutata', sid), "Rifiuta Prenotazione")} className="flex-[1] bg-gray-800 text-red-500 font-black uppercase py-3 rounded-xl hover:bg-red-900 hover:text-white transition-colors">
+                              Rifiuta
+                            </button>
+                          </>
+                        ) : (
+                          <div className="w-full text-center py-3 bg-black rounded-xl border border-gray-800 text-gray-600 font-black uppercase text-xs tracking-widest">
+                            {p.stato === 'confermata' ? 'PRENOTAZIONE CONFERMATA' : 'PRENOTAZIONE RIFIUTATA'}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => { setActiveTableId(t.id); setReserveName(t.prenotato_da); setIsStartModalOpen(true); }} className="flex-[2] bg-teal-600 text-black font-black uppercase py-3 rounded-xl hover:bg-teal-500 transition-colors">
-                        Avvia Partita
-                      </button>
-                      <button onClick={() => richiedePin((sid) => annullaPrenotazione(t.id, sid), "Annulla Prenotazione")} className="flex-[1] bg-gray-800 text-red-500 font-black uppercase py-3 rounded-xl hover:bg-red-900 transition-colors">
-                        Annulla
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -759,8 +891,8 @@ export default function DashboardSala() {
         </div>
       )}
 
-      {/* Prenotazione */}
-      {isReserveModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-yellow-500 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-3xl font-black text-yellow-500 mb-8 uppercase italic">Nuova Prenotazione</h3><input value={reserveName} onChange={(e)=>setReserveName(e.target.value)} placeholder="Nome Cliente" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-2xl text-white mb-4 outline-none text-center" /><input type="time" value={reserveTime} onChange={(e)=>setReserveTime(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-5xl font-mono text-yellow-400 mb-8 text-center outline-none" /><button onClick={() => richiedePin((sid) => prenotaTavolo(sid), "Registra Prenotazione")} className="w-full py-8 bg-yellow-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95">CONFERMA PRENOTAZIONE</button><button onClick={()=>setIsReserveModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
+      {/* Prenotazione Tavolo Manuale (Da Plancia) */}
+      {isReserveModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-yellow-500 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-3xl font-black text-yellow-500 mb-8 uppercase italic">Blocca Tavolo</h3><input value={reserveName} onChange={(e)=>setReserveName(e.target.value)} placeholder="Nome Cliente" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-2xl text-white mb-4 outline-none text-center" /><input type="time" value={reserveTime} onChange={(e)=>setReserveTime(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-5xl font-mono text-yellow-400 mb-8 text-center outline-none" /><button onClick={() => richiedePin((sid) => prenotaTavolo(sid), "Registra Prenotazione")} className="w-full py-8 bg-yellow-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95">CONFERMA PRENOTAZIONE</button><button onClick={()=>setIsReserveModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
 
       {/* Avvia Partita */}
       {isStartModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-950 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic italic">Apertura Tavolo</h3><select value={selectedSocioId} onChange={(e) => setSelectedSocioId(e.target.value)} className="w-full bg-gray-900 border-4 border-blue-900 p-6 rounded-2xl text-xl text-white mb-8 outline-none"><option value="">👤 CLIENTE OCCASIONALE</option>{soci.map(s => (<option key={s.id} value={s.id}>🏆 SOCIO: {s.cognome} {s.nome}</option>))}</select><button onClick={() => richiedePin((sid) => avviaSessione(sid), "Avvio Partita")} className="w-full py-8 bg-blue-600 rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">APRI TAVOLO CON PIN</button><button onClick={()=>setIsStartModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
