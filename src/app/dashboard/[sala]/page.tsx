@@ -613,40 +613,52 @@ export default function DashboardSala() {
   };
 
   const eseguiStampa = () => {
-    // NUOVA FUNZIONE: Esportazione in CSV per Excel
-  const esportaCSV = () => {
-    if (primaNota.length === 0) {
-      alert("⚠️ Nessun movimento da esportare oggi.");
-      return;
-    }
-
-    // 1. Creiamo le intestazioni delle colonne
-    let csvContent = "Data e Ora;Causale;Operatore;Metodo Pagamento;Tipo Movimento;Importo (€)\n";
-
-    // 2. Inseriamo i dati riga per riga
-    primaNota.forEach(m => {
-      const dataOra = new Date(m.created_at).toLocaleString();
-      // Rimuoviamo eventuali punti e virgola dalla descrizione per non rompere le colonne Excel
-      const causale = m.descrizione.replace(/;/g, ','); 
-      const staff = m.staff?.nome || "ADMIN";
-      const metodo = m.metodo_pagamento.toUpperCase();
-      const tipo = m.tipo.toUpperCase();
-      const importo = parseFloat(m.importo).toFixed(2);
-
-      csvContent += `${dataOra};${causale};${staff};${metodo};${tipo};${importo}\n`;
-    });
-
-    // 3. Creiamo il file e forziamo il download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Prima_Nota_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
     window.print();
+  };
+
+  // NUOVA FUNZIONE: Esportazione in CSV per Excel (Versione Potenziata)
+  const esportaCSV = () => {
+    try {
+      if (!primaNota || primaNota.length === 0) {
+        alert("⚠️ Nessun movimento da esportare oggi.");
+        return;
+      }
+
+      // 1. Creiamo le intestazioni
+      let csvContent = "Data e Ora;Causale;Operatore;Metodo Pagamento;Tipo Movimento;Importo\n";
+
+      // 2. Inseriamo i dati
+      primaNota.forEach(m => {
+        const dataOra = new Date(m.created_at).toLocaleString();
+        const causale = m.descrizione ? m.descrizione.replace(/;/g, ',') : "";
+        const staff = m.staff?.nome || "ADMIN";
+        const metodo = m.metodo_pagamento ? m.metodo_pagamento.toUpperCase() : "";
+        const tipo = m.tipo ? m.tipo.toUpperCase() : "";
+        const importo = parseFloat(m.importo || 0).toFixed(2);
+
+        csvContent += `${dataOra};${causale};${staff};${metodo};${tipo};${importo}\n`;
+      });
+
+      // 3. Creiamo il file forzando la compatibilità con Excel (\uFEFF)
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const dataOggi = new Date().toLocaleDateString().replace(/\//g, '-');
+      link.download = `Prima_Nota_${dataOggi}.csv`;
+      
+      // 4. Eseguiamo il download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // 5. Avviso visivo di successo
+      alert("✅ File Prima_Nota scaricato con successo!\n\nControlla la cartella 'Download' del tuo computer o browser.");
+
+    } catch (error) {
+      console.error("Errore durante l'esportazione:", error);
+      alert("❌ C'è stato un problema durante la creazione del file Excel.");
+    }
   };
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-green-500 font-black text-2xl tracking-widest italic animate-pulse">CARICAMENTO TORRE DI CONTROLLO...</div>;
