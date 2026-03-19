@@ -465,11 +465,12 @@ export default function DashboardSala() {
   };
 
   // NUOVA FUNZIONE: Copia il link VIP negli appunti
-  const copiaLinkVIP = (token: string, nomeSocio: string) => {
-    const url = `${window.location.origin}/vip/${params['nome-sala']}/${token}`;
-    navigator.clipboard.writeText(url);
-    alert(`✅ Link VIP copiato!\n\nOra incollalo su WhatsApp per inviarlo a ${nomeSocio}.`);
-  };
+const copiaLinkVIP = (token: string, nomeSocio: string) => {
+  // Ho cambiato params['nome-sala'] con params.sala
+  const url = `${window.location.origin}/vip/${params.sala}/${token}`;
+  navigator.clipboard.writeText(url);
+  alert(`✅ Link VIP copiato!\n\nOra incollalo su WhatsApp per inviarlo a ${nomeSocio}.`);
+};
 
   const formattaCronometro = (startTime: number | null) => {
     if (!startTime) return "00:00:00";
