@@ -12,9 +12,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export default function PrenotazionePubblica() {
   const params = useParams();
   
-  // Usa 'params.sala' in base alla tua struttura cartelle [sala]
+  // Decodifica l'URL e pulisce eventuali trattini o underscore
   const nomeSalaUrl = params.sala as string;
-  const nomeSalaDecoded = decodeURIComponent(nomeSalaUrl).replace(/-/g, ' ');
+  const nomeSalaDecoded = decodeURIComponent(nomeSalaUrl).replace(/[-_]/g, ' ').trim();
 
   const [loading, setLoading] = useState(true);
   const [salaId, setSalaId] = useState<string | null>(null);
@@ -28,21 +28,29 @@ export default function PrenotazionePubblica() {
   // Stato invio
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [debugError, setDebugError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchSala() {
       try {
+        // Cerca la sala ignorando maiuscole/minuscole e spaziature extra
         const { data, error } = await supabase
           .from('sale')
-          .select('id')
-          .ilike('name', nomeSalaDecoded)
+          .select('id, name')
+          .ilike('name', `%${nomeSalaDecoded}%`)
           .single();
+
+        if (error) {
+          console.error("Errore Supabase:", error);
+          setDebugError(error.message);
+          return;
+        }
 
         if (data) {
           setSalaId(data.id);
         }
       } catch (err) {
-        console.error("Sala non trovata:", err);
+        console.error("Eccezione durante la ricerca sala:", err);
       } finally {
         setLoading(false);
       }
@@ -60,7 +68,6 @@ export default function PrenotazionePubblica() {
     setIsSubmitting(true);
 
     try {
-      // Inserisce la richiesta nella tabella prenotazioni
       const { error } = await supabase.from('prenotazioni').insert([{
         sala_id: salaId,
         nome_cliente: nomeCliente,
@@ -81,17 +88,25 @@ export default function PrenotazionePubblica() {
     }
   };
 
+  // SCHERMATA DI CARICAMENTO
   if (loading) {
     return <div className="min-h-screen bg-black flex items-center justify-center text-teal-500 font-black text-xl animate-pulse tracking-widest">Caricamento sala...</div>;
   }
 
+  // SCHERMATA ERRORE (SALA NON TROVATA)
   if (!salaId) {
-    return <div className="min-h-screen bg-black flex flex-col items-center justify-center text-red-500 font-black p-4 text-center">
-      <h1 className="text-4xl mb-4">Sala non trovata</h1>
-      <p className="text-gray-400">Verifica che il link sia corretto.</p>
-    </div>;
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-red-500 font-black p-4 text-center">
+        <h1 className="text-4xl mb-4 uppercase">Sala non trovata</h1>
+        <p className="text-gray-400 mb-2">Verifica che il link della sala sia corretto.</p>
+        <p className="text-gray-600 text-xs uppercase tracking-widest">Hai cercato: "{nomeSalaDecoded}"</p>
+        {/* Mostra l'errore SQL a schermo per aiutarti a fare debug se serve */}
+        {debugError && <p className="text-red-900 text-xs mt-4">Debug: {debugError}</p>}
+      </div>
+    );
   }
 
+  // SCHERMATA DI SUCCESSO
   if (success) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-center p-6 animate-in zoom-in-95 duration-500">
@@ -99,7 +114,7 @@ export default function PrenotazionePubblica() {
           ✓
         </div>
         <h1 className="text-4xl font-black text-white uppercase italic mb-4">Richiesta Inviata!</h1>
-        <p className="text-gray-400 text-lg mb-8 max-w-md">Abbiamo inviato la tua richiesta alla cassa di <span className="text-teal-400 font-bold">{nomeSalaDecoded}</span>. Ti aspettiamo!</p>
+        <p className="text-gray-400 text-lg mb-8 max-w-md">Abbiamo inviato la tua richiesta alla cassa della sala. Ti aspettiamo!</p>
         <button onClick={() => window.location.reload()} className="bg-gray-900 border-2 border-gray-700 text-white font-black uppercase tracking-widest px-8 py-4 rounded-2xl hover:bg-gray-800 transition-colors">
           Nuova Prenotazione
         </button>
@@ -107,10 +122,10 @@ export default function PrenotazionePubblica() {
     );
   }
 
+  // SCHERMATA PRINCIPALE DEL FORM
   return (
     <div className="min-h-screen bg-black text-white p-4 md:p-8 font-sans tracking-tighter flex justify-center items-start pt-12 md:pt-24 relative overflow-hidden">
       
-      {/* Sfondo decorativo */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-teal-900/20 blur-[120px] rounded-full pointer-events-none"></div>
 
       <div className="w-full max-w-md relative z-10">
