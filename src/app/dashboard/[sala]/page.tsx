@@ -38,6 +38,18 @@ export default function DashboardSala() {
   const [incassoTotale, setIncassoTotale] = useState(0);
   const [incassoContanti, setIncassoContanti] = useState(0);
   const [incassoPOS, setIncassoPOS] = useState(0);
+  // NUOVI STATI: Prima Nota Contabile
+  const [primaNota, setPrimaNota] = useState<any[]>([]);
+  const [usciteTotali, setUsciteTotali] = useState(0);
+  
+  // Stati Modale: Registra Uscita
+  const [isNewUscitaModalOpen, setIsNewUscitaModalOpen] = useState(false);
+  const [uscitaImporto, setUscitaImporto] = useState("");
+  const [uscitaDescrizione, setUscitaDescrizione] = useState("");
+  const [uscitaMetodo, setUscitaMetodo] = useState("contanti");
+  
+  // Metodo pagamento per la ricarica socio
+  const [rechargeMetodo, setRechargeMetodo] = useState("contanti");
 
   // Stati Modali
   const [activeTableId, setActiveTableId] = useState<string | null>(null); 
@@ -134,20 +146,43 @@ export default function DashboardSala() {
         const { data: tDB } = await supabase.from('tavoli').select('*').eq('sala_id', salaId).order('numero', { ascending: true });
         const { data: sDB } = await supabase.from('sessioni').select('*, consumazioni(*), staff(nome)').eq('sala_id', salaId).eq('stato', 'in_corso');
         const { data: pDB } = await supabase.from('prodotti').select('*').eq('sala_id', salaId).order('nome', { ascending: true });
-        const { data: rDB } = await supabase.from('sessioni').select('*, staff(nome)').eq('sala_id', salaId).eq('stato', 'terminata').gte('fine', oggi.toISOString()).order('fine', { ascending: false });
         const { data: sociDB } = await supabase.from('soci').select('*').eq('sala_id', salaId).order('cognome', { ascending: true });
         const { data: staffDB } = await supabase.from('staff').select('*').eq('sala_id', salaId).order('nome', { ascending: true });
         const { data: torneiDB } = await supabase.from('tornei').select('*').eq('sala_id', salaId).order('data_inizio', { ascending: false }); 
         const { data: prenDB } = await supabase.from('prenotazioni').select('*').eq('sala_id', salaId).order('data_ora', { ascending: true });
-        
-        // RECUPERA I POST DELLA BACHECA CON LE RELATIVE REAZIONI
         const { data: bachecaDB } = await supabase.from('bacheca').select('*, reazioni_bacheca(*)').eq('sala_id', salaId).order('created_at', { ascending: false });
+        
+        // NUOVO: RECUPERO PRIMA NOTA (MOVIMENTI DI OGGI)
+        const { data: movimentiDB } = await supabase.from('movimenti_cassa').select('*, staff(nome)').eq('sala_id', salaId).gte('created_at', oggi.toISOString()).order('created_at', { ascending: false });
 
         if (pDB) setProdotti(pDB);
         if (sociDB) setSoci(sociDB);
         if (staffDB) setListaStaff(staffDB);
         if (prenDB) setPrenotazioniList(prenDB);
         if (bachecaDB) setBachecaPosts(bachecaDB);
+
+        if (movimentiDB) {
+          setPrimaNota(movimentiDB);
+          let entrate = 0, uscite = 0, contanti = 0, pos = 0;
+          
+          movimentiDB.forEach(m => {
+            const val = parseFloat(m.importo);
+            if (m.tipo === 'entrata') {
+              if (m.metodo_pagamento !== 'credito_vip') entrate += val; 
+              if (m.metodo_pagamento === 'contanti') contanti += val;
+              if (m.metodo_pagamento === 'pos') pos += val;
+            } else if (m.tipo === 'uscita') {
+              uscite += val;
+              if (m.metodo_pagamento === 'contanti') contanti -= val;
+              if (m.metodo_pagamento === 'pos') pos -= val;
+            }
+          });
+          
+          setIncassoTotale(entrate);
+          setUsciteTotali(uscite);
+          setIncassoContanti(contanti); // Saldo REALE cassetto
+          setIncassoPOS(pos);
+        }
 
         if (torneiDB) {
           setTornei(torneiDB);
@@ -157,18 +192,6 @@ export default function DashboardSala() {
           }
         }
 
-        if (rDB) {
-          setRecenti(rDB);
-          let tot = 0, contanti = 0, pos = 0;
-          rDB.forEach(r => {
-            const importo = parseFloat(r.costo_totale || 0);
-            if (r.metodo_pagamento === 'credito') return; 
-            tot += importo;
-            if (r.metodo_pagamento === 'pos') pos += importo;
-            else contanti += importo; 
-          });
-          setIncassoTotale(tot); setIncassoContanti(contanti); setIncassoPOS(pos);
-        }
         if (tDB) {
           setTavoli(tDB.map(t => {
             const sess = sDB?.find(s => s.tavolo_id === t.id);
@@ -453,10 +476,70 @@ export default function DashboardSala() {
     setIsEditSocioModalOpen(false);
   };
 
+  // 1. Ricarica Tessera (Ora scrive in Prima Nota)
   const salvaRicarica = async (staffId: string) => {
-    const nuovoCredito = parseFloat(socioToRecharge.credito || 0) + parseFloat(rechargeAmount);
+    const importoVal = parseFloat(rechargeAmount);
+    const nuovoCredito = parseFloat(socioToRecharge.credito || 0) + importoVal;
+    
     await supabase.from('soci').update({ credito: nuovoCredito }).eq('id', socioToRecharge.id);
-    await refreshDati(currentSalaId!); setIsRechargeModalOpen(false);
+    
+    await supabase.from('movimenti_cassa').insert([{
+      sala_id: currentSalaId,
+      tipo: 'entrata',
+      categoria: 'ricarica_vip',
+      metodo_pagamento: rechargeMetodo,
+      importo: importoVal.toFixed(2),
+      descrizione: `Ricarica Tessera: ${socioToRecharge.cognome} ${socioToRecharge.nome}`,
+      staff_id: staffId
+    }]);
+
+    await refreshDati(currentSalaId!); setIsRechargeModalOpen(false); setRechargeAmount("");
+  };
+
+  // 2. Chiusura Tavolo (Ora scrive in Prima Nota)
+  const confermaChiusura = async (metodo: any, staffId: string) => {
+    if (metodo === 'credito') {
+      const socio = soci.find(s => s.id === summaryData.socio_id);
+      await supabase.from('soci').update({ credito: (socio.credito || 0) - summaryData.totale }).eq('id', socio.id);
+    }
+    
+    await supabase.from('movimenti_cassa').insert([{
+      sala_id: currentSalaId,
+      tipo: 'entrata',
+      categoria: 'biliardo_bar',
+      metodo_pagamento: metodo === 'credito' ? 'credito_vip' : metodo,
+      importo: summaryData.totale.toFixed(2),
+      descrizione: `Incasso ${summaryData.nome}`,
+      staff_id: staffId
+    }]);
+
+    await supabase.from('sessioni').update({ fine: new Date().toISOString(), stato: 'terminata', costo_totale: summaryData.totale.toFixed(2), metodo_pagamento: metodo, staff_id: staffId }).eq('id', summaryData.sessioneId);
+    await supabase.from('tavoli').update({ stato: 'libero' }).eq('id', summaryData.tavoloId);
+    await refreshDati(currentSalaId!); setIsSummaryModalOpen(false);
+  };
+
+  // 3. NUOVA: Registra una spesa/uscita manuale
+  const salvaUscita = async (staffId: string) => {
+    if(!uscitaImporto || !uscitaDescrizione) return;
+    await supabase.from('movimenti_cassa').insert([{
+      sala_id: currentSalaId,
+      tipo: 'uscita',
+      categoria: 'spese_varie',
+      metodo_pagamento: uscitaMetodo,
+      importo: parseFloat(uscitaImporto).toFixed(2),
+      descrizione: uscitaDescrizione,
+      staff_id: staffId
+    }]);
+    await refreshDati(currentSalaId!); 
+    setIsNewUscitaModalOpen(false); setUscitaImporto(""); setUscitaDescrizione("");
+  };
+
+  // 4. NUOVA: Annulla Transazione Cassa (Storno Prima Nota)
+  const stornoMovimento = async (id: string, staffId: string) => {
+    if(confirm("Vuoi davvero annullare questo movimento di cassa?")) {
+      await supabase.from('movimenti_cassa').delete().eq('id', id);
+      await refreshDati(currentSalaId!);
+    }
   };
 
   const salvaTariffe = async (staffId: string) => {
@@ -791,32 +874,65 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* CASSA */}
+        {/* REPORT CASSA (PRIMA NOTA AGGIORNATA) */}
         {activeView === 'report' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 text-center">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-              <div className="bg-gray-900 p-8 rounded-[3rem] border-4 border-purple-600 shadow-2xl"><p className="text-purple-400 font-black uppercase text-xs mb-2">Totale Oggi</p><h3 className="text-6xl font-black italic">€ {incassoTotale.toFixed(2)}</h3></div>
-              <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-green-600"><p className="text-green-500 font-black uppercase text-xs mb-2">In Contanti</p><h3 className="text-4xl font-black italic">€ {incassoContanti.toFixed(2)}</h3></div>
-              <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-blue-600"><p className="text-blue-500 font-black uppercase text-xs mb-2">Tramite POS</p><h3 className="text-4xl font-black italic">€ {incassoPOS.toFixed(2)}</h3></div>
+            
+            <button onClick={() => setIsNewUscitaModalOpen(true)} className="w-full mb-8 py-8 bg-red-600 text-white font-black text-2xl uppercase shadow-xl rounded-[2rem] hover:bg-red-500 transition-colors">
+              - REGISTRA SPESA / USCITA CASSA
+            </button>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+              <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-green-600">
+                <p className="text-green-500 font-black uppercase text-[10px] tracking-widest mb-2">Totale Entrate Oggi</p>
+                <h3 className="text-4xl font-black text-white italic">€ {incassoTotale.toFixed(2)}</h3>
+              </div>
+              <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-red-600">
+                <p className="text-red-500 font-black uppercase text-[10px] tracking-widest mb-2">Totale Uscite Oggi</p>
+                <h3 className="text-4xl font-black text-white italic">€ {usciteTotali.toFixed(2)}</h3>
+              </div>
+              <div className="bg-cyan-950 p-8 rounded-[3rem] border-4 border-cyan-500 shadow-[0_0_30px_rgba(6,182,212,0.2)] md:col-span-2">
+                <p className="text-cyan-400 font-black uppercase text-[10px] tracking-widest mb-2">Saldo Cassetto (Contanti Reali)</p>
+                <h3 className="text-5xl font-black text-cyan-300 italic">€ {incassoContanti.toFixed(2)}</h3>
+                <p className="text-gray-500 text-xs mt-2 uppercase font-bold tracking-widest">In POS/Banca: € {incassoPOS.toFixed(2)}</p>
+              </div>
             </div>
+
             <div className="bg-gray-900 border border-gray-800 rounded-[2.5rem] overflow-hidden text-left shadow-2xl">
+              <div className="p-6 bg-gray-800 border-b border-gray-700 text-center">
+                <h3 className="text-white font-black uppercase tracking-widest">Prima Nota Contabile</h3>
+              </div>
               <table className="w-full text-xs uppercase font-bold">
-                <thead className="bg-gray-800 text-gray-500"><tr><th className="p-5">Ora</th><th className="p-5">Staff</th><th className="p-5">Metodo</th><th className="p-5 text-right">Importo</th><th className="p-5 text-center">Storno</th></tr></thead>
+                <thead className="bg-gray-800 text-gray-500">
+                  <tr><th className="p-5">Ora</th><th className="p-5">Causale</th><th className="p-5">Staff</th><th className="p-5 text-center">Metodo</th><th className="p-5 text-right">Importo</th><th className="p-5 text-center">Storno</th></tr>
+                </thead>
                 <tbody className="divide-y divide-gray-800">
-                  {recenti.map((r) => (
-                    <tr key={r.id} className="hover:bg-gray-800/20 transition-all">
-                      <td className="p-5 font-mono">{new Date(r.fine).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
-                      <td className="p-5 text-cyan-500 font-black italic">{r.staff?.nome || "ADMIN"}</td>
-                      <td className="p-5">{r.metodo_pagamento}</td>
-                      <td className="p-5 text-right font-black text-white text-lg italic">€ {parseFloat(r.costo_totale).toFixed(2)}</td>
-                      <td className="p-5 text-center"><button onClick={() => richiedePin((sid) => annullaTransazione(r.id, sid), "Storno Operazione")} className="text-red-500 text-xl">❌</button></td>
-                    </tr>
-                  ))}
+                  {primaNota.length === 0 ? (
+                    <tr><td colSpan={6} className="p-10 text-center text-gray-500">Nessun movimento registrato oggi.</td></tr>
+                  ) : (
+                    primaNota.map((m) => (
+                      <tr key={m.id} className="hover:bg-gray-800/20 transition-all">
+                        <td className="p-5 font-mono text-gray-400">{new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+                        <td className="p-5 text-white">{m.descrizione}</td>
+                        <td className="p-5 text-gray-500">{m.staff?.nome || "ADMIN"}</td>
+                        <td className="p-5 text-center">
+                          <span className={`px-3 py-1 rounded-lg text-[10px] ${m.metodo_pagamento === 'contanti' ? 'bg-cyan-900/50 text-cyan-400' : m.metodo_pagamento === 'pos' ? 'bg-blue-900/50 text-blue-400' : 'bg-yellow-900/50 text-yellow-400'}`}>
+                            {m.metodo_pagamento.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className={`p-5 text-right font-black text-lg italic ${m.tipo === 'entrata' ? 'text-green-500' : 'text-red-500'}`}>
+                          {m.tipo === 'entrata' ? '+' : '-'} € {parseFloat(m.importo).toFixed(2)}
+                        </td>
+                        <td className="p-5 text-center"><button onClick={() => richiedePin((sid) => stornoMovimento(m.id, sid), "Storno Movimento")} className="text-gray-600 hover:text-red-500 text-xl transition-colors">✕</button></td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
-        )}
+        )}  
+       /* )}*/
 
         {/* STAFF */}
         {activeView === 'staff' && (
@@ -1075,11 +1191,46 @@ export default function DashboardSala() {
       {/* Chiusura Conto */}
       {isSummaryModalOpen && summaryData && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-950 border-4 border-green-600 p-8 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-green-500 uppercase italic mb-8">Riepilogo e Chiusura</h3><div className="bg-gray-900 p-6 rounded-3xl border border-gray-800 mb-8 font-bold text-left"><div className="flex justify-between text-xl uppercase mb-2 text-gray-400"><span>Tempo Gioco</span><span>€ {summaryData.costoBiliardo.toFixed(2)}</span></div><div className="flex justify-between text-xl uppercase text-orange-400 mb-4"><span>Totale Bar</span><span>€ {summaryData.costoBar.toFixed(2)}</span></div><div className="border-t-2 border-gray-700 pt-6 flex justify-between items-center"><span className="text-3xl font-black italic text-white uppercase italic">Totale Conto</span><span className="text-5xl font-black text-green-500 italic">€ {summaryData.totale.toFixed(2)}</span></div></div><div className="flex flex-col gap-4"><button onClick={() => richiedePin((sid) => confermaChiusura('contanti', sid), "Pagamento Contanti")} className="w-full py-6 bg-green-600 rounded-3xl font-black uppercase text-xl shadow-xl">💵 PAGAMENTO CONTANTI</button><button onClick={() => richiedePin((sid) => confermaChiusura('pos', sid), "Pagamento POS")} className="w-full py-6 bg-blue-600 rounded-3xl font-black uppercase text-xl shadow-xl">💳 PAGAMENTO POS</button>{summaryData.socio_id && (<button onClick={() => richiedePin((sid) => confermaChiusura('credito', sid), "Pagamento Credito")} className="w-full py-6 bg-yellow-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl">💳 SCALA DA TESSERA</button>)}</div><button onClick={()=>setIsSummaryModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
 
-      {/* Ricarica Credito */}
-      {isRechargeModalOpen && socioToRecharge && (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in fade-in print:hidden"><div className="bg-gray-900 border-4 border-green-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-2xl font-black text-green-500 mb-2 uppercase italic tracking-tighter italic">Ricarica Credito</h3><p className="text-3xl font-black text-white mb-8 uppercase italic italic">{socioToRecharge.nome} {socioToRecharge.cognome}</p><input type="number" value={rechargeAmount} onChange={(e)=>setRechargeAmount(e.target.value)} placeholder="€" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-6xl text-center text-green-500 mb-8 outline-none font-black" /><button onClick={() => richiedePin((sid) => salvaRicarica(sid), `Ricarica ${socioToRecharge.nome}`)} className="w-full py-8 bg-green-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95 transition-all">CONFERMA CON PIN</button><button onClick={()=>setIsRechargeModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>
+      {/* {/* Registra Uscita (NUOVO MODALE) */}
+      {isNewUscitaModalOpen && (
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden">
+          <div className="bg-gray-900 border-4 border-red-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl">
+            <h3 className="text-3xl font-black text-red-500 mb-8 uppercase italic">Registra Spesa</h3>
+            <input value={uscitaDescrizione} onChange={(e)=>setUscitaDescrizione(e.target.value)} placeholder="Causale (es. Fornitore, Pulizie...)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-red-500" />
+            <input type="number" value={uscitaImporto} onChange={(e)=>setUscitaImporto(e.target.value)} placeholder="Importo (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-4xl font-mono text-red-400 mb-4 text-center outline-none focus:border-red-500" />
+            
+            <select value={uscitaMetodo} onChange={(e)=>setUscitaMetodo(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-red-500">
+              <option value="contanti">Prelevati in Contanti</option>
+              <option value="pos">Pagati con Carta/Dal Conto</option>
+            </select>
+
+            <button onClick={() => richiedePin((sid) => salvaUscita(sid), "Registrazione Uscita")} className="w-full py-8 bg-red-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-colors">CONFERMA USCITA</button>
+            <button onClick={()=>setIsNewUscitaModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button>
+          </div>
+        </div>
       )}
 
+      {/* Ricarica Credito (AGGIORNATO CON METODO PAGAMENTO) */}
+      {isRechargeModalOpen && socioToRecharge && (
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in fade-in print:hidden">
+          <div className="bg-gray-900 border-4 border-green-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl">
+            <h3 className="text-2xl font-black text-green-500 mb-2 uppercase italic tracking-tighter">Ricarica Credito</h3>
+            <p className="text-3xl font-black text-white mb-8 uppercase italic">{socioToRecharge.nome} {socioToRecharge.cognome}</p>
+            
+            <input type="number" value={rechargeAmount} onChange={(e)=>setRechargeAmount(e.target.value)} placeholder="€" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-6xl text-center text-green-500 mb-4 outline-none font-black focus:border-green-500" />
+            
+            <select value={rechargeMetodo} onChange={(e)=>setRechargeMetodo(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-lg text-white mb-8 outline-none text-center focus:border-green-500">
+              <option value="contanti">Il socio mi ha dato Contanti</option>
+              <option value="pos">Il socio ha pagato col POS</option>
+            </select>
+
+            <button onClick={() => richiedePin((sid) => salvaRicarica(sid), `Ricarica ${socioToRecharge.nome}`)} className="w-full py-8 bg-green-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95 transition-all">CONFERMA CON PIN</button>
+            <button onClick={()=>setIsRechargeModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button>
+          </div>
+        </div>
+      )}
+      
+      
       {/* Nuovo Staff */}
       {isNewStaffModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-cyan-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-white mb-8 uppercase italic">Nuovo Collaboratore</h3><input value={newStaffNome} onChange={(e) => setNewStaffNome(e.target.value)} placeholder="Nome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 text-center outline-none focus:border-cyan-500" /><input type="password" maxLength={4} value={newStaffPin} onChange={(e) => setNewStaffPin(e.target.value)} placeholder="PIN 4 Cifre" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-4xl font-mono text-cyan-400 tracking-[0.5em] mb-8 text-center outline-none focus:border-cyan-500" /><button onClick={salvaNuovoStaff} className="w-full py-8 bg-cyan-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95 transition-all">SALVA PROFILO</button><button onClick={()=>setIsNewStaffModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
 
