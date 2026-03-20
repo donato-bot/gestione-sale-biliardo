@@ -77,7 +77,7 @@ export default function DashboardSala() {
   const [pinBuffer, setPinBuffer] = useState("");
   const [pendingAction, setPendingAction] = useState<any>(null);
 
-  // STATO: OPERATORE LOGGATO
+// STATO: OPERATORE LOGGATO
   const [activeStaff, setActiveStaff] = useState<any>(null);
 
   // Stati Filtri Prenotazioni
@@ -112,6 +112,8 @@ export default function DashboardSala() {
   const [players, setPlayers] = useState(["", "", "", ""]);
   
   const [now, setNow] = useState(Date.now());
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -324,7 +326,7 @@ export default function DashboardSala() {
         const s = soci.find(x => x.id === i);
         return { id: i, tipo: 'socio', nome: s ? `${s.cognome} ${s.nome}` : 'Sconosciuto', confermato: true };
       }
-      return i;
+      return i;f
     });
   };
 
@@ -665,7 +667,14 @@ export default function DashboardSala() {
 
   return (
     <div className="min-h-screen bg-black text-white p-4 font-sans tracking-tighter overflow-x-hidden relative print:bg-white print:text-black">
-      
+     {/* TASTO FLUTTUANTE GUIDA */}
+        <button 
+          onClick={() => setIsHelpModalOpen(true)} 
+          className="fixed bottom-6 right-6 z-40 bg-cyan-900 border-2 border-cyan-500 hover:bg-cyan-500 text-cyan-100 hover:text-black font-black rounded-full w-16 h-16 flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.8)] hover:scale-110 transition-all duration-300"
+          title="Apri Manuale Operativo"
+        >
+          ❓
+        </button> 
       {/* BADGE OPERATORE LOGGATO - NASCOSTO IN STAMPA */}
       {activeStaff && (
         <div className="absolute top-6 right-6 z-40 bg-gray-900 border border-cyan-600 px-6 py-3 rounded-2xl flex items-center gap-6 shadow-[0_0_15px_rgba(8,145,178,0.3)] animate-in slide-in-from-top print:hidden">
@@ -676,6 +685,79 @@ export default function DashboardSala() {
           <button onClick={() => setActiveStaff(null)} className="bg-red-950 text-red-500 hover:bg-red-600 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase transition-colors">
             CAMBIO TURNO
           </button>
+        </div>
+      )}
+      {/* MODALE GUIDA E ISTRUZIONI (MANUALE OPERATIVO) */}
+      {isHelpModalOpen && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
+          <div className="bg-gray-900 border-2 border-cyan-600 p-8 md:p-12 rounded-[3rem] shadow-[0_0_50px_rgba(6,182,212,0.2)] max-w-4xl w-full max-h-[90vh] overflow-y-auto relative custom-scrollbar">
+            
+            <button onClick={() => setIsHelpModalOpen(false)} className="absolute top-6 right-6 text-gray-500 hover:text-white bg-gray-800 hover:bg-red-600 rounded-full w-12 h-12 flex items-center justify-center transition-all text-2xl font-black">✕</button>
+
+            <div className="text-center mb-10">
+              <span className="text-5xl mb-4 block">📖</span>
+              <h2 className="text-3xl md:text-4xl font-black text-cyan-400 uppercase tracking-widest">Manuale Operativo</h2>
+              <p className="text-gray-500 font-bold uppercase tracking-widest mt-2 text-sm">Guida rapida per l'utilizzo del gestionale</p>
+            </div>
+
+            <div className="space-y-8 text-left">
+              
+              {/* Sezione 1: Biliardi */}
+              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
+                <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-cyan-500 text-2xl">🎱</span> 1. Gestione Biliardi</h3>
+                <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
+                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1">Apertura Tavolo:</strong> Clicca su un tavolo libero (verde). Scegli se il giocatore è un SOCIO (avrà la tariffa scontata) o un cliente STANDARD. Il cronometro partirà in automatico.</p>
+                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1 mt-3">Chiusura Tavolo:</strong> Clicca sul tavolo occupato (rosso). Il sistema calcolerà l'importo esatto in base ai minuti giocati. Seleziona il metodo di pagamento (Contanti o POS) e clicca conferma.</p>
+                </div>
+              </section>
+
+              {/* Sezione 2: Cassa */}
+              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
+                <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-green-500 text-2xl">💶</span> 2. Cassa e Prima Nota</h3>
+                <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
+                  <p><strong className="text-green-400 uppercase text-xs tracking-widest block mb-1">Registrare Uscite:</strong> Usa la sezione CASSA e clicca il tasto rosso per segnare le spese (es. acquisto gessetti, pulizie). L'importo verrà scalato automaticamente dal cassetto.</p>
+                  <p><strong className="text-green-400 uppercase text-xs tracking-widest block mb-1 mt-3">Lettura Dati:</strong> Controlla sempre il riquadro "SALDO CASSETTO". Quella cifra rappresenta i contanti fisici che devi avere in mano. Le transazioni POS sono separate.</p>
+                  <p><strong className="text-green-400 uppercase text-xs tracking-widest block mb-1 mt-3">Esportazione a fine serata:</strong> Usa il tasto verde "SCARICA PRIMA NOTA" per salvare il file Excel della giornata. Fallo sempre prima di chiudere il locale.</p>
+                </div>
+              </section>
+
+              {/* Sezione 3: Correzioni */}
+              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
+                <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-red-500 text-2xl">⚙️</span> 3. Correzioni e Turni</h3>
+                <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
+                  <p><strong className="text-red-400 uppercase text-xs tracking-widest block mb-1">Storno Errori:</strong> Se sbagli a chiudere un tavolo o inserisci una spesa errata, vai in CASSA. Trova la riga sbagliata in fondo e clicca la ✕. Richiederà il PIN amministratore.</p>
+                  <p><strong className="text-red-400 uppercase text-xs tracking-widest block mb-1 mt-3">Cambio Turno:</strong> Quando dai il cambio a un collega, clicca in alto a destra su "CAMBIO TURNO" per far figurare il nome corretto sugli incassi che farai tu.</p>
+                </div>
+              </section>
+
+            </div>
+
+{/* Sezione 4: Impostazioni e Soci */}
+              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
+                <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-purple-500 text-2xl">👥</span> 4. Impostazioni, Staff e Soci</h3>
+                <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
+                  <p><strong className="text-purple-400 uppercase text-xs tracking-widest block mb-1">Aggiungere Staff:</strong> Vai nella sezione STAFF. Inserisci Nome e un PIN numerico di 4 cifre per i nuovi dipendenti. Il PIN servirà per le operazioni di storno sicure.</p>
+                  <p><strong className="text-purple-400 uppercase text-xs tracking-widest block mb-1 mt-3">Tariffe:</strong> Nella sezione TARIFFE, imposta il costo orario base (Standard) e quello scontato per chi possiede la tessera del locale (Soci).</p>
+                  <p><strong className="text-purple-400 uppercase text-xs tracking-widest block mb-1 mt-3">Gestione Soci:</strong> Usa la sezione SOCI per registrare i tesserati. Ogni socio ha un "Credito" virtuale: può darti 50€ in anticipo e usare quel credito per pagare le future ore di gioco al posto dei contanti.</p>
+                </div>
+              </section>
+
+              {/* Sezione 5: Magazzino e Tornei */}
+              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
+                <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-orange-500 text-2xl">📦</span> 5. Magazzino e Tornei</h3>
+                <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
+                  <p><strong className="text-orange-400 uppercase text-xs tracking-widest block mb-1">Magazzino Bar:</strong> Registra i prodotti da banco (es. Acqua, Birra) con i prezzi. Aggiungendoli al tavolo di un cliente, le scorte si abbasseranno in automatico.</p>
+                  <p><strong className="text-orange-400 uppercase text-xs tracking-widest block mb-1 mt-3">Tornei:</strong> Crea un torneo impostando Data e Quota d'iscrizione. Man mano che iscrivi i partecipanti, l'incasso delle quote finirà automaticamente nella Cassa alla voce Entrate.</p>
+                </div>
+              </section>
+
+            <div className="mt-12 text-center">
+              <button onClick={() => setIsHelpModalOpen(false)} className="bg-cyan-600 hover:bg-cyan-500 text-black font-black text-lg py-5 px-10 rounded-[2rem] shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all uppercase tracking-widest w-full md:w-auto">
+                Ho capito, chiudi guida
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
 

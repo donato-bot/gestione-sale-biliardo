@@ -1,11 +1,14 @@
-> Why do I have a folder named ".vercel" in my project?
-The ".vercel" folder is created when you link a directory to a Vercel project.
+> Perché nel mio progetto è presente una cartella denominata ".vercel"?
 
-> What does the "project.json" file contain?
-The "project.json" file contains:
-- The ID of the Vercel project that you linked ("projectId")
-- The ID of the user or team your Vercel project is owned by ("orgId")
+La cartella ".vercel" viene creata quando si collega una directory a un progetto Vercel.
 
-> Should I commit the ".vercel" folder?
-No, you should not share the ".vercel" folder with anyone.
-Upon creation, it will be automatically added to your ".gitignore" file.
+> Cosa contiene il file "project.json"?
+
+Il file "project.json" contiene:
+- L'ID del progetto Vercel a cui è stato collegato ("projectId")
+- L'ID dell'utente o del team proprietario del progetto Vercel ("orgId")
+
+> Devo includere la cartella ".vercel" nel commit?
+
+No, non è consigliabile condividere la cartella ".vercel" con nessuno.
+Al momento della creazione, verrà automaticamente aggiunta al file ".gitignore".
