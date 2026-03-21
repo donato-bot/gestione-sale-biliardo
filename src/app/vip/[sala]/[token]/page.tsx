@@ -44,15 +44,18 @@ export default function AppVIP() {
       try {
         setLoading(true);
 
-        // 1. Trova il Socio tramite la funzione sicura
-        const { data: dataSocio, error: errSocio } = await (supabase as any)
-          .rpc('ottieni_profilo_vip', { id_segreto: tokenSocio })
-          .single();
+        // 1. Trova il Socio (SENZA .single() perché il DB restituisce un array!)
+        const { data: dataSocioArray, error: errSocio } = await (supabase as any)
+          .rpc('ottieni_profilo_vip', { id_segreto: tokenSocio });
 
         if (errSocio) {
           setDebugMsg("Il DB ha bloccato il Socio. Dettaglio: " + errSocio.message);
           throw new Error("Socio error");
         }
+        
+        // Estraiamo il primo elemento dalla lista che ci ha mandato il DB
+        const dataSocio = dataSocioArray && dataSocioArray.length > 0 ? dataSocioArray[0] : null;
+
         if (!dataSocio) {
           setDebugMsg("Il Socio non esiste più nel database (ID non trovato).");
           throw new Error("Socio missing");
@@ -67,7 +70,7 @@ export default function AppVIP() {
           .single();
 
         if (errSala) {
-          setDebugMsg("Il DB ha bloccato la lettura della Sala. Dettaglio: " + errSala.message + " (Forse hai dimenticato la Policy SELECT per 'anon' sulla tabella sale?)");
+          setDebugMsg("Il DB ha bloccato la lettura della Sala. Dettaglio: " + errSala.message);
           throw new Error("Sala error");
         }
         setSala(dataSala);
@@ -166,7 +169,7 @@ export default function AppVIP() {
         
         {/* IL NOSTRO VISORE NOTTURNO PER GLI ERRORI */}
         {debugMsg && (
-          <div className="bg-red-950/40 border border-red-800 p-6 rounded-2xl max-w-lg text-left">
+          <div className="bg-red-950/40 border border-red-800 p-6 rounded-2xl max-w-lg text-left break-all">
             <p className="text-red-400 font-black uppercase text-xs tracking-widest mb-2 border-b border-red-900 pb-2">Diagnostica di Sistema</p>
             <p className="text-red-300 font-mono text-sm">{debugMsg}</p>
           </div>
