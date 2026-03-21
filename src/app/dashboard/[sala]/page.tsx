@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { createClient } from '@supabase/supabase-js'; 
 import { useParams, useRouter } from "next/navigation";
 
-const [isSalaSuspended, setIsSalaSuspended] = useState(false);
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -14,13 +13,15 @@ export default function DashboardSala() {
   const router = useRouter();
   
   const [loading, setLoading] = useState(true);
-  // AGGIUNTO 'bacheca' AI TIPI DI VISUALE
   const [activeView, setActiveView] = useState<"hub" | "plancia" | "magazzino" | "report" | "soci" | "impostazioni" | "statistiche" | "staff" | "tornei" | "prenotazioni" | "bacheca">("hub");
   
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentSalaId, setCurrentSalaId] = useState<string | null>(null);
   const [nomeSala, setNomeSala] = useState<string>("La Mia Sala");
   
+  // STATO PER SOSPENSIONE SALA
+  const [isSalaSuspended, setIsSalaSuspended] = useState(false);
+
   const [tariffaStandard, setTariffaStandard] = useState(10.00);
   const [tariffaSoci, setTariffaSoci] = useState(8.00);
 
@@ -32,27 +33,22 @@ export default function DashboardSala() {
   const [tornei, setTornei] = useState<any[]>([]); 
   const [prenotazioniList, setPrenotazioniList] = useState<any[]>([]); 
   
-  // NUOVI STATI: Bacheca
   const [bachecaPosts, setBachecaPosts] = useState<any[]>([]);
   const [newPostText, setNewPostText] = useState("");
 
   const [incassoTotale, setIncassoTotale] = useState(0);
   const [incassoContanti, setIncassoContanti] = useState(0);
   const [incassoPOS, setIncassoPOS] = useState(0);
-  // NUOVI STATI: Prima Nota Contabile
   const [primaNota, setPrimaNota] = useState<any[]>([]);
   const [usciteTotali, setUsciteTotali] = useState(0);
   
-  // Stati Modale: Registra Uscita
   const [isNewUscitaModalOpen, setIsNewUscitaModalOpen] = useState(false);
   const [uscitaImporto, setUscitaImporto] = useState("");
   const [uscitaDescrizione, setUscitaDescrizione] = useState("");
   const [uscitaMetodo, setUscitaMetodo] = useState("contanti");
   
-  // Metodo pagamento per la ricarica socio
   const [rechargeMetodo, setRechargeMetodo] = useState("contanti");
 
-  // Stati Modali
   const [activeTableId, setActiveTableId] = useState<string | null>(null); 
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
   const [isBarModalOpen, setIsBarModalOpen] = useState(false);
@@ -69,7 +65,6 @@ export default function DashboardSala() {
   const [isNewStaffModalOpen, setIsNewStaffModalOpen] = useState(false);
   const [isNewTableModalOpen, setIsNewTableModalOpen] = useState(false);
   
-  // Stati per la modifica del tavolo
   const [isEditTableModalOpen, setIsEditTableModalOpen] = useState(false);
   const [editTableNumber, setEditTableNumber] = useState("");
 
@@ -83,14 +78,11 @@ export default function DashboardSala() {
   const [pinBuffer, setPinBuffer] = useState("");
   const [pendingAction, setPendingAction] = useState<any>(null);
 
-// STATO: OPERATORE LOGGATO
   const [activeStaff, setActiveStaff] = useState<any>(null);
 
-  // Stati Filtri Prenotazioni
   const [filtroStatoPrenotazione, setFiltroStatoPrenotazione] = useState<"da_impostare" | "impostate" | "tutte">("tutte");
   const [filtroTempoPrenotazione, setFiltroTempoPrenotazione] = useState<"oggi" | "settimana" | "mese" | "tutte">("tutte");
 
-  // Input
   const [reserveName, setReserveName] = useState("");
   const [reserveTime, setReserveTime] = useState("");
   const [newTableNumber, setNewTableNumber] = useState("");
@@ -103,7 +95,6 @@ export default function DashboardSala() {
   const [newStaffPin, setNewStaffPin] = useState("");
   const [rechargeAmount, setRechargeAmount] = useState("");
   
-  // Input Tornei
   const [newTorneoNome, setNewTorneoNome] = useState("");
   const [newTorneoData, setNewTorneoData] = useState("");
   const [newTorneoQuota, setNewTorneoQuota] = useState("");
@@ -134,6 +125,7 @@ export default function DashboardSala() {
         if (session) {
           setUserEmail(session.user.email ?? null);
           const { data: salaData } = await supabase.from("sale").select("*").eq("manager_email", session.user.email).single();
+          
           if (salaData) {
             // CONTROLLO SOSPENSIONE DA TORRE DI CONTROLLO
             if (salaData.is_active === false) {
@@ -167,7 +159,6 @@ export default function DashboardSala() {
         const { data: prenDB } = await supabase.from('prenotazioni').select('*').eq('sala_id', salaId).order('data_ora', { ascending: true });
         const { data: bachecaDB } = await supabase.from('bacheca').select('*, reazioni_bacheca(*)').eq('sala_id', salaId).order('created_at', { ascending: false });
         
-        // NUOVO: RECUPERO PRIMA NOTA (MOVIMENTI DI OGGI)
         const { data: movimentiDB } = await supabase.from('movimenti_cassa').select('*, staff(nome)').eq('sala_id', salaId).gte('created_at', oggi.toISOString()).order('created_at', { ascending: false });
 
         if (pDB) setProdotti(pDB);
@@ -195,7 +186,7 @@ export default function DashboardSala() {
           
           setIncassoTotale(entrate);
           setUsciteTotali(uscite);
-          setIncassoContanti(contanti); // Saldo REALE cassetto
+          setIncassoContanti(contanti); 
           setIncassoPOS(pos);
         }
 
@@ -463,7 +454,6 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!); setIsNewTableModalOpen(false);
   };
 
-  // Funzioni per la modifica del tavolo
   const apriModificaTavolo = (tavolo: any) => {
     setActiveTableId(tavolo.id);
     setEditTableNumber(tavolo.numero.toString());
@@ -504,7 +494,6 @@ export default function DashboardSala() {
     setIsEditSocioModalOpen(false);
   };
 
-  // 1. Ricarica Tessera (Ora scrive in Prima Nota)
   const salvaRicarica = async (staffId: string) => {
     const importoVal = parseFloat(rechargeAmount);
     const nuovoCredito = parseFloat(socioToRecharge.credito || 0) + importoVal;
@@ -524,7 +513,6 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!); setIsRechargeModalOpen(false); setRechargeAmount("");
   };
 
-  // 2. Chiusura Tavolo (Ora scrive in Prima Nota)
   const confermaChiusura = async (metodo: any, staffId: string) => {
     if (metodo === 'credito') {
       const socio = soci.find(s => s.id === summaryData.socio_id);
@@ -546,7 +534,6 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!); setIsSummaryModalOpen(false);
   };
 
-  // 3. NUOVA: Registra una spesa/uscita manuale
   const salvaUscita = async (staffId: string) => {
     if(!uscitaImporto || !uscitaDescrizione) return;
     await supabase.from('movimenti_cassa').insert([{
@@ -562,7 +549,6 @@ export default function DashboardSala() {
     setIsNewUscitaModalOpen(false); setUscitaImporto(""); setUscitaDescrizione("");
   };
 
-  // 4. NUOVA: Annulla Transazione Cassa (Storno Prima Nota)
   const stornoMovimento = async (id: string, staffId: string) => {
     if(confirm("Vuoi davvero annullare questo movimento di cassa?")) {
       await supabase.from('movimenti_cassa').delete().eq('id', id);
@@ -585,7 +571,6 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!); setIsStartModalOpen(false); setReserveName("");
   };
 
-  
   const aggiungiBar = async (staffId: string) => {
     const tavolo = tavoli.find(t => t.id === activeTableId);
     const prodotto = prodotti.find(p => p.id === selectedProdottoId);
@@ -599,7 +584,6 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!);
   };
 
-  // NUOVE FUNZIONI: BACHECA AVVISI
   const salvaNuovoPost = async (staffId: string) => {
     if (!newPostText.trim()) return;
     await supabase.from('bacheca').insert([{ sala_id: currentSalaId, testo: newPostText.trim() }]);
@@ -644,7 +628,6 @@ export default function DashboardSala() {
     window.print();
   };
 
-  // NUOVA FUNZIONE: Esportazione in CSV per Excel (Versione Potenziata)
   const esportaCSV = () => {
     try {
       if (!primaNota || primaNota.length === 0) {
@@ -652,10 +635,8 @@ export default function DashboardSala() {
         return;
       }
 
-      // 1. Creiamo le intestazioni
       let csvContent = "Data e Ora;Causale;Operatore;Metodo Pagamento;Tipo Movimento;Importo\n";
 
-      // 2. Inseriamo i dati
       primaNota.forEach(m => {
         const dataOra = new Date(m.created_at).toLocaleString();
         const causale = m.descrizione ? m.descrizione.replace(/;/g, ',') : "";
@@ -667,7 +648,6 @@ export default function DashboardSala() {
         csvContent += `${dataOra};${causale};${staff};${metodo};${tipo};${importo}\n`;
       });
 
-      // 3. Creiamo il file forzando la compatibilità con Excel (\uFEFF)
       const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -675,12 +655,10 @@ export default function DashboardSala() {
       const dataOggi = new Date().toLocaleDateString().replace(/\//g, '-');
       link.download = `Prima_Nota_${dataOggi}.csv`;
       
-      // 4. Eseguiamo il download
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      // 5. Avviso visivo di successo
       alert("✅ File Prima_Nota scaricato con successo!\n\nControlla la cartella 'Download' del tuo computer o browser.");
 
     } catch (error) {
@@ -712,6 +690,7 @@ export default function DashboardSala() {
       </div>
     );
   }
+
   return (
     <div className="min-h-screen bg-black text-white p-4 font-sans tracking-tighter overflow-x-hidden relative print:bg-white print:text-black">
      {/* TASTO FLUTTUANTE GUIDA */}
