@@ -30,52 +30,70 @@ export default function AppVIP() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prenotazioneSuccess, setPrenotazioneSuccess] = useState(false);
 
+  // STATO SPECIALE PER CAPIRE L'ERRORE
+  const [debugMsg, setDebugMsg] = useState<string>("");
+
   useEffect(() => {
     async function fetchData() {
-      if (!tokenSocio) return;
+      if (!tokenSocio) {
+        setDebugMsg("Token mancante nell'URL.");
+        setLoading(false);
+        return;
+      }
       
       try {
         setLoading(true);
 
-        // 1. Usa la funzione di sicurezza RPC (Cast a 'any' per evitare errori TS)
+        // 1. Trova il Socio tramite la funzione sicura
         const { data: dataSocio, error: errSocio } = await (supabase as any)
           .rpc('ottieni_profilo_vip', { id_segreto: tokenSocio })
           .single();
 
-        if (errSocio || !dataSocio) {
-          console.error("Errore recupero socio:", errSocio);
-          throw new Error("Socio non trovato");
+        if (errSocio) {
+          setDebugMsg("Il DB ha bloccato il Socio. Dettaglio: " + errSocio.message);
+          throw new Error("Socio error");
+        }
+        if (!dataSocio) {
+          setDebugMsg("Il Socio non esiste più nel database (ID non trovato).");
+          throw new Error("Socio missing");
         }
         setSocio(dataSocio);
 
-        // 2. Trova la Sala collegata al Socio
+        // 2. Trova la Sala collegata
         const { data: dataSala, error: errSala } = await supabase
           .from('sale')
           .select('id, name')
           .eq('id', dataSocio.sala_id)
           .single();
 
-        if (errSala || !dataSala) throw new Error("Sala non trovata");
+        if (errSala) {
+          setDebugMsg("Il DB ha bloccato la lettura della Sala. Dettaglio: " + errSala.message + " (Forse hai dimenticato la Policy SELECT per 'anon' sulla tabella sale?)");
+          throw new Error("Sala error");
+        }
         setSala(dataSala);
 
         // 3. Carica i Tornei
-        const { data: dataTornei } = await supabase
+        const { data: dataTornei, error: errTornei } = await supabase
           .from('tornei')
           .select('*')
           .eq('sala_id', dataSala.id)
           .order('data_inizio', { ascending: false });
-        if (dataTornei) setTornei(dataTornei);
+          
+        if (errTornei) console.error("Errore Tornei:", errTornei);
+        else if (dataTornei) setTornei(dataTornei);
 
         // 4. Carica la Bacheca
-        const { data: dataBacheca } = await supabase
+        const { data: dataBacheca, error: errBacheca } = await supabase
           .from('bacheca')
           .select('*, reazioni_bacheca(*)')
           .eq('sala_id', dataSala.id)
           .order('created_at', { ascending: false });
-        if (dataBacheca) setBacheca(dataBacheca);
+          
+        if (errBacheca) console.error("Errore Bacheca:", errBacheca);
+        else if (dataBacheca) setBacheca(dataBacheca);
 
       } catch (err) {
-        console.error("Errore nel caricamento dati VIP:", err);
+        console.error("Fetch Data Interrotto.");
       } finally {
         setLoading(false);
       }
@@ -139,11 +157,20 @@ export default function AppVIP() {
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-purple-500 font-bold animate-pulse">ACCESSO VIP...</div>;
 
+  // SCHERMATA DI ERRORE CON DIAGNOSTICA
   if (!socio || !sala) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-center p-6">
         <h1 className="text-2xl font-black text-white uppercase mb-4">Accesso Negato</h1>
-        <p className="text-gray-500">Il link non è valido o la sessione è scaduta.</p>
+        <p className="text-gray-500 mb-6">Il link non è valido o la sessione è scaduta.</p>
+        
+        {/* IL NOSTRO VISORE NOTTURNO PER GLI ERRORI */}
+        {debugMsg && (
+          <div className="bg-red-950/40 border border-red-800 p-6 rounded-2xl max-w-lg text-left">
+            <p className="text-red-400 font-black uppercase text-xs tracking-widest mb-2 border-b border-red-900 pb-2">Diagnostica di Sistema</p>
+            <p className="text-red-300 font-mono text-sm">{debugMsg}</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -211,7 +238,107 @@ export default function AppVIP() {
           </div>
         )}
 
-        {/* Altri tab (tornei, prenota) seguono la stessa logica UI... */}
+        {/* TAB 3: TORNEI */}
+        {activeTab === 'tornei' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <h2 className="text-xl font-black uppercase text-purple-400 mb-4 tracking-widest italic">Tornei in Sala</h2>
+            
+            {tornei.length === 0 ? (
+              <div className="bg-gray-900 p-8 rounded-[2rem] border border-gray-800 text-center shadow-lg">
+                <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">Nessun torneo attivo.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {tornei.map((tr) => {
+                  const mioStatus = (tr.iscritti || []).find((i: any) => i.id === socio.id);
+                  
+                  return (
+                    <div key={tr.id} className="bg-gray-900 border border-gray-800 rounded-[2rem] p-6 shadow-xl relative overflow-hidden">
+                      <div className={`absolute top-0 right-0 px-4 py-1 rounded-bl-xl text-[10px] font-black uppercase tracking-widest ${tr.stato === 'iscrizioni' ? 'bg-yellow-500 text-black' : tr.stato === 'in_corso' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-white'}`}>
+                        {tr.stato === 'iscrizioni' ? 'Iscrizioni Aperte' : tr.stato === 'in_corso' ? 'Live' : 'Concluso'}
+                      </div>
+
+                      <h3 className="text-2xl font-black italic uppercase text-white mt-2 mb-1">{tr.nome}</h3>
+                      <p className="text-gray-400 text-sm font-bold uppercase tracking-widest mb-4">📅 {new Date(tr.data_inizio).toLocaleDateString()}</p>
+                      
+                      <div className="flex justify-between items-center bg-black p-4 rounded-2xl mb-4 border border-gray-800">
+                        <div>
+                          <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-1">Quota</p>
+                          <p className="text-green-400 font-black">€ {parseFloat(tr.quota_iscrizione).toFixed(2)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-1">Il tuo stato</p>
+                          {mioStatus ? (
+                            <p className={`font-black uppercase text-xs tracking-widest ${mioStatus.confermato ? 'text-green-500' : 'text-yellow-500 animate-pulse'}`}>
+                              {mioStatus.confermato ? '✓ Iscritto' : '⌛ In Attesa'}
+                            </p>
+                          ) : (
+                            <p className="text-gray-600 font-black uppercase text-xs tracking-widest">Non Iscritto</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {tr.stato === 'iscrizioni' && !mioStatus && (
+                        <button onClick={() => richiediIscrizione(tr)} className="w-full bg-purple-600 text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-transform">
+                          Richiedi Iscrizione
+                        </button>
+                      )}
+
+                      {(tr.stato === 'in_corso' || tr.stato === 'completato') && (
+                        <button onClick={() => window.open(`/bacheca/${params.sala}/${tr.id}`, '_blank')} className="w-full bg-blue-600/20 border border-blue-500 text-blue-400 py-4 rounded-xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-transform flex justify-center items-center gap-2">
+                          🏆 Visualizza Tabellone
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: PRENOTA */}
+        {activeTab === 'prenota' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <h2 className="text-xl font-black uppercase text-purple-400 mb-4 tracking-widest italic">Prenota il tuo Tavolo</h2>
+            
+            {prenotazioneSuccess ? (
+              <div className="bg-gray-900 border border-gray-800 rounded-[2rem] p-8 text-center shadow-xl">
+                <div className="w-16 h-16 bg-green-900/50 text-green-400 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 border-2 border-green-500">✓</div>
+                <h3 className="text-2xl font-black text-white uppercase italic mb-2">Richiesta Inviata</h3>
+                <p className="text-gray-400 text-sm mb-6">Il gestore confermerà la tua prenotazione a breve.</p>
+                <button onClick={() => { setPrenotazioneSuccess(false); setActiveTab('home'); }} className="bg-gray-800 text-white px-6 py-3 rounded-xl font-black uppercase text-xs tracking-widest">Torna alla Home</button>
+              </div>
+            ) : (
+              <form onSubmit={inviaPrenotazione} className="bg-gray-900 border border-gray-800 p-6 rounded-[2rem] shadow-xl flex flex-col gap-5">
+                
+                <div className="bg-black/50 p-4 rounded-xl border border-gray-800">
+                  <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest mb-1">Prenotazione a nome di</p>
+                  <p className="text-white font-black uppercase italic">{socio.cognome} {socio.nome}</p>
+                </div>
+
+                <div>
+                  <label className="block text-gray-400 font-bold uppercase text-xs tracking-widest ml-2 mb-2">Data e Ora di Arrivo *</label>
+                  <input required type="datetime-local" value={dataOra} onChange={(e) => setDataOra(e.target.value)} className="w-full bg-black border border-gray-700 focus:border-purple-500 p-4 rounded-xl text-lg font-mono text-purple-400 outline-none transition-all" />
+                </div>
+
+                <div>
+                  <label className="block text-gray-400 font-bold uppercase text-xs tracking-widest ml-2 mb-2">Recapito (Opzionale)</label>
+                  <input type="tel" value={telefono || socio.telefono || ""} onChange={(e) => setTelefono(e.target.value)} placeholder="Es. 333 1234567" className="w-full bg-black border border-gray-700 focus:border-purple-500 p-4 rounded-xl text-md text-white outline-none transition-all" />
+                </div>
+
+                <div>
+                  <label className="block text-gray-400 font-bold uppercase text-xs tracking-widest ml-2 mb-2">Note (Opzionale)</label>
+                  <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Preferenze tavolo..." className="w-full bg-black border border-gray-700 focus:border-purple-500 p-4 rounded-xl text-sm text-white outline-none transition-all resize-none min-h-[80px]"></textarea>
+                </div>
+
+                <button type="submit" disabled={isSubmitting} className={`w-full py-5 rounded-xl font-black uppercase tracking-widest text-sm shadow-xl transition-all mt-2 ${isSubmitting ? 'bg-purple-900 text-purple-700' : 'bg-purple-600 text-white active:scale-95'}`}>
+                  {isSubmitting ? 'INVIO...' : 'INVIA RICHIESTA'}
+                </button>
+              </form>
+            )}
+          </div>
+        )}
 
       </div>
 
