@@ -732,7 +732,10 @@ export default function DashboardSala() {
               <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
                 <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-cyan-500 text-2xl">🎱</span> 1. Gestione Biliardi</h3>
                 <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
-                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1">Apertura Tavolo:</strong> Clicca su un tavolo libero (verde). Scegli se il giocatore è un SOCIO (avrà la tariffa scontata) o un cliente STANDARD. Il cronometro partirà in automatico.</p>
+                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1">Configura Tavolo:</strong> Clicca “Numero” ed inserire il N° che identifica il biliardo da impostare. Quindi Clic su Conferma Pin (staff). Inserire il proprio Pin (staff gestore). Il biliardo apparirà sullo schermo.</p>
+                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1 mt-3">Modifica Tavolo:</strong> Clicca su immagine “Matita in alto al biliardo”.</p>
+                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1 mt-3">Elimina Tavolo:</strong> Il tavolo sarà eliminato dalla configurazione Sala (Attenzione questa operazione elimina completamente tutti i dati registrati inerenti il tavolo in oggetto).</p>
+                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1 mt-3">Apertura Tavolo:</strong> Clicca su un tavolo libero (verde). Scegli se il giocatore è un SOCIO (avrà la tariffa scontata) o un cliente STANDARD. Il cronometro partirà in automatico.</p>
                   <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1 mt-3">Chiusura Tavolo:</strong> Clicca sul tavolo occupato (rosso). Il sistema calcolerà l'importo esatto in base ai minuti giocati. Seleziona il metodo di pagamento (Contanti o POS) e clicca conferma.</p>
                 </div>
               </section>
@@ -1571,7 +1574,7 @@ export default function DashboardSala() {
           </div>
         </div>
       )}
-
+{/* Sezione 1: Biliardi */}
     </div>
   );
 }
