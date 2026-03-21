@@ -46,11 +46,11 @@ export default function AppVIP() {
         if (!dataSala) throw new Error("Sala non trovata");
         setSala(dataSala);
 
-        // 2. Trova il Socio tramite il Token
+        // 2. Trova il Socio tramite l'ID (passato come token nell'URL)
         const { data: dataSocio } = await supabase
           .from('soci')
           .select('*')
-          .eq('token', tokenSocio)
+          .eq('id', tokenSocio) 
           .eq('sala_id', dataSala.id)
           .single();
 

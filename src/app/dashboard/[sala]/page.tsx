@@ -493,7 +493,7 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!); 
     setIsEditSocioModalOpen(false);
   };
-
+  
   // NUOVA FUNZIONE: Elimina Socio
   const eliminaSocio = async (id: string, staffId: string) => {
     if (confirm("⚠️ ATTENZIONE: Vuoi davvero eliminare questo socio?\nL'operazione è irreversibile e cancellerà anche il suo eventuale credito residuo!")) {
@@ -607,8 +607,10 @@ export default function DashboardSala() {
     }
   };
 
+  // FUNZIONE AGGIORNATA PER IL LINK WHATSAPP
   const inviaLinkWhatsApp = (socio: any) => {
-    const url = `${window.location.origin}/vip/${params.sala}/${socio.token}`;
+    const socioToken = socio.token || socio.id; 
+    const url = `${window.location.origin}/vip/${params.sala}/${socioToken}`;
     const messaggioTesto = `Ciao ${socio.nome}, ecco la tua Tessera Digitale VIP per ${nomeSala}. Clicca qui per vedere il tuo credito e prenotare: ${url}`;
     const messaggioCodificato = encodeURIComponent(messaggioTesto);
 
@@ -769,8 +771,8 @@ export default function DashboardSala() {
 
             </div>
 
-{/* Sezione 4: Impostazioni e Soci */}
-              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
+              {/* Sezione 4: Impostazioni e Soci */}
+              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem] mt-8">
                 <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-purple-500 text-2xl">👥</span> 4. Impostazioni, Staff e Soci</h3>
                 <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
                   <p><strong className="text-purple-400 uppercase text-xs tracking-widest block mb-1">Aggiungere Staff:</strong> Vai nella sezione STAFF. Inserisci Nome e un PIN numerico di 4 cifre per i nuovi dipendenti. Il PIN servirà per le operazioni di storno sicure.</p>
@@ -780,7 +782,7 @@ export default function DashboardSala() {
               </section>
 
               {/* Sezione 5: Magazzino e Tornei */}
-              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
+              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem] mt-8">
                 <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-orange-500 text-2xl">📦</span> 5. Magazzino e Tornei</h3>
                 <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
                   <p><strong className="text-orange-400 uppercase text-xs tracking-widest block mb-1">Magazzino Bar:</strong> Registra i prodotti da banco (es. Acqua, Birra) con i prezzi. Aggiungendoli al tavolo di un cliente, le scorte si abbasseranno in automatico.</p>
@@ -813,7 +815,6 @@ export default function DashboardSala() {
               <button onClick={() => setActiveView("prenotazioni")} className="bg-gray-900 border-2 border-teal-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📅</div><h2 className="text-xl font-black uppercase">Prenotazioni</h2></button>
               <button onClick={() => setActiveView("tornei")} className="bg-gray-900 border-2 border-pink-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🏆</div><h2 className="text-xl font-black uppercase">Tornei</h2></button>
               
-              {/* NUOVO BOTTONE BACHECA NELL'HUB */}
               <button onClick={() => setActiveView("bacheca")} className="bg-gray-900 border-2 border-orange-500 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📢</div><h2 className="text-xl font-black uppercase">Bacheca</h2></button>
 
               <button onClick={() => { supabase.auth.signOut(); router.push('/login'); }} className="col-span-1 md:col-span-3 bg-red-950/30 border-2 border-red-600 p-6 rounded-[2rem] text-red-500 font-black uppercase mt-0 flex items-center justify-center">Esci dal Sistema</button>
@@ -861,7 +862,6 @@ export default function DashboardSala() {
                       <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-3">🗓️ {new Date(post.created_at).toLocaleDateString()} - {new Date(post.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                       <p className="text-xl text-white whitespace-pre-wrap mb-6">{post.testo}</p>
                       
-                      {/* Recap Reazioni per il Gestore */}
                       <div className="flex flex-wrap gap-2 border-t border-gray-800 pt-4">
                         {Object.entries(conteggio).length === 0 ? (
                           <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">Nessuna reazione ancora</span>
@@ -885,7 +885,6 @@ export default function DashboardSala() {
         {activeView === 'plancia' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             
-            {/* ALERT PRENOTAZIONI CONFERMATE OGGI */}
             {getPrenotazioniConfermateOggi().length > 0 && (
               <div className="mb-8 bg-teal-900/30 border-2 border-teal-600 rounded-3xl p-6 shadow-lg animate-in fade-in">
                 <h3 className="text-teal-400 font-black uppercase mb-4 flex items-center gap-2 tracking-widest text-sm">
@@ -915,7 +914,6 @@ export default function DashboardSala() {
                     <div className="flex flex-col items-end gap-2">
                        <div className={`h-6 w-6 rounded-full ${t.stato === 'LIBERO' ? 'bg-green-500' : t.stato === 'PRENOTATO' ? 'bg-yellow-400 animate-pulse' : 'bg-red-500 animate-pulse'}`}></div>
                        
-                       {/* Mostra i tasti Modifica/Elimina SOLO se il tavolo è LIBERO */}
                        {t.stato === 'LIBERO' && (
                          <div className="flex gap-2 mt-2">
                            <button onClick={() => apriModificaTavolo(t)} className="bg-blue-900/50 hover:bg-blue-600 text-blue-300 hover:text-white p-2 rounded-lg transition-colors text-xs font-black uppercase" title="Modifica Tavolo">✏️</button>
@@ -1044,7 +1042,6 @@ export default function DashboardSala() {
             </div>
           </div>
         )}
-
         {/* REPORT CASSA (PRIMA NOTA AGGIORNATA) */}
         {activeView === 'report' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 text-center">
@@ -1115,13 +1112,10 @@ export default function DashboardSala() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {listaStaff.map((s) => (
                 <div key={s.id} className="bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border-2 border-cyan-900 flex justify-between items-center shadow-2xl gap-4">
-                  {/* flex-1 e min-w-0 servono a contenere il testo lungo */}
                   <div className="flex-1 min-w-0">
-                    {/* break-all forza l'email ad andare a capo senza sfondare il box */}
                     <h4 className="text-lg md:text-xl font-black uppercase text-white italic break-all">{s.nome}</h4>
                     <p className="text-cyan-500 font-mono font-bold text-base md:text-lg mt-1 tracking-[0.2em] md:tracking-[0.5em]">PIN: {s.pin}</p>
                   </div>
-                  {/* shrink-0 impedisce al cestino di rimpicciolirsi */}
                   <button onClick={async () => { if(confirm("Eliminare staff?")) { await supabase.from('staff').delete().eq('id', s.id); refreshDati(currentSalaId!); } }} className="shrink-0 bg-red-950 text-red-500 p-4 md:p-5 rounded-2xl shadow-lg hover:bg-red-900 transition-colors">🗑️</button>
                 </div>
               ))}
@@ -1301,7 +1295,7 @@ export default function DashboardSala() {
                       )}
 
                       <button onClick={() => {
-                          const urlBacheca = `${window.location.origin}/bacheca/${params['nome-sala']}/${tr.id}`;
+                          const urlBacheca = `${window.location.origin}/bacheca/${params.sala}/${tr.id}`;
                           alert(`Invia questo link ai giocatori per far loro seguire il tabellone in diretta sul cellulare:\n\n${urlBacheca}`);
                         }} className="w-full py-3 bg-gray-900 border border-gray-700 text-gray-400 font-black uppercase rounded-2xl hover:text-white transition-all text-xs mt-2">
                         🔗 LINK PER I SOCI (CELLULARI)
@@ -1594,7 +1588,7 @@ export default function DashboardSala() {
           </div>
         </div>
       )}
-{/* Sezione 1: Biliardi */}
+
     </div>
   );
 }
