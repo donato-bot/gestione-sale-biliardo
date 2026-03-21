@@ -36,26 +36,26 @@ export default function AppVIP() {
   useEffect(() => {
     async function fetchData() {
       try {
-        // 1. Trova la Sala
+       
+        // 1. Trova DIRETTAMENTE il Socio tramite il suo ID univoco
+        const { data: dataSocio } = await supabase
+          .from('soci')
+          .select('*')
+          .eq('id', tokenSocio)
+          .single();
+
+        if (!dataSocio) throw new Error("Socio non trovato o link non valido");
+        setSocio(dataSocio);
+
+        // 2. Trova la Sala collegata esattamente a questo Socio
         const { data: dataSala } = await supabase
           .from('sale')
           .select('id, name')
-          .ilike('name', `%${nomeSalaDecoded}%`)
+          .eq('id', dataSocio.sala_id)
           .single();
 
         if (!dataSala) throw new Error("Sala non trovata");
         setSala(dataSala);
-
-        // 2. Trova il Socio tramite l'ID (passato come token nell'URL)
-        const { data: dataSocio } = await supabase
-          .from('soci')
-          .select('*')
-          .eq('id', tokenSocio) 
-          .eq('sala_id', dataSala.id)
-          .single();
-
-        if (!dataSocio) throw new Error("Socio non trovato o token non valido");
-        setSocio(dataSocio);
 
         // 3. Trova i Tornei attivi
         const { data: dataTornei } = await supabase
