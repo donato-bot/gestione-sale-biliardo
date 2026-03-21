@@ -67,6 +67,11 @@ export default function DashboardSala() {
 
   const [isNewStaffModalOpen, setIsNewStaffModalOpen] = useState(false);
   const [isNewTableModalOpen, setIsNewTableModalOpen] = useState(false);
+  
+  // Stati per la modifica del tavolo
+  const [isEditTableModalOpen, setIsEditTableModalOpen] = useState(false);
+  const [editTableNumber, setEditTableNumber] = useState("");
+
   const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
   const [isReserveModalOpen, setIsReserveModalOpen] = useState(false);
   const [isNewTorneoModalOpen, setIsNewTorneoModalOpen] = useState(false); 
@@ -326,7 +331,7 @@ export default function DashboardSala() {
         const s = soci.find(x => x.id === i);
         return { id: i, tipo: 'socio', nome: s ? `${s.cognome} ${s.nome}` : 'Sconosciuto', confermato: true };
       }
-      return i;f
+      return i;
     });
   };
 
@@ -448,6 +453,19 @@ export default function DashboardSala() {
   const salvaNuovoTavolo = async (staffId: string) => {
     await supabase.from('tavoli').insert([{ sala_id: currentSalaId, numero: parseInt(newTableNumber), stato: 'libero' }]);
     await refreshDati(currentSalaId!); setIsNewTableModalOpen(false);
+  };
+
+  // Funzioni per la modifica del tavolo
+  const apriModificaTavolo = (tavolo: any) => {
+    setActiveTableId(tavolo.id);
+    setEditTableNumber(tavolo.numero.toString());
+    setIsEditTableModalOpen(true);
+  };
+
+  const salvaModificaTavolo = async (staffId: string) => {
+    await supabase.from('tavoli').update({ numero: parseInt(editTableNumber) }).eq('id', activeTableId);
+    await refreshDati(currentSalaId!); 
+    setIsEditTableModalOpen(false);
   };
 
   const salvaNuovoProdotto = async (staffId: string) => {
@@ -844,7 +862,7 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* PLANCIA CON ALERT PRENOTAZIONI */}
+        {/* PLANCIA CON ALERT PRENOTAZIONI E NUOVI TASTI MODIFICA/ELIMINA */}
         {activeView === 'plancia' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             
@@ -872,7 +890,21 @@ export default function DashboardSala() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {tavoli.map((t) => (
                 <div key={t.id} className={`p-8 rounded-[2.5rem] border-4 transition-colors shadow-2xl ${t.stato === 'IN GIOCO' ? 'border-red-600 bg-gray-900' : t.stato === 'PRENOTATO' ? 'border-yellow-500 bg-yellow-900/30' : 'border-green-900 bg-gray-950'}`}>
-                  <div className="flex justify-between items-center mb-8"><h3 className="text-4xl font-black italic">{t.nome}</h3><div className={`h-6 w-6 rounded-full ${t.stato === 'LIBERO' ? 'bg-green-500' : t.stato === 'PRENOTATO' ? 'bg-yellow-400 animate-pulse' : 'bg-red-500 animate-pulse'}`}></div></div>
+                  
+                  <div className="flex justify-between items-start mb-8">
+                    <h3 className="text-4xl font-black italic">{t.nome}</h3>
+                    <div className="flex flex-col items-end gap-2">
+                       <div className={`h-6 w-6 rounded-full ${t.stato === 'LIBERO' ? 'bg-green-500' : t.stato === 'PRENOTATO' ? 'bg-yellow-400 animate-pulse' : 'bg-red-500 animate-pulse'}`}></div>
+                       
+                       {/* Mostra i tasti Modifica/Elimina SOLO se il tavolo è LIBERO */}
+                       {t.stato === 'LIBERO' && (
+                         <div className="flex gap-2 mt-2">
+                           <button onClick={() => apriModificaTavolo(t)} className="bg-blue-900/50 hover:bg-blue-600 text-blue-300 hover:text-white p-2 rounded-lg transition-colors text-xs font-black uppercase" title="Modifica Tavolo">✏️</button>
+                           <button onClick={async () => { if(confirm(`Vuoi davvero eliminare il ${t.nome}?`)) { await supabase.from('tavoli').delete().eq('id', t.id); refreshDati(currentSalaId!); } }} className="bg-red-950/50 hover:bg-red-600 text-red-500 hover:text-white p-2 rounded-lg transition-colors text-xs font-black uppercase" title="Elimina Tavolo">🗑️</button>
+                         </div>
+                       )}
+                    </div>
+                  </div>
                   
                   {t.stato === 'PRENOTATO' && (
                       <div className="mb-10 text-center bg-black/40 p-4 rounded-3xl border border-yellow-900/50">
@@ -915,9 +947,6 @@ export default function DashboardSala() {
                     </div>
                   )}
                   
-                  {t.stato === 'LIBERO' && (
-                     <button onClick={async () => { if(confirm("Eliminare tavolo?")) { await supabase.from('tavoli').delete().eq('id', t.id); refreshDati(currentSalaId!); } }} className="mt-4 w-full text-gray-700 text-[10px] font-bold uppercase hover:text-red-500">Rimuovi Postazione</button>
-                  )}
                 </div>
               ))}
             </div>
@@ -1311,7 +1340,7 @@ export default function DashboardSala() {
       {/* Chiusura Conto */}
       {isSummaryModalOpen && summaryData && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-950 border-4 border-green-600 p-8 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-green-500 uppercase italic mb-8">Riepilogo e Chiusura</h3><div className="bg-gray-900 p-6 rounded-3xl border border-gray-800 mb-8 font-bold text-left"><div className="flex justify-between text-xl uppercase mb-2 text-gray-400"><span>Tempo Gioco</span><span>€ {summaryData.costoBiliardo.toFixed(2)}</span></div><div className="flex justify-between text-xl uppercase text-orange-400 mb-4"><span>Totale Bar</span><span>€ {summaryData.costoBar.toFixed(2)}</span></div><div className="border-t-2 border-gray-700 pt-6 flex justify-between items-center"><span className="text-3xl font-black italic text-white uppercase italic">Totale Conto</span><span className="text-5xl font-black text-green-500 italic">€ {summaryData.totale.toFixed(2)}</span></div></div><div className="flex flex-col gap-4"><button onClick={() => richiedePin((sid) => confermaChiusura('contanti', sid), "Pagamento Contanti")} className="w-full py-6 bg-green-600 rounded-3xl font-black uppercase text-xl shadow-xl">💵 PAGAMENTO CONTANTI</button><button onClick={() => richiedePin((sid) => confermaChiusura('pos', sid), "Pagamento POS")} className="w-full py-6 bg-blue-600 rounded-3xl font-black uppercase text-xl shadow-xl">💳 PAGAMENTO POS</button>{summaryData.socio_id && (<button onClick={() => richiedePin((sid) => confermaChiusura('credito', sid), "Pagamento Credito")} className="w-full py-6 bg-yellow-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl">💳 SCALA DA TESSERA</button>)}</div><button onClick={()=>setIsSummaryModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
 
-      {/* {/* Registra Uscita (NUOVO MODALE) */}
+      {/* Registra Uscita (NUOVO MODALE) */}
       {isNewUscitaModalOpen && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden">
           <div className="bg-gray-900 border-4 border-red-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl">
@@ -1381,6 +1410,28 @@ export default function DashboardSala() {
 
       {/* Nuovo Tavolo */}
       {isNewTableModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-green-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-3xl font-black text-green-500 mb-8 uppercase italic">Configura Tavolo</h3><input type="number" value={newTableNumber} onChange={(e)=>setNewTableNumber(e.target.value)} placeholder="Numero" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-6xl text-center text-white mb-8 outline-none" /><button onClick={() => richiedePin((sid) => salvaNuovoTavolo(sid), "Configurazione Tavolo")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95">CONFERMA CON PIN</button><button onClick={()=>setIsNewTableModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Indietro</button></div></div>)}
+
+      {/* Modifica Tavolo */}
+      {isEditTableModalOpen && (
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden">
+          <div className="bg-gray-900 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl">
+            <h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic">Modifica Tavolo</h3>
+            <label className="block text-gray-500 font-bold text-xs uppercase mb-2">Numero Tavolo</label>
+            <input 
+              type="number" 
+              value={editTableNumber} 
+              onChange={(e)=>setEditTableNumber(e.target.value)} 
+              className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-6xl text-center text-white mb-8 outline-none focus:border-blue-500" 
+            />
+            <button onClick={() => richiedePin((sid) => salvaModificaTavolo(sid), "Modifica Tavolo")} className="w-full py-8 bg-blue-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-colors">
+              SALVA MODIFICHE
+            </button>
+            <button onClick={()=>setIsEditTableModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">
+              Annulla
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Nuovo Torneo */}
       {isNewTorneoModalOpen && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-pink-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-pink-500 mb-8 uppercase italic">Nuovo Torneo</h3><input value={newTorneoNome} onChange={(e) => setNewTorneoNome(e.target.value)} placeholder="Nome del Torneo (es. Trofeo Invernale)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-pink-500 transition-all" /><input type="date" value={newTorneoData} onChange={(e) => setNewTorneoData(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white/70 mb-4 outline-none text-center focus:border-pink-500 transition-all" /><input type="number" value={newTorneoQuota} onChange={(e) => setNewTorneoQuota(e.target.value)} placeholder="Quota di Iscrizione (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-pink-500 transition-all" /><button onClick={() => richiedePin((sid) => salvaNuovoTorneo(sid), "Creazione Torneo")} className="w-full py-8 bg-pink-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">CREA TORNEO</button><button onClick={()=>setIsNewTorneoModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
