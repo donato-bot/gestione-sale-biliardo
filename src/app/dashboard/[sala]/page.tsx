@@ -1114,9 +1114,15 @@ export default function DashboardSala() {
             <button onClick={() => setIsNewStaffModalOpen(true)} className="mb-8 w-full py-8 bg-cyan-600 rounded-[2rem] font-black text-2xl text-black uppercase shadow-xl">+ AGGIUNGI STAFF</button>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {listaStaff.map((s) => (
-                <div key={s.id} className="bg-gray-900 p-8 rounded-[2.5rem] border-2 border-cyan-900 flex justify-between items-center shadow-2xl">
-                  <div><h4 className="text-2xl font-black uppercase text-white italic">{s.nome}</h4><p className="text-cyan-500 font-mono font-bold text-lg mt-1 tracking-[0.5em]">PIN: {s.pin}</p></div>
-                  <button onClick={async () => { if(confirm("Eliminare staff?")) { await supabase.from('staff').delete().eq('id', s.id); refreshDati(currentSalaId!); } }} className="bg-red-950 text-red-500 p-5 rounded-2xl shadow-lg">🗑️</button>
+                <div key={s.id} className="bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border-2 border-cyan-900 flex justify-between items-center shadow-2xl gap-4">
+                  {/* flex-1 e min-w-0 servono a contenere il testo lungo */}
+                  <div className="flex-1 min-w-0">
+                    {/* break-all forza l'email ad andare a capo senza sfondare il box */}
+                    <h4 className="text-lg md:text-xl font-black uppercase text-white italic break-all">{s.nome}</h4>
+                    <p className="text-cyan-500 font-mono font-bold text-base md:text-lg mt-1 tracking-[0.2em] md:tracking-[0.5em]">PIN: {s.pin}</p>
+                  </div>
+                  {/* shrink-0 impedisce al cestino di rimpicciolirsi */}
+                  <button onClick={async () => { if(confirm("Eliminare staff?")) { await supabase.from('staff').delete().eq('id', s.id); refreshDati(currentSalaId!); } }} className="shrink-0 bg-red-950 text-red-500 p-4 md:p-5 rounded-2xl shadow-lg hover:bg-red-900 transition-colors">🗑️</button>
                 </div>
               ))}
             </div>
