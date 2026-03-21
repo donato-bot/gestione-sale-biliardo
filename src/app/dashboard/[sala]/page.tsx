@@ -494,6 +494,14 @@ export default function DashboardSala() {
     setIsEditSocioModalOpen(false);
   };
 
+  // NUOVA FUNZIONE: Elimina Socio
+  const eliminaSocio = async (id: string, staffId: string) => {
+    if (confirm("⚠️ ATTENZIONE: Vuoi davvero eliminare questo socio?\nL'operazione è irreversibile e cancellerà anche il suo eventuale credito residuo!")) {
+      await supabase.from('soci').delete().eq('id', id);
+      await refreshDati(currentSalaId!);
+    }
+  };
+
   const salvaRicarica = async (staffId: string) => {
     const importoVal = parseFloat(rechargeAmount);
     const nuovoCredito = parseFloat(socioToRecharge.credito || 0) + importoVal;
@@ -1011,7 +1019,7 @@ export default function DashboardSala() {
                         </button>
                       </td>
                       <td className="p-6">
-                        <div className="flex justify-end items-center gap-3">
+                        <div className="flex justify-end items-center gap-2">
                           <button 
                             onClick={() => apriModificaSocio(s)} 
                             className="bg-blue-900/50 border border-blue-700 text-blue-300 px-4 py-3 rounded-xl text-xs font-black uppercase hover:bg-blue-600 hover:text-white transition-all shadow-md">
@@ -1019,8 +1027,13 @@ export default function DashboardSala() {
                           </button>
                           <button 
                             onClick={() => { setSocioToRecharge(s); setIsRechargeModalOpen(true); }} 
-                            className="bg-green-600 text-black px-6 py-3 rounded-2xl font-black uppercase shadow-lg active:scale-95">
+                            className="bg-green-600 text-black px-4 py-3 rounded-xl text-xs font-black uppercase shadow-md hover:bg-green-500 transition-all">
                             💰 Ricarica
+                          </button>
+                          <button 
+                            onClick={() => richiedePin((sid) => eliminaSocio(s.id, sid), "Elimina Socio")} 
+                            className="bg-red-950/80 border border-red-800 text-red-500 px-4 py-3 rounded-xl text-xs font-black uppercase hover:bg-red-600 hover:text-white transition-all shadow-md">
+                            🗑️ Elimina
                           </button>
                         </div>
                       </td>
@@ -1031,6 +1044,7 @@ export default function DashboardSala() {
             </div>
           </div>
         )}
+
         {/* REPORT CASSA (PRIMA NOTA AGGIORNATA) */}
         {activeView === 'report' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 text-center">
