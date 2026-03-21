@@ -71,6 +71,30 @@ export default function TorreDiControllo() {
     }
   };
 
+  // NUOVA FUNZIONE: Elimina Sala Definitivamente
+  const eliminaSala = async (salaId: string, nomeSala: string) => {
+    if (confirm(`⚠️ ATTENZIONE ⚠️\nVuoi davvero eliminare definitivamente la sala "${nomeSala}" e tutti i suoi dati?\n\nQuesta operazione è IRREVERSIBILE!`)) {
+      const { error } = await supabase.from('sale').delete().eq('id', salaId);
+      if (!error) {
+        await caricaSale();
+      } else {
+        alert("Errore durante l'eliminazione: " + error.message);
+      }
+    }
+  };
+
+  // NUOVA FUNZIONE: Sospendi / Riattiva Sala (Offline / Online)
+  const toggleStatoSala = async (salaId: string, statoAttuale: boolean) => {
+    const nuovoStato = !statoAttuale;
+    const { error } = await supabase.from('sale').update({ is_active: nuovoStato }).eq('id', salaId);
+    
+    if (!error) {
+      await caricaSale();
+    } else {
+      alert("Errore durante l'aggiornamento dello stato: " + error.message);
+    }
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
@@ -108,23 +132,46 @@ export default function TorreDiControllo() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {sale.map((s) => (
-            <div key={s.id} className="bg-gray-900 p-10 rounded-[3rem] border-2 border-gray-800 hover:border-red-600 transition-colors relative overflow-hidden">
+            <div key={s.id} className={`p-10 rounded-[3rem] border-2 transition-colors relative flex flex-col justify-between ${s.is_active ? 'bg-gray-900 border-gray-800 hover:border-red-600' : 'bg-gray-950 border-red-900/50 opacity-80'}`}>
+              
+              {/* Etichetta Stato */}
               <div className={`absolute top-0 right-0 px-6 py-2 rounded-bl-3xl text-xs font-black tracking-widest uppercase ${s.is_active ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
                 {s.is_active ? 'ONLINE' : 'OFFLINE'}
               </div>
               
-              <h3 className="text-4xl font-black text-white italic mb-4 mt-4">{s.name}</h3>
-              
-              <div className="space-y-4 mb-8">
-                <div>
-                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Gestore (Manager)</p>
-                  <p className="text-xl font-bold text-blue-400 truncate">{s.manager_email}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Codice Sala (ID)</p>
-                  <p className="text-sm font-mono text-gray-400 truncate">{s.id}</p>
+              <div>
+                <h3 className={`text-4xl font-black italic mb-4 mt-4 ${s.is_active ? 'text-white' : 'text-gray-500'}`}>{s.name}</h3>
+                
+                <div className="space-y-4 mb-8">
+                  <div>
+                    <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest">Gestore (Manager)</p>
+                    <p className={`text-xl font-bold truncate ${s.is_active ? 'text-blue-400' : 'text-blue-900'}`}>{s.manager_email}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest">Codice Sala (ID)</p>
+                    <p className="text-sm font-mono text-gray-500 truncate">{s.id}</p>
+                  </div>
                 </div>
               </div>
+
+              {/* Bottoni Azione (Nuovi) */}
+              <div className="flex gap-3 mt-auto pt-6 border-t border-gray-800">
+                <button 
+                  onClick={() => toggleStatoSala(s.id, s.is_active)}
+                  className={`flex-[3] py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${s.is_active ? 'bg-orange-900/40 text-orange-500 hover:bg-orange-800' : 'bg-green-900 text-green-400 hover:bg-green-700'}`}
+                >
+                  {s.is_active ? 'Sospendi (Offline)' : 'Riattiva (Online)'}
+                </button>
+                
+                <button 
+                  onClick={() => eliminaSala(s.id, s.name)}
+                  className="flex-[1] bg-gray-950 border border-gray-800 text-red-500 hover:bg-red-900 hover:text-white rounded-2xl transition-colors flex items-center justify-center text-xl"
+                  title="Elimina Definitivamente"
+                >
+                  🗑️
+                </button>
+              </div>
+
             </div>
           ))}
         </div>
