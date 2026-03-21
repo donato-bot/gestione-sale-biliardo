@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from '@supabase/supabase-js'; 
 import { useParams, useRouter } from "next/navigation";
 
+const [isSalaSuspended, setIsSalaSuspended] = useState(false);
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -134,6 +135,13 @@ export default function DashboardSala() {
           setUserEmail(session.user.email ?? null);
           const { data: salaData } = await supabase.from("sale").select("*").eq("manager_email", session.user.email).single();
           if (salaData) {
+            // CONTROLLO SOSPENSIONE DA TORRE DI CONTROLLO
+            if (salaData.is_active === false) {
+              setIsSalaSuspended(true);
+              setLoading(false);
+              return; // Ferma il caricamento di tutto il resto
+            }
+
             setCurrentSalaId(salaData.id);
             setNomeSala(salaData.name);
             setTariffaStandard(salaData.tariffa_standard || 10.00);
@@ -683,6 +691,27 @@ export default function DashboardSala() {
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-green-500 font-black text-2xl tracking-widest italic animate-pulse">CARICAMENTO TORRE DI CONTROLLO...</div>;
 
+  // SCHERMATA DI SOSPENSIONE (Muro invalicabile)
+  if (isSalaSuspended) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-500">
+        <div className="bg-gray-900 border-4 border-red-600 p-10 md:p-16 rounded-[3rem] shadow-[0_0_80px_rgba(220,38,38,0.4)] max-w-4xl relative overflow-hidden">
+          {/* Effetto allarme sfondo */}
+          <div className="absolute top-0 left-0 w-full h-2 bg-red-600 animate-pulse"></div>
+          
+          <span className="text-7xl md:text-9xl mb-8 block drop-shadow-lg">⛔</span>
+          
+          <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-widest leading-loose border-y-2 border-gray-800 py-8 my-8">
+            SECONDO OPZIONI CONTRATTUALI<br/>LE ATTIVITA' DELLA SALA SONO MOMENTANEAMENTE SOSPESE
+          </h2>
+          
+          <button onClick={() => { supabase.auth.signOut(); router.push('/login'); }} className="mt-8 bg-red-950 text-red-500 border border-red-800 hover:bg-red-600 hover:text-white px-10 py-5 rounded-3xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 text-lg">
+            Torna al Login
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-black text-white p-4 font-sans tracking-tighter overflow-x-hidden relative print:bg-white print:text-black">
      {/* TASTO FLUTTUANTE GUIDA */}
