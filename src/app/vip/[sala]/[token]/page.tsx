@@ -32,18 +32,16 @@ export default function AppVIP() {
 
   useEffect(() => {
     async function fetchData() {
-      try {
-        // 1. Trova DIRETTAMENTE il Socio tramite il suo ID univoco (infallibile)
+      try {try {
+        // 1. Usa la funzione di sicurezza per trovare il socio senza aprire tutto il DB
         const { data: dataSocio, error: errSocio } = await supabase
-          .from('soci')
-          .select('*')
-          .eq('id', tokenSocio)
+          .rpc('ottieni_profilo_vip', { id_segreto: tokenSocio })
           .single();
 
         if (errSocio || !dataSocio) throw new Error("Socio non trovato");
         setSocio(dataSocio);
 
-        // 2. Ora che abbiamo il socio, carichiamo la sua Sala con certezza matematica
+        // 2. Trova la Sala collegata al Socio
         const { data: dataSala, error: errSala } = await supabase
           .from('sale')
           .select('id, name')
@@ -53,26 +51,23 @@ export default function AppVIP() {
         if (errSala || !dataSala) throw new Error("Sala non trovata");
         setSala(dataSala);
 
-        // 3. Trova i Tornei attivi per questa sala
+        // 3. Carica Tornei e Bacheca (ora funzioneranno grazie alle policy che abbiamo messo)
         const { data: dataTornei } = await supabase
           .from('tornei')
           .select('*')
           .eq('sala_id', dataSala.id)
           .order('data_inizio', { ascending: false });
-
         if (dataTornei) setTornei(dataTornei);
 
-        // 4. Trova i Post della Bacheca
         const { data: dataBacheca } = await supabase
           .from('bacheca')
           .select('*, reazioni_bacheca(*)')
           .eq('sala_id', dataSala.id)
           .order('created_at', { ascending: false });
-
         if (dataBacheca) setBacheca(dataBacheca);
 
       } catch (err) {
-        console.error("Errore Accesso VIP:", err);
+        console.error("Errore VIP:", err);
       } finally {
         setLoading(false);
       }
