@@ -13,20 +13,17 @@ export default function AppVIP() {
   const params = useParams();
   const router = useRouter();
   
-  const nomeSalaUrl = params.sala as string;
-  const nomeSalaDecoded = decodeURIComponent(nomeSalaUrl).replace(/[-_]/g, ' ').trim();
+  // Usiamo solo il token (che è l'ID del socio) per un accesso infallibile
   const tokenSocio = params.token as string;
 
   const [loading, setLoading] = useState(true);
   const [sala, setSala] = useState<any>(null);
   const [socio, setSocio] = useState<any>(null);
   const [tornei, setTornei] = useState<any[]>([]);
-  const [bacheca, setBacheca] = useState<any[]>([]); // NUOVO STATO BACHECA
+  const [bacheca, setBacheca] = useState<any[]>([]);
   
-  // Navigazione interna dell'App VIP (AGGIUNTO 'bacheca')
   const [activeTab, setActiveTab] = useState<"home" | "tornei" | "prenota" | "bacheca">("home");
 
-  // Stati Form Prenotazione
   const [telefono, setTelefono] = useState("");
   const [dataOra, setDataOra] = useState("");
   const [note, setNote] = useState("");
@@ -36,28 +33,27 @@ export default function AppVIP() {
   useEffect(() => {
     async function fetchData() {
       try {
-       
-        // 1. Trova DIRETTAMENTE il Socio tramite il suo ID univoco
-        const { data: dataSocio } = await supabase
+        // 1. Trova DIRETTAMENTE il Socio tramite il suo ID univoco (infallibile)
+        const { data: dataSocio, error: errSocio } = await supabase
           .from('soci')
           .select('*')
           .eq('id', tokenSocio)
           .single();
 
-        if (!dataSocio) throw new Error("Socio non trovato o link non valido");
+        if (errSocio || !dataSocio) throw new Error("Socio non trovato");
         setSocio(dataSocio);
 
-        // 2. Trova la Sala collegata esattamente a questo Socio
-        const { data: dataSala } = await supabase
+        // 2. Ora che abbiamo il socio, carichiamo la sua Sala con certezza matematica
+        const { data: dataSala, error: errSala } = await supabase
           .from('sale')
           .select('id, name')
           .eq('id', dataSocio.sala_id)
           .single();
 
-        if (!dataSala) throw new Error("Sala non trovata");
+        if (errSala || !dataSala) throw new Error("Sala non trovata");
         setSala(dataSala);
 
-        // 3. Trova i Tornei attivi
+        // 3. Trova i Tornei attivi per questa sala
         const { data: dataTornei } = await supabase
           .from('tornei')
           .select('*')
@@ -66,7 +62,7 @@ export default function AppVIP() {
 
         if (dataTornei) setTornei(dataTornei);
 
-        // 4. Trova i Post della Bacheca (CON LE REAZIONI)
+        // 4. Trova i Post della Bacheca
         const { data: dataBacheca } = await supabase
           .from('bacheca')
           .select('*, reazioni_bacheca(*)')
@@ -76,36 +72,33 @@ export default function AppVIP() {
         if (dataBacheca) setBacheca(dataBacheca);
 
       } catch (err) {
-        console.error(err);
+        console.error("Errore Accesso VIP:", err);
       } finally {
         setLoading(false);
       }
     }
-    fetchData();
-  }, [nomeSalaDecoded, tokenSocio]);
+    
+    if (tokenSocio) {
+      fetchData();
+    }
+  }, [tokenSocio]);
 
-
-  // --- NUOVA LOGICA: GESTIONE REAZIONI BACHECA ---
+  // --- GESTIONE REAZIONI BACHECA ---
   const gestisciReazione = async (postId: string, emoji: string) => {
-    // Troviamo il post e cerchiamo se il socio ha già reagito
     const post = bacheca.find(p => p.id === postId);
     const reazioneEsistente = post.reazioni_bacheca?.find((r: any) => r.socio_id === socio.id);
 
     try {
       if (reazioneEsistente) {
         if (reazioneEsistente.tipo === emoji) {
-          // Ha cliccato la stessa emoji: la rimuoviamo (Toglie il Mi Piace)
           await supabase.from('reazioni_bacheca').delete().eq('id', reazioneEsistente.id);
         } else {
-          // Ha cliccato un'emoji diversa: l'aggiorniamo
           await supabase.from('reazioni_bacheca').update({ tipo: emoji }).eq('id', reazioneEsistente.id);
         }
       } else {
-        // Non aveva ancora reagito: inseriamo la nuova reazione
         await supabase.from('reazioni_bacheca').insert([{ post_id: postId, socio_id: socio.id, tipo: emoji }]);
       }
 
-      // Ricarichiamo la bacheca in background per aggiornare i contatori
       const { data: dataBachecaAggiornata } = await supabase
         .from('bacheca')
         .select('*, reazioni_bacheca(*)')
@@ -132,7 +125,7 @@ export default function AppVIP() {
       const { error } = await supabase.from('prenotazioni').insert([{
         sala_id: sala.id,
         nome_cliente: `${socio.cognome} ${socio.nome}`,
-        telefono: telefono || socio.telefono || "Non fornito", // Usa il telefono del socio se presente
+        telefono: telefono || socio.telefono || "Non fornito",
         data_ora: dataOra,
         note: note,
         stato: 'in_attesa'
@@ -177,14 +170,12 @@ export default function AppVIP() {
       if (error) throw error;
       
       alert("✅ Richiesta di iscrizione inviata! Il gestore dovrà confermarla.");
-      
       setTornei(tornei.map(t => t.id === torneo.id ? { ...t, iscritti: iscrittiAggiornati } : t));
     } catch (error) {
       console.error(error);
       alert("Errore durante l'iscrizione.");
     }
   };
-
 
   // --- SCHERMATE DI ERRORE O CARICAMENTO ---
   if (loading) {
@@ -261,7 +252,7 @@ export default function AppVIP() {
           </div>
         )}
 
-        {/* TAB 2: BACHECA / NEWS (NUOVO TAB) */}
+        {/* TAB 2: BACHECA / NEWS */}
         {activeTab === 'bacheca' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
             <h2 className="text-xl font-black uppercase text-orange-500 mb-6 tracking-widest italic">Avvisi in Sala</h2>
@@ -276,7 +267,6 @@ export default function AppVIP() {
                   const reazioni = post.reazioni_bacheca || [];
                   const miaReazione = reazioni.find((r: any) => r.socio_id === socio.id)?.tipo;
                   
-                  // Calcola i totali per ogni emoji
                   const conteggio = reazioni.reduce((acc: any, curr: any) => { 
                     acc[curr.tipo] = (acc[curr.tipo] || 0) + 1; 
                     return acc; 
@@ -402,7 +392,6 @@ export default function AppVIP() {
 
                 <div>
                   <label className="block text-gray-400 font-bold uppercase text-xs tracking-widest ml-2 mb-2">Recapito (Opzionale)</label>
-                  {/* Precompila il telefono se il socio lo ha già nel DB */}
                   <input type="tel" value={telefono || socio.telefono || ""} onChange={(e) => setTelefono(e.target.value)} placeholder="Es. 333 1234567" className="w-full bg-black border border-gray-700 focus:border-purple-500 p-4 rounded-xl text-md text-white outline-none transition-all" />
                 </div>
 
@@ -421,7 +410,7 @@ export default function AppVIP() {
 
       </div>
 
-      {/* BOTTOM NAVIGATION BAR (AGGIORNATA A 4 BOTTONI) */}
+      {/* BOTTOM NAVIGATION BAR */}
       <div className="fixed bottom-0 left-0 w-full bg-gray-950/95 backdrop-blur-md border-t border-gray-800 px-2 py-4 flex justify-between items-center z-50">
         <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center justify-center gap-1 flex-1 transition-colors ${activeTab === 'home' ? 'text-purple-400' : 'text-gray-600 hover:text-gray-300'}`}>
           <span className="text-2xl">💳</span>
