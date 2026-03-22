@@ -610,6 +610,8 @@ export default function DashboardSala() {
   // FUNZIONE AGGIORNATA PER IL LINK WHATSAPP
   
   // FUNZIONE AGGIORNATA PER IL LINK WHATSAPP: FORZIAMO L'USO DELL'ID REALE
+  
+  // FUNZIONE AGGIORNATA PER IL LINK WHATSAPP: FORZIAMO L'USO DELL'ID REALE
   const inviaLinkWhatsApp = (socio: any) => {
     // Ignoriamo la vecchia colonna 'token' e peschiamo l'ID univoco e corretto:
     const idReale = socio.id; 
