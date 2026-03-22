@@ -44,20 +44,18 @@ export default function AppVIP() {
       try {
         setLoading(true);
 
-        // 1. Trova il Socio (SENZA .single() perché il DB restituisce un array!)
-        const { data: dataSocioArray, error: errSocio } = await (supabase as any)
-          .rpc('ottieni_profilo_vip', { id_segreto: tokenSocio });
+        // 1. Trova il Socio con la nuova funzione JSON super-stabile (con .trim() per sicurezza)
+        const { data: dataSocio, error: errSocio } = await (supabase as any)
+          .rpc('ottieni_profilo_vip', { id_segreto: tokenSocio.trim() });
 
         if (errSocio) {
-          setDebugMsg("Il DB ha bloccato il Socio. Dettaglio: " + errSocio.message);
+          setDebugMsg("Errore del database. Dettaglio: " + errSocio.message);
           throw new Error("Socio error");
         }
         
-        // Estraiamo il primo elemento dalla lista che ci ha mandato il DB
-        const dataSocio = dataSocioArray && dataSocioArray.length > 0 ? dataSocioArray[0] : null;
-
         if (!dataSocio) {
-          setDebugMsg("Il Socio non esiste più nel database (ID non trovato).");
+          // ECCO IL TRUCCO: STAMPIAMO L'ID ESATTO CHE STIAMO CERCANDO!
+          setDebugMsg("Il Socio non esiste nel database. L'ID che ho cercato è esattamente questo: [" + tokenSocio + "]");
           throw new Error("Socio missing");
         }
         setSocio(dataSocio);
@@ -76,24 +74,22 @@ export default function AppVIP() {
         setSala(dataSala);
 
         // 3. Carica i Tornei
-        const { data: dataTornei, error: errTornei } = await supabase
+        const { data: dataTornei } = await supabase
           .from('tornei')
           .select('*')
           .eq('sala_id', dataSala.id)
           .order('data_inizio', { ascending: false });
           
-        if (errTornei) console.error("Errore Tornei:", errTornei);
-        else if (dataTornei) setTornei(dataTornei);
+        if (dataTornei) setTornei(dataTornei);
 
         // 4. Carica la Bacheca
-        const { data: dataBacheca, error: errBacheca } = await supabase
+        const { data: dataBacheca } = await supabase
           .from('bacheca')
           .select('*, reazioni_bacheca(*)')
           .eq('sala_id', dataSala.id)
           .order('created_at', { ascending: false });
           
-        if (errBacheca) console.error("Errore Bacheca:", errBacheca);
-        else if (dataBacheca) setBacheca(dataBacheca);
+        if (dataBacheca) setBacheca(dataBacheca);
 
       } catch (err) {
         console.error("Fetch Data Interrotto.");
