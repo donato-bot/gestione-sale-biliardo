@@ -608,9 +608,13 @@ export default function DashboardSala() {
   };
 
   // FUNZIONE AGGIORNATA PER IL LINK WHATSAPP
+  
+  // FUNZIONE AGGIORNATA PER IL LINK WHATSAPP: FORZIAMO L'USO DELL'ID REALE
   const inviaLinkWhatsApp = (socio: any) => {
-    const socioToken = socio.token || socio.id; 
-    const url = `${window.location.origin}/vip/${params.sala}/${socioToken}`;
+    // Ignoriamo la vecchia colonna 'token' e peschiamo l'ID univoco e corretto:
+    const idReale = socio.id; 
+    const url = `${window.location.origin}/vip/${params.sala}/${idReale}`;
+    
     const messaggioTesto = `Ciao ${socio.nome}, ecco la tua Tessera Digitale VIP per ${nomeSala}. Clicca qui per vedere il tuo credito e prenotare: ${url}`;
     const messaggioCodificato = encodeURIComponent(messaggioTesto);
 
