@@ -179,7 +179,16 @@ export default function DashboardSala() {
           <p className="text-purple-500 font-bold uppercase tracking-widest text-[10px] mb-1">PLANCIA GESTORE</p>
           <h1 className="text-4xl font-black italic uppercase text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">{nomeSala || "Sala"}</h1>
         </div>
-        <div className="flex gap-4 mt-6 md:mt-0">
+        <div className="flex gap-4 mt-6 md:mt-0 flex-wrap justify-end">
+          
+          {/* NUOVO PULSANTE INDIETRO */}
+          <button 
+            onClick={() => router.push('/dashboard')} 
+            className="bg-gray-800 border border-gray-700 text-gray-300 font-bold px-6 py-3 rounded-2xl hover:bg-gray-700 hover:text-white transition-all text-sm uppercase shadow-lg active:scale-95"
+          >
+            ⬅ Indietro
+          </button>
+
           <button onClick={() => setIsPasswordModalOpen(true)} className="bg-blue-900 border border-blue-700 text-blue-400 font-bold px-6 py-3 rounded-2xl hover:bg-blue-800 hover:text-white transition-all text-sm uppercase shadow-lg active:scale-95">
             🔑 Cambia Password
           </button>

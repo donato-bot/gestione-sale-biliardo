@@ -46,14 +46,14 @@ export default function Login() {
       if (userEmail) {
         const { data: salaData, error: salaError } = await supabase
           .from('sale')
-          .select('name')
+          .select('id, name') // MODIFICA 1: Ho aggiunto 'id' per recuperare l'ID univoco dal database
           .eq('manager_email', userEmail)
           .single();
 
         if (salaData) {
-          // Creiamo un link "pulito" dal nome della sala (es. "Biliardo Royal" -> "biliardo-royal")
-          const slug = salaData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          router.push(`/dashboard/${slug}`);
+          // MODIFICA 2: Invece di usare uno "slug" testuale, usiamo l'ID reale della sala.
+          // Così la dashboard troverà la sala corretta nel database!
+          router.push(`/dashboard/${salaData.id}`);
         } else {
           // Se l'utente esiste ma non ha una sala assegnata
           setError("Nessuna sala assegnata a questo account. Contatta l'amministratore.");
