@@ -21,9 +21,8 @@ export default function DashboardSala() {
   const [currentSalaId, setCurrentSalaId] = useState<string | null>(null);
   const [nomeSala, setNomeSala] = useState<string>("La Mia Sala");
   
-  // STATI PER LA SICUREZZA
+  // STATO PER SOSPENSIONE SALA
   const [isSalaSuspended, setIsSalaSuspended] = useState(false);
-  const [supportActive, setSupportActive] = useState(false); // <--- NUOVO STATO PRIVACY
 
   const [tariffaStandard, setTariffaStandard] = useState(10.00);
   const [tariffaSoci, setTariffaSoci] = useState(8.00);
@@ -141,7 +140,6 @@ export default function DashboardSala() {
             setNomeSala(salaData.name);
             setTariffaStandard(salaData.tariffa_standard || 10.00);
             setTariffaSoci(salaData.tariffa_soci || 8.00);
-            setSupportActive(salaData.support_active || false); // IMPOSTA LO STATO INIZIALE DELLA PRIVACY
             await refreshDati(salaData.id);
           }
         }
@@ -154,11 +152,6 @@ export default function DashboardSala() {
   async function refreshDati(salaId: string) {
     try {
         const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
-
-        // Ricarica anche lo stato della privacy
-        const { data: sInfo } = await supabase.from('sale').select('support_active').eq('id', salaId).single();
-        if (sInfo) setSupportActive(sInfo.support_active);
-
         const { data: tDB } = await supabase.from('tavoli').select('*').eq('sala_id', salaId).order('numero', { ascending: true });
         const { data: sDB } = await supabase.from('sessioni').select('*, consumazioni(*), staff(nome)').eq('sala_id', salaId).eq('stato', 'in_corso');
         const { data: pDB } = await supabase.from('prodotti').select('*').eq('sala_id', salaId).order('nome', { ascending: true });
@@ -1393,7 +1386,6 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* --- SEZIONE IMPOSTAZIONI (ORA CON LA PRIVACY) --- */}
         {activeView === 'impostazioni' && (
           <div className="max-w-2xl mx-auto bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 animate-in slide-in-from-bottom-8 shadow-2xl">
             <h3 className="text-3xl font-black text-white uppercase italic mb-8 border-b border-gray-800 pb-4">Configurazione Tariffe</h3>
@@ -1402,34 +1394,29 @@ export default function DashboardSala() {
               <div><label className="block text-yellow-500 font-black text-xs uppercase mb-4">Soci (€/h)</label><input type="number" value={tariffaSoci} onChange={(e) => setTariffaSoci(parseFloat(e.target.value))} className="w-full bg-black border border-yellow-900 p-6 rounded-2xl text-4xl text-white font-black" /></div>
             </div>
             <button onClick={() => richiedePin((sid) => salvaTariffe(sid), "Aggiornamento Tariffe")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA TARIFFE</button>
-
-            {/* NUOVO BLOCCO: PRIVACY E SUPPORTO */}
-            <div className="mt-12 pt-8 border-t border-gray-800">
-              <h3 className="text-xl font-black text-pink-500 uppercase italic mb-6">Sicurezza e Privacy</h3>
-              <div className="bg-black p-6 rounded-[2rem] border border-pink-900/30 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="text-center md:text-left">
-                  <p className="font-bold text-white uppercase tracking-widest text-sm">Accesso Tecnico Remoto</p>
-                  <p className="text-xs text-gray-500 mt-1">Consenti al Super Admin di accedere per assistenza.</p>
-                </div>
-                <button 
-                  onClick={async () => {
-                    const nuovoStato = !supportActive;
-                    const { error } = await supabase.from('sale').update({ support_active: nuovoStato }).eq('id', currentSalaId);
-                    if (!error) {
-                      setSupportActive(nuovoStato);
-                      alert(nuovoStato ? "✅ Assistenza Attivata" : "🔒 Assistenza Disattivata");
-                    }
-                  }}
-                  className={`px-8 py-4 rounded-2xl font-black text-sm uppercase transition-all ${supportActive ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}
-                >
-                  {supportActive ? "DISATTIVA" : "ATTIVA"}
-                </button>
-              </div>
-            </div>
-            {/* FINE BLOCCO PRIVACY */}
-
           </div>
         )}
+        {/* Sezione Sicurezza e Assistenza */}
+<div className="mt-12 pt-8 border-t border-gray-800">
+  <h3 className="text-pink-500 font-black mb-4 uppercase italic">Privacy e Supporto</h3>
+  <div className="bg-black p-6 rounded-2xl border border-pink-900/30 flex justify-between items-center">
+    <div>
+      <p className="font-bold">Accesso Tecnico Remoto</p>
+      <p className="text-xs text-gray-500">Se attivo, consenti al Super Admin di accedere per assistenza.</p>
+    </div>
+    <button 
+      onClick={async () => {
+        const nuovoStato = !salaInfo.support_active; // Supponendo di avere i dati della sala in uno stato
+        await supabase.from('sale').update({ support_active: nuovoStato }).eq('id', currentSalaId);
+        alert(nuovoStato ? "✅ Assistenza Attivata" : "🔒 Assistenza Disattivata");
+        refreshDati(currentSalaId!);
+      }}
+      className={`px-6 py-2 rounded-full font-black text-xs ${salaInfo.support_active ? 'bg-red-600' : 'bg-green-600'}`}
+    >
+      {salaInfo.support_active ? "DISATTIVA" : "ATTIVA"}
+    </button>
+  </div>
+</div>
 
         {/* SEZIONE PRENOTAZIONI CON NUOVO TASTO PDF */}
         {activeView === 'prenotazioni' && (

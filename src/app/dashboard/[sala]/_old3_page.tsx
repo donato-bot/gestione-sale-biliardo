@@ -20,10 +20,10 @@ export default function DashboardSala() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentSalaId, setCurrentSalaId] = useState<string | null>(null);
   const [nomeSala, setNomeSala] = useState<string>("La Mia Sala");
+  const [supportActive, setSupportActive] = useState(false); // NUOVO STATO PER PRIVACY
   
-  // STATI PER LA SICUREZZA
+  // STATO PER SOSPENSIONE SALA
   const [isSalaSuspended, setIsSalaSuspended] = useState(false);
-  const [supportActive, setSupportActive] = useState(false); // <--- NUOVO STATO PRIVACY
 
   const [tariffaStandard, setTariffaStandard] = useState(10.00);
   const [tariffaSoci, setTariffaSoci] = useState(8.00);
@@ -114,7 +114,6 @@ export default function DashboardSala() {
   const [now, setNow] = useState(Date.now());
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
-
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
@@ -127,7 +126,7 @@ export default function DashboardSala() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           setUserEmail(session.user.email ?? null);
-          const { data: salaData } = await supabase.from("sale").select("*").eq("manager_email", session.user.email).single();
+          const { data: salaData } = await supabase.from("sale").select("*").eq("id", params.sala).single();
           
           if (salaData) {
             // CONTROLLO SOSPENSIONE DA TORRE DI CONTROLLO
@@ -141,7 +140,7 @@ export default function DashboardSala() {
             setNomeSala(salaData.name);
             setTariffaStandard(salaData.tariffa_standard || 10.00);
             setTariffaSoci(salaData.tariffa_soci || 8.00);
-            setSupportActive(salaData.support_active || false); // IMPOSTA LO STATO INIZIALE DELLA PRIVACY
+            setSupportActive(salaData.support_active || false); // IMPOSTO STATO PRIVACY
             await refreshDati(salaData.id);
           }
         }
@@ -149,15 +148,13 @@ export default function DashboardSala() {
       setLoading(false);
     }
     init();
-  }, []);
+  }, [params.sala]);
 
   async function refreshDati(salaId: string) {
     try {
         const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
-
-        // Ricarica anche lo stato della privacy
-        const { data: sInfo } = await supabase.from('sale').select('support_active').eq('id', salaId).single();
-        if (sInfo) setSupportActive(sInfo.support_active);
+        const { data: salaDB } = await supabase.from('sale').select('support_active').eq('id', salaId).single();
+        if(salaDB) setSupportActive(salaDB.support_active);
 
         const { data: tDB } = await supabase.from('tavoli').select('*').eq('sala_id', salaId).order('numero', { ascending: true });
         const { data: sDB } = await supabase.from('sessioni').select('*, consumazioni(*), staff(nome)').eq('sala_id', salaId).eq('stato', 'in_corso');
@@ -1393,7 +1390,7 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* --- SEZIONE IMPOSTAZIONI (ORA CON LA PRIVACY) --- */}
+        {/* --- SEZIONE IMPOSTAZIONI AGGIORNATA CON PRIVACY --- */}
         {activeView === 'impostazioni' && (
           <div className="max-w-2xl mx-auto bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 animate-in slide-in-from-bottom-8 shadow-2xl">
             <h3 className="text-3xl font-black text-white uppercase italic mb-8 border-b border-gray-800 pb-4">Configurazione Tariffe</h3>
@@ -1403,30 +1400,47 @@ export default function DashboardSala() {
             </div>
             <button onClick={() => richiedePin((sid) => salvaTariffe(sid), "Aggiornamento Tariffe")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA TARIFFE</button>
 
-            {/* NUOVO BLOCCO: PRIVACY E SUPPORTO */}
+            {/* SEZIONE PRIVACY E SUPPORTO */}
             <div className="mt-12 pt-8 border-t border-gray-800">
-              <h3 className="text-xl font-black text-pink-500 uppercase italic mb-6">Sicurezza e Privacy</h3>
-              <div className="bg-black p-6 rounded-[2rem] border border-pink-900/30 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="text-center md:text-left">
-                  <p className="font-bold text-white uppercase tracking-widest text-sm">Accesso Tecnico Remoto</p>
-                  <p className="text-xs text-gray-500 mt-1">Consenti al Super Admin di accedere per assistenza.</p>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="h-8 w-1 bg-pink-600"></div>
+                <h3 className="text-pink-500 font-black uppercase italic text-xl">Sicurezza e Privacy</h3>
+              </div>
+              
+              <div className="bg-gradient-to-br from-gray-950 to-black p-8 rounded-[2.5rem] border border-pink-900/20 flex flex-col md:flex-row justify-between items-center gap-6 shadow-2xl">
+                <div className="max-w-md text-center md:text-left">
+                  <p className="text-white font-black text-xl uppercase italic tracking-tighter">Accesso Tecnico Remoto</p>
+                  <p className="text-gray-400 text-sm mt-2 font-medium leading-relaxed">
+                    Se attivato, permetti al Super Admin di entrare in questa dashboard per fornirti assistenza tecnica.
+                  </p>
+                  <p className="text-pink-500/60 text-[10px] mt-4 font-black uppercase tracking-widest">
+                    Stato attuale: {supportActive ? "🔓 Porta Aperta" : "🔒 Porta Chiusa"}
+                  </p>
                 </div>
+                
                 <button 
                   onClick={async () => {
                     const nuovoStato = !supportActive;
-                    const { error } = await supabase.from('sale').update({ support_active: nuovoStato }).eq('id', currentSalaId);
+                    const { error } = await supabase
+                      .from('sale')
+                      .update({ support_active: nuovoStato })
+                      .eq('id', currentSalaId);
+                    
                     if (!error) {
                       setSupportActive(nuovoStato);
-                      alert(nuovoStato ? "✅ Assistenza Attivata" : "🔒 Assistenza Disattivata");
+                      alert(nuovoStato ? "🔓 ASSISTENZA ATTIVATA: Il Super Admin può ora accedere." : "🔒 ASSISTENZA DISATTIVATA: Accesso negato a chiunque tranne te.");
                     }
                   }}
-                  className={`px-8 py-4 rounded-2xl font-black text-sm uppercase transition-all ${supportActive ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}
+                  className={`h-16 w-full md:w-56 rounded-[1.5rem] font-black transition-all shadow-xl flex items-center justify-center group relative overflow-hidden ${supportActive ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-green-600 text-white hover:bg-green-500'}`}
                 >
-                  {supportActive ? "DISATTIVA" : "ATTIVA"}
+                  <span className="relative z-10 uppercase italic tracking-tighter">
+                    {supportActive ? "Revoca Accesso" : "Concedi Accesso"}
+                  </span>
+                  <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-all duration-300"></div>
                 </button>
               </div>
             </div>
-            {/* FINE BLOCCO PRIVACY */}
+            {/* FINE SEZIONE PRIVACY */}
 
           </div>
         )}
