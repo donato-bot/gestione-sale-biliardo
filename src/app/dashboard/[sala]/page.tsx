@@ -48,6 +48,10 @@ export default function DashboardSala() {
   // STATO PER IL GRAFICO DEGLI INCASSI
   const [datiGrafico, setDatiGrafico] = useState<{data: string, totale: number}[]>([]);
   
+  // STATI PER ESPORTAZIONE AVANZATA
+  const [storicoDal, setStoricoDal] = useState("");
+  const [storicoAl, setStoricoAl] = useState("");
+
   const [isNewUscitaModalOpen, setIsNewUscitaModalOpen] = useState(false);
   const [uscitaImporto, setUscitaImporto] = useState("");
   const [uscitaDescrizione, setUscitaDescrizione] = useState("");
@@ -116,7 +120,6 @@ export default function DashboardSala() {
   
   const [now, setNow] = useState(Date.now());
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
-
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -204,9 +207,8 @@ export default function DashboardSala() {
           setIncassoContanti(contanti); 
           setIncassoPOS(pos);
 
-          // Calcoliamo i dati per il GRAFICO
+          // Calcoliamo i dati per il GRAFICO a 7 Giorni
           const raggruppamentoGiorni: Record<string, number> = {};
-          // Inizializza array vuoto per 7 giorni per avere anche i giorni con 0 incassi
           for(let i=6; i>=0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
@@ -214,7 +216,6 @@ export default function DashboardSala() {
             raggruppamentoGiorni[dataStr] = 0;
           }
 
-          // Riempi con i dati reali
           movimentiDB.forEach(m => {
             if(m.tipo === 'entrata' && m.metodo_pagamento !== 'credito_vip') {
               const dataStr = new Date(m.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
@@ -678,15 +679,13 @@ export default function DashboardSala() {
     window.print();
   };
 
+  // --- FUNZIONI DI ESPORTAZIONE ---
   const esportaCSV = () => {
     try {
       if (!primaNota || primaNota.length === 0) {
-        alert("⚠️ Nessun movimento da esportare oggi.");
-        return;
+        alert("⚠️ Nessun movimento da esportare oggi."); return;
       }
-
       let csvContent = "Data e Ora;Causale;Operatore;Metodo Pagamento;Tipo Movimento;Importo\n";
-
       primaNota.forEach(m => {
         const dataOra = new Date(m.created_at).toLocaleString();
         const causale = m.descrizione ? m.descrizione.replace(/;/g, ',') : "";
@@ -694,30 +693,20 @@ export default function DashboardSala() {
         const metodo = m.metodo_pagamento ? m.metodo_pagamento.toUpperCase() : "";
         const tipo = m.tipo ? m.tipo.toUpperCase() : "";
         const importo = parseFloat(m.importo || 0).toFixed(2);
-
         csvContent += `${dataOra};${causale};${staff};${metodo};${tipo};${importo}\n`;
       });
-
       const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      const dataOggi = new Date().toLocaleDateString().replace(/\//g, '-');
-      link.download = `Prima_Nota_${dataOggi}.csv`;
-      
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      alert("✅ File Prima_Nota scaricato con successo!\n\nControlla la cartella 'Download' del tuo computer o browser.");
-
+      link.download = `Prima_Nota_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      alert("✅ File scaricato con successo!");
     } catch (error) {
-      console.error("Errore durante l'esportazione:", error);
-      alert("❌ C'è stato un problema durante la creazione del file Excel.");
+      alert("❌ C'è stato un problema durante l'esportazione.");
     }
   };
 
-  // --- PDF: PRIMA NOTA ---
   const scaricaPrimaNotaPDF = () => {
     const doc = new jsPDF();
     const dataOggi = new Date().toLocaleDateString('it-IT');
@@ -725,283 +714,199 @@ export default function DashboardSala() {
     const operatore = activeStaff ? activeStaff.nome : 'Gestore/Admin';
     const nomeFile = `Prima_Nota_${nomeSala.replace(/\s+/g, '_')}_${dataOggi.replace(/\//g, '-')}.pdf`;
 
-    doc.setFontSize(22);
-    doc.setTextColor(34, 197, 94); // Verde
-    doc.text(nomeSala.toUpperCase(), 14, 20);
+    doc.setFontSize(22); doc.setTextColor(34, 197, 94); doc.text(nomeSala.toUpperCase(), 14, 20);
+    doc.setFontSize(14); doc.setTextColor(50, 50, 50); doc.text("Report Chiusura Cassa (Prima Nota Ufficiale)", 14, 30);
+    doc.setFontSize(10); doc.setTextColor(100, 100, 100);
+    doc.text(`Data e Ora: ${dataOggi} - ${oraOggi}`, 14, 38);
+    doc.text(`Operatore: ${operatore}`, 14, 44);
 
-    doc.setFontSize(14);
-    doc.setTextColor(50, 50, 50);
-    doc.text("Report Chiusura Cassa (Prima Nota Ufficiale)", 14, 30);
-
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Data e Ora di stampa: ${dataOggi} - ${oraOggi}`, 14, 38);
-    doc.text(`Operatore di turno: ${operatore}`, 14, 44);
-
-    doc.setFontSize(11);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold');
     doc.text("RIEPILOGO GIORNALIERO", 14, 55);
-
     doc.setFont('helvetica', 'normal');
     doc.text(`Totale Entrate: € ${incassoTotale.toFixed(2)}`, 14, 62);
     doc.text(`Totale Uscite: € ${usciteTotali.toFixed(2)}`, 14, 68);
-    
-    doc.text(`Incasso POS/Elettronico: € ${incassoPOS.toFixed(2)}`, 100, 62);
-    doc.setFontSize(12);
-    doc.setTextColor(6, 182, 212); // Cyan
-    doc.setFont('helvetica', 'bold');
-    doc.text(`SALDO CASSETTO (Contanti): € ${incassoContanti.toFixed(2)}`, 100, 68);
+    doc.text(`Incasso POS: € ${incassoPOS.toFixed(2)}`, 100, 62);
+    doc.setFontSize(12); doc.setTextColor(6, 182, 212); doc.setFont('helvetica', 'bold');
+    doc.text(`SALDO CASSETTO: € ${incassoContanti.toFixed(2)}`, 100, 68);
 
     const colonne = ["Ora", "Causale", "Operatore", "Metodo", "Importo"];
     const righe = primaNota.map(m => [
       new Date(m.created_at).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
-      m.descrizione || '',
-      m.staff?.nome || "ADMIN",
-      m.metodo_pagamento.toUpperCase().replace('_', ' '),
+      m.descrizione || '', m.staff?.nome || "ADMIN", m.metodo_pagamento.toUpperCase().replace('_', ' '),
       (m.tipo === 'entrata' ? '+ ' : '- ') + '€ ' + parseFloat(m.importo).toFixed(2)
     ]);
 
     autoTable(doc, {
-      startY: 75,
-      head: [colonne],
-      body: righe,
-      theme: 'grid',
-      headStyles: { fillColor: [22, 163, 74], textColor: 255 }, 
-      styles: { fontSize: 9 },
-      columnStyles: {
-        4: { halign: 'right', fontStyle: 'bold' } 
-      },
+      startY: 75, head: [colonne], body: righe, theme: 'grid',
+      headStyles: { fillColor: [22, 163, 74], textColor: 255 }, styles: { fontSize: 9 },
+      columnStyles: { 4: { halign: 'right', fontStyle: 'bold' } },
       didParseCell: function (data) {
         if (data.section === 'body' && data.column.index === 4) {
-          if (data.cell.raw.toString().startsWith('+')) {
-            data.cell.styles.textColor = [22, 163, 74]; 
-          } else {
-            data.cell.styles.textColor = [220, 38, 38]; 
-          }
+          data.cell.styles.textColor = data.cell.raw.toString().startsWith('+') ? [22, 163, 74] : [220, 38, 38];
         }
       }
     });
 
     const finalY = (doc as any).lastAutoTable.finalY || 150;
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
     doc.text("Firma Operatore ________________________", 14, finalY + 20);
     doc.text("Firma Gestore ________________________", 120, finalY + 20);
-
     doc.save(nomeFile);
   };
 
-  // --- PDF: ELENCO SOCI ---
+  // --- NUOVA FUNZIONE: ESPORTA STORICO AVANZATO ---
+  const esportaStorico = async (formato: 'csv' | 'pdf') => {
+    if (!storicoDal || !storicoAl) {
+      alert("⚠️ Seleziona sia la Data di Inizio che la Data di Fine!");
+      return;
+    }
+    
+    // Imposta orari per includere tutto il periodo (da 00:00 del primo giorno alle 23:59 dell'ultimo)
+    const dataInizio = new Date(storicoDal);
+    dataInizio.setHours(0, 0, 0, 0);
+    const dataFine = new Date(storicoAl);
+    dataFine.setHours(23, 59, 59, 999);
+
+    if (dataInizio > dataFine) {
+      alert("⚠️ La Data di Inizio non può essere successiva alla Data di Fine!");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('movimenti_cassa')
+        .select('*, staff(nome)')
+        .eq('sala_id', currentSalaId)
+        .gte('created_at', dataInizio.toISOString())
+        .lte('created_at', dataFine.toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error || !data || data.length === 0) {
+        alert("Nessun movimento trovato nel periodo selezionato.");
+        return;
+      }
+
+      if (formato === 'csv') {
+        let csvContent = "Data e Ora;Causale;Operatore;Metodo Pagamento;Tipo Movimento;Importo\n";
+        data.forEach(m => {
+          csvContent += `${new Date(m.created_at).toLocaleString('it-IT')};${m.descrizione?.replace(/;/g, ',')};${m.staff?.nome || "ADMIN"};${m.metodo_pagamento.toUpperCase()};${m.tipo.toUpperCase()};${parseFloat(m.importo).toFixed(2)}\n`;
+        });
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a"); 
+        link.href = URL.createObjectURL(blob); 
+        link.download = `Storico_Cassa_${storicoDal}_al_${storicoAl}.csv`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        alert("✅ Storico Excel scaricato!");
+
+      } else if (formato === 'pdf') {
+        const doc = new jsPDF();
+        const nomeFile = `Storico_${nomeSala.replace(/\s+/g, '_')}_${storicoDal}_al_${storicoAl}.pdf`;
+
+        doc.setFontSize(22); doc.setTextColor(37, 99, 235); // Blue
+        doc.text(`STORICO INCASSI: ${nomeSala.toUpperCase()}`, 14, 20);
+        doc.setFontSize(12); doc.setTextColor(100);
+        doc.text(`Periodo analizzato: dal ${new Date(storicoDal).toLocaleDateString('it-IT')} al ${new Date(storicoAl).toLocaleDateString('it-IT')}`, 14, 30);
+        
+        // Calcoli per il periodo
+        let entrate = 0, uscite = 0;
+        data.forEach(m => {
+          if (m.tipo === 'entrata' && m.metodo_pagamento !== 'credito_vip') entrate += parseFloat(m.importo);
+          else if (m.tipo === 'uscita') uscite += parseFloat(m.importo);
+        });
+
+        doc.setFontSize(11); doc.setTextColor(0); doc.setFont('helvetica', 'bold');
+        doc.text(`Totale Entrate Reali: € ${entrate.toFixed(2)}`, 14, 45);
+        doc.text(`Totale Uscite: € ${uscite.toFixed(2)}`, 14, 52);
+        doc.setTextColor(37, 99, 235);
+        doc.text(`Utile Netto del Periodo: € ${(entrate - uscite).toFixed(2)}`, 14, 59);
+
+        const colonne = ["Data e Ora", "Causale", "Staff", "Metodo", "Importo"];
+        const righe = data.map((m:any) => [
+          new Date(m.created_at).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'}),
+          m.descrizione || '', m.staff?.nome || "ADMIN", m.metodo_pagamento.toUpperCase().replace('_', ' '),
+          (m.tipo === 'entrata' ? '+ ' : '- ') + '€ ' + parseFloat(m.importo).toFixed(2)
+        ]);
+
+        autoTable(doc, {
+          startY: 65, head: [colonne], body: righe, theme: 'grid',
+          headStyles: { fillColor: [37, 99, 235], textColor: 255 }, styles: { fontSize: 8 },
+          columnStyles: { 4: { halign: 'right', fontStyle: 'bold' } },
+          didParseCell: function(d:any) { 
+            if(d.column.index === 4 && d.section === 'body') {
+              d.cell.styles.textColor = d.cell.raw.toString().startsWith('+') ? [22,163,74] : [220,38,38]; 
+            }
+          }
+        });
+        doc.save(nomeFile);
+      }
+    } catch (error) {
+      alert("❌ Errore durante l'estrazione dello storico.");
+    }
+  };
+
   const scaricaSociPDF = () => {
     const doc = new jsPDF();
     const dataOggi = new Date().toLocaleDateString('it-IT');
     const oraOggi = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-    const nomeFile = `Elenco_Soci_${nomeSala.replace(/\s+/g, '_')}_${dataOggi.replace(/\//g, '-')}.pdf`;
-
-    doc.setFontSize(22);
-    doc.setTextColor(202, 138, 4); // Giallo/Oro
-    doc.text(nomeSala.toUpperCase(), 14, 20);
-
-    doc.setFontSize(14);
-    doc.setTextColor(50, 50, 50);
-    doc.text("Report Anagrafica e Crediti Soci VIP", 14, 30);
-
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Data e Ora di stampa: ${dataOggi} - ${oraOggi}`, 14, 38);
-    doc.text(`Totale Soci Registrati: ${soci.length}`, 14, 44);
-
+    doc.setFontSize(22); doc.setTextColor(202, 138, 4); doc.text(nomeSala.toUpperCase(), 14, 20);
+    doc.setFontSize(14); doc.setTextColor(50, 50, 50); doc.text("Report Anagrafica e Crediti Soci VIP", 14, 30);
+    doc.setFontSize(10); doc.setTextColor(100, 100, 100); doc.text(`Stampa: ${dataOggi} - ${oraOggi}`, 14, 38);
+    
     const totaleCrediti = soci.reduce((acc, s) => acc + parseFloat(s.credito || 0), 0);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(22, 163, 74); 
-    doc.text(`Esposizione Totale Crediti: € ${totaleCrediti.toFixed(2)}`, 120, 44);
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74); doc.text(`Esposizione Totale Crediti: € ${totaleCrediti.toFixed(2)}`, 120, 44);
 
     const colonne = ["Cognome", "Nome", "Telefono", "Credito Residuo"];
-    const righe = soci.map(s => [
-      s.cognome.toUpperCase(),
-      s.nome.toUpperCase(),
-      s.telefono || "Non inserito",
-      '€ ' + parseFloat(s.credito || 0).toFixed(2)
-    ]);
+    const righe = soci.map(s => [s.cognome.toUpperCase(), s.nome.toUpperCase(), s.telefono || "-", '€ ' + parseFloat(s.credito || 0).toFixed(2)]);
 
     autoTable(doc, {
-      startY: 55,
-      head: [colonne],
-      body: righe,
-      theme: 'grid',
-      headStyles: { fillColor: [202, 138, 4], textColor: 255 },
-      styles: { fontSize: 10 },
-      columnStyles: {
-        3: { halign: 'right', fontStyle: 'bold' } 
-      },
+      startY: 55, head: [colonne], body: righe, theme: 'grid',
+      headStyles: { fillColor: [202, 138, 4], textColor: 255 }, styles: { fontSize: 10 },
+      columnStyles: { 3: { halign: 'right', fontStyle: 'bold' } },
       didParseCell: function (data) {
         if (data.section === 'body' && data.column.index === 3) {
-          const valore = parseFloat(data.cell.raw.toString().replace('€ ', ''));
-          if (valore > 0) {
-            data.cell.styles.textColor = [22, 163, 74]; 
-          } else if (valore < 0) {
-            data.cell.styles.textColor = [220, 38, 38]; 
-          }
+          const v = parseFloat(data.cell.raw.toString().replace('€ ', ''));
+          if (v > 0) data.cell.styles.textColor = [22, 163, 74]; else if (v < 0) data.cell.styles.textColor = [220, 38, 38];
         }
       }
     });
-
-    const pageCount = (doc as any).internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(150);
-      doc.text(
-        `Pagina ${i} di ${pageCount} - Documento ad uso interno`,
-        doc.internal.pageSize.getWidth() / 2,
-        doc.internal.pageSize.getHeight() - 10,
-        { align: 'center' }
-      );
-    }
-
-    doc.save(nomeFile);
+    doc.save(`Elenco_Soci_${dataOggi.replace(/\//g, '-')}.pdf`);
   };
 
-  // --- NUOVA FUNZIONE PDF: INVENTARIO MAGAZZINO ---
   const scaricaMagazzinoPDF = () => {
     const doc = new jsPDF();
-    const dataOggi = new Date().toLocaleDateString('it-IT');
-    const oraOggi = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-    const operatore = activeStaff ? activeStaff.nome : 'Gestore/Admin';
-    const nomeFile = `Inventario_Magazzino_${nomeSala.replace(/\s+/g, '_')}_${dataOggi.replace(/\//g, '-')}.pdf`;
-
-    doc.setFontSize(22);
-    doc.setTextColor(37, 99, 235); // Blue-600
-    doc.text(nomeSala.toUpperCase(), 14, 20);
-
-    doc.setFontSize(14);
-    doc.setTextColor(50, 50, 50);
-    doc.text("Report Inventario Magazzino Bar", 14, 30);
-
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Data e Ora di stampa: ${dataOggi} - ${oraOggi}`, 14, 38);
-    doc.text(`Operatore di turno: ${operatore}`, 14, 44);
-
-    const totaleArticoli = prodotti.reduce((acc, p) => acc + (p.quantita_stock || 0), 0);
-    const valoreTotale = prodotti.reduce((acc, p) => acc + ((p.quantita_stock || 0) * (parseFloat(p.prezzo_vendita) || 0)), 0);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(37, 99, 235); 
-    doc.text(`Totale Pezzi in Stock: ${totaleArticoli}`, 120, 38);
-    doc.text(`Valore Stimato di Vendita: € ${valoreTotale.toFixed(2)}`, 120, 44);
-
-    const colonne = ["Prodotto", "Prezzo Vendita", "Quantità in Stock", "Valore Totale"];
-    const righe = prodotti.map(p => [
-      p.nome.toUpperCase(),
-      `€ ${parseFloat(p.prezzo_vendita).toFixed(2)}`,
-      p.quantita_stock.toString(),
-      `€ ${(p.quantita_stock * parseFloat(p.prezzo_vendita)).toFixed(2)}`
-    ]);
+    doc.setFontSize(22); doc.setTextColor(37, 99, 235); doc.text(nomeSala.toUpperCase(), 14, 20);
+    doc.setFontSize(14); doc.setTextColor(50, 50, 50); doc.text("Inventario Magazzino", 14, 30);
+    
+    const valTot = prodotti.reduce((acc, p) => acc + ((p.quantita_stock || 0) * (parseFloat(p.prezzo_vendita) || 0)), 0);
+    doc.setFontSize(11); doc.setTextColor(37, 99, 235); doc.text(`Valore Stimato di Vendita: € ${valTot.toFixed(2)}`, 14, 45);
 
     autoTable(doc, {
-      startY: 55,
-      head: [colonne],
-      body: righe,
-      theme: 'grid',
-      headStyles: { fillColor: [37, 99, 235], textColor: 255 }, 
-      styles: { fontSize: 10 },
-      columnStyles: {
-        1: { halign: 'right' },
-        2: { halign: 'center', fontStyle: 'bold' },
-        3: { halign: 'right', fontStyle: 'bold', textColor: [37, 99, 235] }
-      },
+      startY: 55, head: [["Prodotto", "Prezzo Vendita", "Quantità", "Valore Totale"]],
+      body: prodotti.map(p => [p.nome.toUpperCase(), `€ ${parseFloat(p.prezzo_vendita).toFixed(2)}`, p.quantita_stock.toString(), `€ ${(p.quantita_stock * parseFloat(p.prezzo_vendita)).toFixed(2)}`]),
+      theme: 'grid', headStyles: { fillColor: [37, 99, 235] },
       didParseCell: function (data) {
-        if (data.section === 'body' && data.column.index === 2) {
-          const stock = parseInt(data.cell.raw.toString());
-          if (stock <= 5) {
-            data.cell.styles.textColor = [220, 38, 38]; // Rosso (sotto scorta)
-          } else {
-            data.cell.styles.textColor = [22, 163, 74]; // Verde
-          }
-        }
+        if (data.section === 'body' && data.column.index === 2 && parseInt(data.cell.raw.toString()) <= 5) data.cell.styles.textColor = [220, 38, 38];
       }
     });
-
-    const pageCount = (doc as any).internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(150);
-      doc.text(
-        `Pagina ${i} di ${pageCount} - Documento ad uso interno`,
-        doc.internal.pageSize.getWidth() / 2,
-        doc.internal.pageSize.getHeight() - 10,
-        { align: 'center' }
-      );
-    }
-
-    doc.save(nomeFile);
+    doc.save(`Inventario_${new Date().toLocaleDateString().replace(/\//g, '-')}.pdf`);
   };
 
-  // --- NUOVA FUNZIONE PDF: FOGLIO PRENOTAZIONI ---
   const scaricaPrenotazioniPDF = () => {
     const doc = new jsPDF();
-    const dataOggi = new Date().toLocaleDateString('it-IT');
-    const oraOggi = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-    const nomeFile = `Foglio_Marcia_Prenotazioni_${nomeSala.replace(/\s+/g, '_')}_${dataOggi.replace(/\//g, '-')}.pdf`;
-
-    doc.setFontSize(22);
-    doc.setTextColor(20, 184, 166); // Teal-500
-    doc.text(nomeSala.toUpperCase(), 14, 20);
-
-    doc.setFontSize(14);
-    doc.setTextColor(50, 50, 50);
-    doc.text("Foglio di Marcia: Prenotazioni Tavoli", 14, 30);
-
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Data e Ora di stampa: ${dataOggi} - ${oraOggi}`, 14, 38);
-
-    const prenotazioniDaStampare = getPrenotazioniFiltrate();
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(20, 184, 166);
-    doc.text(`Totale Prenotazioni nel report: ${prenotazioniDaStampare.length}`, 120, 38);
-
-    const colonne = ["Data e Ora", "Cliente", "Telefono", "Stato", "Note"];
-    const righe = prenotazioniDaStampare.map(p => {
-      const dataP = new Date(p.data_ora);
-      return [
-        `${dataP.toLocaleDateString('it-IT')} ${dataP.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`,
-        p.nome_cliente.toUpperCase(),
-        p.telefono || "-",
-        p.stato.toUpperCase().replace('_', ' '),
-        p.note || ""
-      ];
-    });
-
+    doc.setFontSize(22); doc.setTextColor(20, 184, 166); doc.text(nomeSala.toUpperCase(), 14, 20);
+    doc.setFontSize(14); doc.setTextColor(50); doc.text("Foglio di Marcia: Prenotazioni Tavoli", 14, 30);
+    
+    const pren = getPrenotazioniFiltrate();
     autoTable(doc, {
-      startY: 45,
-      head: [colonne],
-      body: righe,
-      theme: 'grid',
-      headStyles: { fillColor: [15, 118, 110], textColor: 255 }, // Teal-700
-      styles: { fontSize: 9 },
-      didParseCell: function (data) {
-        if (data.section === 'body' && data.column.index === 3) {
-          if (data.cell.raw === 'CONFERMATA') {
-            data.cell.styles.textColor = [22, 163, 74];
-            data.cell.styles.fontStyle = 'bold';
-          } else if (data.cell.raw === 'IN ATTESA') {
-            data.cell.styles.textColor = [202, 138, 4];
-          } else if (data.cell.raw === 'RIFIUTATA') {
-            data.cell.styles.textColor = [220, 38, 38];
-          }
-        }
-      }
+      startY: 45, head: [["Data e Ora", "Cliente", "Telefono", "Stato", "Note"]],
+      body: pren.map(p => {
+        const d = new Date(p.data_ora);
+        return [`${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`, p.nome_cliente.toUpperCase(), p.telefono || "-", p.stato.toUpperCase().replace('_', ' '), p.note || ""];
+      }),
+      theme: 'grid', headStyles: { fillColor: [15, 118, 110] }, styles: { fontSize: 9 }
     });
-
-    doc.save(nomeFile);
+    doc.save(`Prenotazioni.pdf`);
   };
-
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-green-500 font-black text-2xl tracking-widest italic animate-pulse">CARICAMENTO TORRE DI CONTROLLO...</div>;
 
@@ -1253,7 +1158,7 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* SEZIONE MAGAZZINO CON TASTO PDF */}
+        {/* SEZIONE MAGAZZINO */}
         {activeView === 'magazzino' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <div className="flex flex-col md:flex-row gap-4 mb-8">
@@ -1278,6 +1183,7 @@ export default function DashboardSala() {
           </div>
         )}
 
+        {/* SEZIONE SOCI */}
         {activeView === 'soci' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <div className="flex flex-col md:flex-row gap-4 mb-8">
@@ -1340,6 +1246,7 @@ export default function DashboardSala() {
           </div>
         )}
 
+        {/* --- SEZIONE CASSA / REPORT --- */}
         {activeView === 'report' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 text-center">
             
@@ -1351,7 +1258,6 @@ export default function DashboardSala() {
               <button onClick={scaricaPrimaNotaPDF} className="flex-1 py-6 bg-gray-900 border-2 border-green-500 text-green-400 font-black text-xl uppercase shadow-xl rounded-[2rem] hover:bg-green-600 hover:text-black transition-all flex items-center justify-center gap-3 active:scale-95">
                 <span>🖨️</span> STAMPA PRIMA NOTA (PDF)
               </button>
-
               <button onClick={esportaCSV} className="flex-1 py-6 bg-gray-900 border-2 border-blue-500 text-blue-400 font-black text-xl uppercase shadow-xl rounded-[2rem] hover:bg-blue-600 hover:text-black transition-all flex items-center justify-center gap-3 active:scale-95">
                 <span>📥</span> SCARICA (EXCEL / CSV)
               </button>
@@ -1373,7 +1279,7 @@ export default function DashboardSala() {
               </div>
             </div>
 
-            {/* ---- GRAFICO INCASSI 7 GIORNI ---- */}
+            {/* GRAFICO INCASSI 7 GIORNI */}
             {datiGrafico.length > 0 && (
               <div className="bg-gray-900 border-2 border-gray-800 rounded-[3rem] p-8 mb-12 shadow-2xl">
                 <h3 className="text-2xl font-black text-green-500 uppercase italic mb-8 text-left">Andamento Incassi (Ultimi 7 Giorni)</h3>
@@ -1394,11 +1300,31 @@ export default function DashboardSala() {
                 </div>
               </div>
             )}
-            {/* ---- FINE GRAFICO ---- */}
+
+            {/* NUOVO BLOCCO: ESPORTAZIONE STORICO AVANZATA */}
+            <div className="bg-gray-900 border-2 border-gray-800 rounded-[3rem] p-8 mb-12 shadow-2xl">
+              <h3 className="text-2xl font-black text-blue-500 uppercase italic mb-2 text-left">Esportazione Storico Avanzata</h3>
+              <p className="text-gray-400 text-sm font-bold uppercase tracking-widest text-left mb-6">Seleziona un periodo per scaricare l'estratto conto completo.</p>
+              
+              <div className="flex flex-col md:flex-row gap-4 items-center">
+                <div className="flex-1 w-full">
+                  <label className="block text-gray-500 text-xs font-black uppercase mb-2 text-left">Data Inizio</label>
+                  <input type="date" value={storicoDal} onChange={(e) => setStoricoDal(e.target.value)} className="w-full bg-black border border-gray-800 p-4 rounded-2xl text-white outline-none focus:border-blue-500 transition-colors" />
+                </div>
+                <div className="flex-1 w-full">
+                  <label className="block text-gray-500 text-xs font-black uppercase mb-2 text-left">Data Fine</label>
+                  <input type="date" value={storicoAl} onChange={(e) => setStoricoAl(e.target.value)} className="w-full bg-black border border-gray-800 p-4 rounded-2xl text-white outline-none focus:border-blue-500 transition-colors" />
+                </div>
+                <div className="flex-[2] w-full flex gap-2 mt-6 md:mt-0 self-end">
+                   <button onClick={() => esportaStorico('pdf')} className="flex-1 bg-blue-900/50 border border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white py-4 rounded-2xl font-black uppercase transition-all shadow-lg text-sm active:scale-95">📄 SCARICA PDF</button>
+                   <button onClick={() => esportaStorico('csv')} className="flex-1 bg-green-900/50 border border-green-600 text-green-400 hover:bg-green-600 hover:text-white py-4 rounded-2xl font-black uppercase transition-all shadow-lg text-sm active:scale-95">📊 SCARICA EXCEL</button>
+                </div>
+              </div>
+            </div>
 
             <div className="bg-gray-900 border border-gray-800 rounded-[2.5rem] overflow-hidden text-left shadow-2xl">
               <div className="p-6 bg-gray-800 border-b border-gray-700 text-center">
-                <h3 className="text-white font-black uppercase tracking-widest">Prima Nota Contabile</h3>
+                <h3 className="text-white font-black uppercase tracking-widest">Prima Nota Contabile (Oggi)</h3>
               </div>
               <table className="w-full text-xs uppercase font-bold">
                 <thead className="bg-gray-800 text-gray-500">
@@ -1448,7 +1374,7 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* --- SEZIONE IMPOSTAZIONI AGGIORNATA CON PRIVACY --- */}
+        {/* --- SEZIONE IMPOSTAZIONI --- */}
         {activeView === 'impostazioni' && (
           <div className="max-w-2xl mx-auto bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 animate-in slide-in-from-bottom-8 shadow-2xl">
             <h3 className="text-3xl font-black text-white uppercase italic mb-8 border-b border-gray-800 pb-4">Configurazione Tariffe</h3>
@@ -1458,7 +1384,7 @@ export default function DashboardSala() {
             </div>
             <button onClick={() => richiedePin((sid) => salvaTariffe(sid), "Aggiornamento Tariffe")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA TARIFFE</button>
 
-            {/* NUOVO BLOCCO: PRIVACY E SUPPORTO */}
+            {/* BLOCCO PRIVACY E SUPPORTO */}
             <div className="mt-12 pt-8 border-t border-gray-800">
               <h3 className="text-xl font-black text-pink-500 uppercase italic mb-6">Sicurezza e Privacy</h3>
               <div className="bg-black p-6 rounded-[2rem] border border-pink-900/30 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -1481,12 +1407,10 @@ export default function DashboardSala() {
                 </button>
               </div>
             </div>
-            {/* FINE BLOCCO PRIVACY */}
-
           </div>
         )}
 
-        {/* SEZIONE PRENOTAZIONI CON TASTO PDF */}
+        {/* SEZIONE PRENOTAZIONI */}
         {activeView === 'prenotazioni' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <h3 className="text-4xl font-black text-teal-500 uppercase italic mb-8 text-center drop-shadow-md">Gestione Prenotazioni</h3>
