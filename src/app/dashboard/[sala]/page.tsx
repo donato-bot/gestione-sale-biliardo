@@ -23,7 +23,7 @@ export default function DashboardSala() {
   
   // STATI PER LA SICUREZZA
   const [isSalaSuspended, setIsSalaSuspended] = useState(false);
-  const [supportActive, setSupportActive] = useState(false); // <--- NUOVO STATO PRIVACY
+  const [supportActive, setSupportActive] = useState(false); 
 
   const [tariffaStandard, setTariffaStandard] = useState(10.00);
   const [tariffaSoci, setTariffaSoci] = useState(8.00);
@@ -44,6 +44,9 @@ export default function DashboardSala() {
   const [incassoPOS, setIncassoPOS] = useState(0);
   const [primaNota, setPrimaNota] = useState<any[]>([]);
   const [usciteTotali, setUsciteTotali] = useState(0);
+  
+  // STATO PER IL GRAFICO DEGLI INCASSI
+  const [datiGrafico, setDatiGrafico] = useState<{data: string, totale: number}[]>([]);
   
   const [isNewUscitaModalOpen, setIsNewUscitaModalOpen] = useState(false);
   const [uscitaImporto, setUscitaImporto] = useState("");
@@ -130,18 +133,17 @@ export default function DashboardSala() {
           const { data: salaData } = await supabase.from("sale").select("*").eq("manager_email", session.user.email).single();
           
           if (salaData) {
-            // CONTROLLO SOSPENSIONE DA TORRE DI CONTROLLO
             if (salaData.is_active === false) {
               setIsSalaSuspended(true);
               setLoading(false);
-              return; // Ferma il caricamento di tutto il resto
+              return; 
             }
 
             setCurrentSalaId(salaData.id);
             setNomeSala(salaData.name);
             setTariffaStandard(salaData.tariffa_standard || 10.00);
             setTariffaSoci(salaData.tariffa_soci || 8.00);
-            setSupportActive(salaData.support_active || false); // IMPOSTA LO STATO INIZIALE DELLA PRIVACY
+            setSupportActive(salaData.support_active || false); 
             await refreshDati(salaData.id);
           }
         }
@@ -154,8 +156,10 @@ export default function DashboardSala() {
   async function refreshDati(salaId: string) {
     try {
         const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+        // Calcoliamo la data di 7 giorni fa per il grafico
+        const setteGiorniFa = new Date(oggi); 
+        setteGiorniFa.setDate(oggi.getDate() - 6);
 
-        // Ricarica anche lo stato della privacy
         const { data: sInfo } = await supabase.from('sale').select('support_active').eq('id', salaId).single();
         if (sInfo) setSupportActive(sInfo.support_active);
 
@@ -168,7 +172,8 @@ export default function DashboardSala() {
         const { data: prenDB } = await supabase.from('prenotazioni').select('*').eq('sala_id', salaId).order('data_ora', { ascending: true });
         const { data: bachecaDB } = await supabase.from('bacheca').select('*, reazioni_bacheca(*)').eq('sala_id', salaId).order('created_at', { ascending: false });
         
-        const { data: movimentiDB } = await supabase.from('movimenti_cassa').select('*, staff(nome)').eq('sala_id', salaId).gte('created_at', oggi.toISOString()).order('created_at', { ascending: false });
+        // Estraiamo i movimenti degli ULTIMI 7 GIORNI
+        const { data: movimentiDB } = await supabase.from('movimenti_cassa').select('*, staff(nome)').eq('sala_id', salaId).gte('created_at', setteGiorniFa.toISOString()).order('created_at', { ascending: false });
 
         if (pDB) setProdotti(pDB);
         if (sociDB) setSoci(sociDB);
@@ -177,10 +182,12 @@ export default function DashboardSala() {
         if (bachecaDB) setBachecaPosts(bachecaDB);
 
         if (movimentiDB) {
-          setPrimaNota(movimentiDB);
-          let entrate = 0, uscite = 0, contanti = 0, pos = 0;
+          // Filtriamo solo quelli di OGGI per la Prima Nota e i totali rapidi
+          const movimentiOggi = movimentiDB.filter(m => new Date(m.created_at) >= oggi);
+          setPrimaNota(movimentiOggi);
           
-          movimentiDB.forEach(m => {
+          let entrate = 0, uscite = 0, contanti = 0, pos = 0;
+          movimentiOggi.forEach(m => {
             const val = parseFloat(m.importo);
             if (m.tipo === 'entrata') {
               if (m.metodo_pagamento !== 'credito_vip') entrate += val; 
@@ -192,11 +199,36 @@ export default function DashboardSala() {
               if (m.metodo_pagamento === 'pos') pos -= val;
             }
           });
-          
           setIncassoTotale(entrate);
           setUsciteTotali(uscite);
           setIncassoContanti(contanti); 
           setIncassoPOS(pos);
+
+          // Calcoliamo i dati per il GRAFICO
+          const raggruppamentoGiorni: Record<string, number> = {};
+          // Inizializza array vuoto per 7 giorni per avere anche i giorni con 0 incassi
+          for(let i=6; i>=0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dataStr = d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+            raggruppamentoGiorni[dataStr] = 0;
+          }
+
+          // Riempi con i dati reali
+          movimentiDB.forEach(m => {
+            if(m.tipo === 'entrata' && m.metodo_pagamento !== 'credito_vip') {
+              const dataStr = new Date(m.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+              if(raggruppamentoGiorni[dataStr] !== undefined) {
+                raggruppamentoGiorni[dataStr] += parseFloat(m.importo);
+              }
+            }
+          });
+
+          const arrayGrafico = Object.keys(raggruppamentoGiorni).map(k => ({
+            data: k,
+            totale: raggruppamentoGiorni[k]
+          }));
+          setDatiGrafico(arrayGrafico);
         }
 
         if (torneiDB) {
@@ -1221,7 +1253,7 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* SEZIONE MAGAZZINO CON NUOVO TASTO PDF */}
+        {/* SEZIONE MAGAZZINO CON TASTO PDF */}
         {activeView === 'magazzino' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <div className="flex flex-col md:flex-row gap-4 mb-8">
@@ -1341,6 +1373,29 @@ export default function DashboardSala() {
               </div>
             </div>
 
+            {/* ---- GRAFICO INCASSI 7 GIORNI ---- */}
+            {datiGrafico.length > 0 && (
+              <div className="bg-gray-900 border-2 border-gray-800 rounded-[3rem] p-8 mb-12 shadow-2xl">
+                <h3 className="text-2xl font-black text-green-500 uppercase italic mb-8 text-left">Andamento Incassi (Ultimi 7 Giorni)</h3>
+                <div className="flex items-end justify-around gap-2 h-48 mt-8 border-b-2 border-gray-800 pb-2">
+                  {datiGrafico.map((g, idx) => {
+                    const maxIncasso = Math.max(...datiGrafico.map(d => d.totale), 10);
+                    const altezza = `${(g.totale / maxIncasso) * 100}%`;
+                    return (
+                      <div key={idx} className="flex flex-col items-center flex-1 group h-full justify-end">
+                        <div className="opacity-0 group-hover:opacity-100 text-green-400 font-black text-sm mb-2 transition-opacity">€ {g.totale.toFixed(0)}</div>
+                        <div className="w-full max-w-[50px] bg-green-900/30 group-hover:bg-green-500 transition-colors rounded-t-xl border-b-4 border-green-500 relative" style={{ height: altezza, minHeight: '8px' }}>
+                           <div className="absolute bottom-full left-0 w-full bg-green-400/20 rounded-t-xl transition-all" style={{height: '100%'}}></div>
+                        </div>
+                        <div className="text-gray-500 text-xs font-bold mt-4 uppercase tracking-widest">{g.data}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {/* ---- FINE GRAFICO ---- */}
+
             <div className="bg-gray-900 border border-gray-800 rounded-[2.5rem] overflow-hidden text-left shadow-2xl">
               <div className="p-6 bg-gray-800 border-b border-gray-700 text-center">
                 <h3 className="text-white font-black uppercase tracking-widest">Prima Nota Contabile</h3>
@@ -1393,7 +1448,7 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* --- SEZIONE IMPOSTAZIONI (ORA CON LA PRIVACY) --- */}
+        {/* --- SEZIONE IMPOSTAZIONI AGGIORNATA CON PRIVACY --- */}
         {activeView === 'impostazioni' && (
           <div className="max-w-2xl mx-auto bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 animate-in slide-in-from-bottom-8 shadow-2xl">
             <h3 className="text-3xl font-black text-white uppercase italic mb-8 border-b border-gray-800 pb-4">Configurazione Tariffe</h3>
@@ -1431,7 +1486,7 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* SEZIONE PRENOTAZIONI CON NUOVO TASTO PDF */}
+        {/* SEZIONE PRENOTAZIONI CON TASTO PDF */}
         {activeView === 'prenotazioni' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <h3 className="text-4xl font-black text-teal-500 uppercase italic mb-8 text-center drop-shadow-md">Gestione Prenotazioni</h3>
