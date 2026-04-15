@@ -63,7 +63,14 @@ export default function DashboardSala() {
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
   const [isBarModalOpen, setIsBarModalOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+  
+  // MODALI MAGAZZINO
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
+  const [isEditProductModalOpen, setIsEditProductModalOpen] = useState(false);
+  const [editProdId, setEditProdId] = useState("");
+  const [editProdName, setEditProdName] = useState("");
+  const [editProdPrice, setEditProdPrice] = useState("");
+  const [editProdStock, setEditProdStock] = useState("");
   
   const [isNewSocioModalOpen, setIsNewSocioModalOpen] = useState(false);
   const [isEditSocioModalOpen, setIsEditSocioModalOpen] = useState(false);
@@ -552,6 +559,34 @@ export default function DashboardSala() {
     await supabase.from('prodotti').insert([{ sala_id: currentSalaId, nome: newProdName, prezzo_vendita: parseFloat(newProdPrice), quantita_stock: parseInt(newProdStock) || 0 }]);
     await refreshDati(currentSalaId!); setIsNewProductModalOpen(false);
   };
+
+  // --- NUOVE FUNZIONI PER MODIFICA ED ELIMINAZIONE PRODOTTO ---
+  const apriModificaProdotto = (prodotto: any) => {
+    if (isSalaSuspended) { alert("⚠️ Sala sospesa: impossibile modificare i prodotti."); return; }
+    setEditProdId(prodotto.id);
+    setEditProdName(prodotto.nome);
+    setEditProdPrice(prodotto.prezzo_vendita.toString());
+    setEditProdStock(prodotto.quantita_stock.toString());
+    setIsEditProductModalOpen(true);
+  };
+
+  const salvaModificaProdotto = async (staffId: string) => {
+    await supabase.from('prodotti').update({
+      nome: editProdName,
+      prezzo_vendita: parseFloat(editProdPrice),
+      quantita_stock: parseInt(editProdStock) || 0
+    }).eq('id', editProdId);
+    await refreshDati(currentSalaId!);
+    setIsEditProductModalOpen(false);
+  };
+
+  const eliminaProdotto = async (id: string, staffId: string) => {
+    if (confirm("⚠️ Vuoi davvero eliminare definitivamente questo prodotto dal magazzino?")) {
+      await supabase.from('prodotti').delete().eq('id', id);
+      await refreshDati(currentSalaId!);
+    }
+  };
+  // -----------------------------------------------------------
 
   const salvaNuovoSocio = async (staffId: string) => {
     await supabase.from('soci').insert([{ sala_id: currentSalaId, nome: newSocioNome, cognome: newSocioCognome, credito: 0 }]);
@@ -1071,8 +1106,9 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {activeView !== "hub" && (<button onClick={() => setActiveView("hub")} className="w-full max-w-6xl mx-auto bg-gray-900 border-2 border-gray-700 text-white py-6 rounded-[2rem] mb-8 font-black uppercase italic flex items-center justify-center gap-4 transition-all">🔙 MENU PRINCIPALE</button>)}
+        {activeView !== "hub" && (<button onClick={() => setActiveView("hub")} className="w-full max-w-6xl mx-auto bg-gray-900 border-2 border-gray-700 text-white py-6 rounded-[2rem] mb-8 font-black uppercase italic flex items-center justify-center gap-4 transition-all hover:bg-gray-800">🔙 MENU PRINCIPALE</button>)}
 
+        {/* BACHECA */}
         {activeView === 'bacheca' && (
           <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-8">
             <h3 className="text-4xl font-black text-orange-500 uppercase italic mb-8 text-center drop-shadow-md">Bacheca Avvisi</h3>
@@ -1132,6 +1168,7 @@ export default function DashboardSala() {
           </div>
         )}
 
+        {/* PLANCIA */}
         {activeView === 'plancia' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             {getPrenotazioniConfermateOggi().length > 0 && (
@@ -1155,7 +1192,7 @@ export default function DashboardSala() {
             
             {/* NASCONDI CREAZIONE TAVOLO SE SOSPESA */}
             {!isSalaSuspended && (
-              <button onClick={() => setIsNewTableModalOpen(true)} className="w-full mb-8 py-8 bg-gray-900 border-4 border-dashed border-green-900 rounded-[2.5rem] text-green-500 font-black text-2xl uppercase italic">+ AGGIUNGI TAVOLO</button>
+              <button onClick={() => setIsNewTableModalOpen(true)} className="w-full mb-8 py-8 bg-gray-900 border-4 border-dashed border-green-900 rounded-[2.5rem] text-green-500 font-black text-2xl uppercase italic hover:bg-green-900/10 transition-all">+ AGGIUNGI TAVOLO</button>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1224,7 +1261,7 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* SEZIONE MAGAZZINO */}
+        {/* SEZIONE MAGAZZINO CON MODIFICA ED ELIMINA */}
         {activeView === 'magazzino' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <div className="flex flex-col md:flex-row gap-4 mb-8">
@@ -1240,12 +1277,27 @@ export default function DashboardSala() {
             
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {prodotti.map((p) => (
-                <div key={p.id} className="bg-gray-900 p-6 rounded-[2rem] border-2 border-gray-800 shadow-xl">
-                  <h4 className="text-xl font-black uppercase mb-2 italic">{p.nome}</h4>
-                  <p className="text-blue-400 font-bold mb-4 text-lg">€ {p.prezzo_vendita.toFixed(2)}</p>
-                  <div className={`text-center py-3 rounded-xl font-black uppercase text-xs ${p.quantita_stock > 5 ? 'bg-green-900/20 text-green-500' : 'bg-red-950 text-red-500 animate-pulse'}`}>STOCK: {p.quantita_stock}</div>
+                <div key={p.id} className="bg-gray-900 p-6 rounded-[2rem] border-2 border-gray-800 text-center flex flex-col justify-between shadow-xl hover:border-gray-700 transition-colors">
+                  <div>
+                    <h4 className="text-xl font-black uppercase italic mb-2">{p.nome}</h4>
+                    <p className="text-blue-400 font-black text-lg mb-4">€ {parseFloat(p.prezzo_vendita).toFixed(2)}</p>
+                    <div className={`py-2 rounded-xl font-black text-xs uppercase mb-4 ${p.quantita_stock > 5 ? 'bg-green-900/20 text-green-500' : 'bg-red-950 text-red-500 animate-pulse'}`}>STOCK: {p.quantita_stock}</div>
+                  </div>
+                  
                   {!isSalaSuspended && (
-                    <button onClick={async () => { if(confirm("Eliminare prodotto?")) { await supabase.from('prodotti').delete().eq('id', p.id); refreshDati(currentSalaId!); } }} className="mt-4 w-full text-gray-700 text-[10px] font-bold uppercase hover:text-red-500">Rimuovi</button>
+                    <div className="flex gap-2 mt-auto border-t border-gray-800 pt-4">
+                      <button onClick={() => apriModificaProdotto(p)} className="flex-1 bg-blue-900/50 border border-blue-800 text-blue-400 hover:bg-blue-600 hover:text-white py-2 rounded-xl text-[10px] font-black uppercase transition-colors">
+                        ✏️ Modifica
+                      </button>
+                      <button onClick={() => richiedePin((sid) => eliminaProdotto(p.id, sid), "Elimina Prodotto")} className="flex-1 bg-red-950/50 border border-red-900 text-red-500 hover:bg-red-600 hover:text-white py-2 rounded-xl text-[10px] font-black uppercase transition-colors">
+                        🗑️ Elimina
+                      </button>
+                    </div>
+                  )}
+                  {isSalaSuspended && (
+                     <div className="mt-auto border-t border-gray-800 pt-4 text-gray-600 text-[10px] font-bold uppercase tracking-widest">
+                       Sola Lettura
+                     </div>
                   )}
                 </div>
               ))}
@@ -1465,8 +1517,8 @@ export default function DashboardSala() {
           <div className="max-w-2xl mx-auto bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 animate-in slide-in-from-bottom-8 shadow-2xl">
             <h3 className="text-3xl font-black text-white uppercase italic mb-8 border-b border-gray-800 pb-4">Configurazione Tariffe</h3>
             <div className="space-y-8 mb-12">
-              <div><label className="block text-gray-500 font-black text-xs uppercase mb-4">Standard (€/h)</label><input type="number" value={tariffaStandard} onChange={(e) => setTariffaStandard(parseFloat(e.target.value))} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-4xl text-white font-black" disabled={isSalaSuspended} /></div>
-              <div><label className="block text-yellow-500 font-black text-xs uppercase mb-4">Soci (€/h)</label><input type="number" value={tariffaSoci} onChange={(e) => setTariffaSoci(parseFloat(e.target.value))} className="w-full bg-black border border-yellow-900 p-6 rounded-2xl text-4xl text-white font-black" disabled={isSalaSuspended} /></div>
+              <div><label className="block text-gray-500 font-black text-xs uppercase mb-4 text-left">Standard (€/h)</label><input type="number" value={tariffaStandard} onChange={(e) => setTariffaStandard(parseFloat(e.target.value))} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-4xl text-white font-black" disabled={isSalaSuspended} /></div>
+              <div><label className="block text-yellow-500 font-black text-xs uppercase mb-4 text-left">Soci (€/h)</label><input type="number" value={tariffaSoci} onChange={(e) => setTariffaSoci(parseFloat(e.target.value))} className="w-full bg-black border border-yellow-900 p-6 rounded-2xl text-4xl text-white font-black" disabled={isSalaSuspended} /></div>
             </div>
             {!isSalaSuspended && (
               <button onClick={() => richiedePin((sid) => salvaTariffe(sid), "Aggiornamento Tariffe")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA TARIFFE</button>
@@ -1711,7 +1763,23 @@ export default function DashboardSala() {
       )}
       
       {isNewStaffModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-cyan-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-white mb-8 uppercase italic">Nuovo Collaboratore</h3><input value={newStaffNome} onChange={(e) => setNewStaffNome(e.target.value)} placeholder="Nome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 text-center outline-none focus:border-cyan-500" /><input type="password" maxLength={4} value={newStaffPin} onChange={(e) => setNewStaffPin(e.target.value)} placeholder="PIN 4 Cifre" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-4xl font-mono text-cyan-400 tracking-[0.5em] mb-8 text-center outline-none focus:border-cyan-500" /><button onClick={salvaNuovoStaff} className="w-full py-8 bg-cyan-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95 transition-all">SALVA PROFILO</button><button onClick={()=>setIsNewStaffModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
-      {isNewProductModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic">Magazzino</h3><input value={newProdName} onChange={(e) => setNewProdName(e.target.value)} placeholder="Prodotto" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center" /><input type="number" value={newProdPrice} onChange={(e) => setNewProdPrice(e.target.value)} placeholder="Prezzo (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center" /><input type="number" value={newProdStock} onChange={(e) => setNewProdStock(e.target.value)} placeholder="Stock" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center" /><button onClick={() => richiedePin((sid) => salvaNuovoProdotto(sid), "Caricamento Magazzino")} className="w-full py-8 bg-blue-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95">SALVA PRODOTTO</button><button onClick={()=>setIsNewProductModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
+      
+      {isNewProductModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic">Nuovo Prodotto</h3><input value={newProdName} onChange={(e) => setNewProdName(e.target.value)} placeholder="Nome Prodotto" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" /><input type="number" value={newProdPrice} onChange={(e) => setNewProdPrice(e.target.value)} placeholder="Prezzo (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" /><input type="number" value={newProdStock} onChange={(e) => setNewProdStock(e.target.value)} placeholder="Quantità in Stock" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-blue-500 transition-all" /><button onClick={() => richiedePin((sid) => salvaNuovoProdotto(sid), "Caricamento Magazzino")} className="w-full py-8 bg-blue-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA PRODOTTO</button><button onClick={()=>setIsNewProductModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
+      
+      {/* MODALE MODIFICA PRODOTTO */}
+      {isEditProductModalOpen && !isSalaSuspended && (
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden">
+          <div className="bg-gray-900 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center">
+            <h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic">Modifica Prodotto</h3>
+            <input value={editProdName} onChange={(e) => setEditProdName(e.target.value)} placeholder="Nome Prodotto" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" />
+            <input type="number" value={editProdPrice} onChange={(e) => setEditProdPrice(e.target.value)} placeholder="Prezzo (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" />
+            <input type="number" value={editProdStock} onChange={(e) => setEditProdStock(e.target.value)} placeholder="Quantità in Stock" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-blue-500 transition-all" />
+            <button onClick={() => richiedePin((sid) => salvaModificaProdotto(sid), "Modifica Magazzino")} className="w-full py-8 bg-blue-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA MODIFICHE</button>
+            <button onClick={()=>setIsEditProductModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button>
+          </div>
+        </div>
+      )}
+
       {isNewSocioModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-yellow-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl animate-in zoom-in-95 text-center"><h3 className="text-3xl font-black text-yellow-500 mb-8 uppercase italic italic">Nuovo Socio</h3><input value={newSocioNome} onChange={(e) => setNewSocioNome(e.target.value)} placeholder="Nome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center" /><input value={newSocioCognome} onChange={(e) => setNewSocioCognome(e.target.value)} placeholder="Cognome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center" /><button onClick={() => richiedePin((sid) => salvaNuovoSocio(sid), "Registrazione Socio")} className="w-full py-8 bg-yellow-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">SALVA ANAGRAFICA</button><button onClick={()=>setIsNewSocioModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
       
       {isEditSocioModalOpen && !isSalaSuspended && (
