@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { createClient } from '@supabase/supabase-js'; 
 import { useRouter } from "next/navigation";
-// NUOVE LIBRERIE IMPORTATE PER IL PDF 👇
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -55,7 +54,7 @@ export default function TorreDiControllo() {
     if (error) console.error("Errore nel caricamento sale:", error);
   }
 
-  // Crea l'utente tramite API e poi salva la Sala
+  // Crea l'utente tramite API, salva la Sala, Logga e Invia Email
   const handleCreaSala = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setFormError(null);
@@ -71,6 +70,7 @@ export default function TorreDiControllo() {
     try {
       const passwordProvvisoria = "Gestore-" + Math.random().toString(36).slice(-6) + "!";
 
+      // 1. Creazione Utente in Auth
       const resApi = await fetch('/api/crea-gestore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,6 +83,7 @@ export default function TorreDiControllo() {
         throw new Error(apiData.error || "Errore nella creazione dell'account Gestore");
       }
 
+      // 2. Creazione Record Sala nel Database
       const { error: dbError } = await supabase
         .from('sale')
         .insert([
@@ -95,6 +96,24 @@ export default function TorreDiControllo() {
         ]);
 
       if (dbError) throw dbError;
+
+      // 3. Registrazione Scatola Nera (admin_logs)
+      await supabase.from('admin_logs').insert([{
+        azione: 'CREAZIONE_SALA',
+        dettagli: `Varata nuova sala: ${nomeSala.trim()} - Email: ${managerEmail.trim()}`,
+        admin_email: userEmail
+      }]);
+
+      // 4. Invio Automatico Email di Onboarding (Resend)
+      fetch('/api/send-welcome-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: managerEmail.trim(),
+          password: passwordProvvisoria,
+          salaName: nomeSala.trim()
+        })
+      }).catch(err => console.error("Errore invio email background:", err));
 
       await caricaSale();
       setCredenzialiGenerate({ email: managerEmail.trim(), pass: passwordProvvisoria });
@@ -119,7 +138,14 @@ export default function TorreDiControllo() {
   const eliminaSala = async (salaId: string, nomeSala: string) => {
     if (window.confirm(`⚠️ ATTENZIONE ⚠️\nVuoi davvero eliminare definitivamente la sala "${nomeSala}" e tutti i suoi dati?\n\nQuesta operazione è IRREVERSIBILE!`)) {
       const { error } = await supabase.from('sale').delete().eq('id', salaId);
+      
       if (!error) {
+        // Registrazione Scatola Nera (admin_logs)
+        await supabase.from('admin_logs').insert([{
+          azione: 'ELIMINAZIONE_SALA',
+          dettagli: `Eliminata definitivamente la sala: ${nomeSala} (ID: ${salaId})`,
+          admin_email: userEmail
+        }]);
         await caricaSale();
       } else {
         alert("Errore durante l'eliminazione: " + error.message);
@@ -132,6 +158,12 @@ export default function TorreDiControllo() {
     const { error } = await supabase.from('sale').update({ is_active: nuovoStato }).eq('id', salaId);
     
     if (!error) {
+      // Registrazione Scatola Nera (admin_logs)
+      await supabase.from('admin_logs').insert([{
+        azione: nuovoStato ? 'RIATTIVAZIONE_SALA' : 'SOSPENSIONE_SALA',
+        dettagli: `${nuovoStato ? 'Riattivata' : 'Sospesa'} (Kill Switch) la sala con ID: ${salaId}`,
+        admin_email: userEmail
+      }]);
       await caricaSale();
     } else {
       alert("Errore durante l'aggiornamento dello stato: " + error.message);
@@ -145,30 +177,26 @@ export default function TorreDiControllo() {
 
   // --- NUOVA FUNZIONE: GENERAZIONE PDF DELLA FLOTTA ---
   const scaricaPDF = () => {
-    // 1. Inizializza il documento PDF (orientamento portrait)
     const doc = new jsPDF();
     
-    // 2. Prepara le date per il titolo e il nome file
     const dataOggi = new Date().toLocaleDateString('it-IT');
     const oraOggi = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     const nomeFile = `Report_Flotta_${dataOggi.replace(/\//g, '-')}.pdf`;
 
-    // 3. Intestazione del Documento
     doc.setFontSize(22);
-    doc.setTextColor(220, 38, 38); // Rosso intenso stile Torre di Controllo
+    doc.setTextColor(220, 38, 38); 
     doc.text("TORRE DI CONTROLLO", 14, 20);
     
     doc.setFontSize(14);
-    doc.setTextColor(50, 50, 50); // Grigio scuro
+    doc.setTextColor(50, 50, 50); 
     doc.text("Report Ufficiale: Flotta Sale Biliardo", 14, 30);
     
     doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100); // Grigio chiaro
+    doc.setTextColor(100, 100, 100); 
     doc.text(`Generato da: ${userEmail}`, 14, 38);
     doc.text(`Data e Ora di stampa: ${dataOggi} alle ${oraOggi}`, 14, 44);
     doc.text(`Totale Strutture Registrate: ${sale.length}`, 14, 50);
 
-    // 4. Prepara i dati per la tabella
     const colonne = ["Stato", "Nome Sala", "Email Gestore", "ID Univoco Sala"];
     
     const righe = sale.map(s => [
@@ -178,32 +206,29 @@ export default function TorreDiControllo() {
       s.id
     ]);
 
-    // 5. Disegna la Tabella Automatica
     autoTable(doc, {
-      startY: 58, // Partenza sotto l'intestazione
+      startY: 58, 
       head: [colonne],
       body: righe,
-      theme: 'grid', // Stile griglia
-      headStyles: { fillColor: [153, 27, 27], textColor: 255, fontStyle: 'bold' }, // Intestazione rossa scura
-      alternateRowStyles: { fillColor: [245, 245, 245] }, // Righe alternate grigie per leggibilità
-      styles: { fontSize: 9, cellPadding: 3 }, // Font piccolo per far stare l'ID
+      theme: 'grid', 
+      headStyles: { fillColor: [153, 27, 27], textColor: 255, fontStyle: 'bold' }, 
+      alternateRowStyles: { fillColor: [245, 245, 245] }, 
+      styles: { fontSize: 9, cellPadding: 3 }, 
       columnStyles: {
-        0: { fontStyle: 'bold', textColor: [0, 0, 0] }, // Colonna Stato
-        3: { fontSize: 7, textColor: [100, 100, 100] } // Colonna ID più piccola e grigia
+        0: { fontStyle: 'bold', textColor: [0, 0, 0] }, 
+        3: { fontSize: 7, textColor: [100, 100, 100] } 
       },
-      // Funzione per colorare dinamicamente la cella ONLINE/OFFLINE
       didParseCell: function (data) {
         if (data.section === 'body' && data.column.index === 0) {
           if (data.cell.raw === 'ONLINE') {
-            data.cell.styles.textColor = [22, 163, 74]; // Verde
+            data.cell.styles.textColor = [22, 163, 74]; 
           } else {
-            data.cell.styles.textColor = [220, 38, 38]; // Rosso
+            data.cell.styles.textColor = [220, 38, 38]; 
           }
         }
       }
     });
 
-    // 6. Pie di pagina
     const pageCount = (doc as any).internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
@@ -217,7 +242,6 @@ export default function TorreDiControllo() {
       );
     }
 
-    // 7. Salva il file
     doc.save(nomeFile);
   };
 
@@ -234,7 +258,6 @@ export default function TorreDiControllo() {
         </div>
         <div className="flex gap-4 flex-wrap w-full md:w-auto justify-center md:justify-end">
           
-          {/* TASTO PDF AGGIUNTO QUI */}
           <button onClick={scaricaPDF} className="bg-gray-800 border-2 border-gray-600 text-white font-black px-6 py-4 rounded-3xl hover:bg-gray-700 transition-all active:scale-95 uppercase tracking-widest shadow-lg flex items-center gap-2">
             <span>📥</span> REPORT FLOTTA
           </button>

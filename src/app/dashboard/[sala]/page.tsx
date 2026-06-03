@@ -147,9 +147,7 @@ export default function DashboardSala() {
           const { data: salaData } = await supabase.from("sale").select("*").eq("manager_email", email).single();
           
           if (salaData) {
-            // Se la sala non è attiva, attiviamo la modalità Sola Lettura
             setIsSalaSuspended(salaData.is_active === false);
-
             setCurrentSalaId(salaData.id);
             setNomeSala(salaData.name);
             setTariffaStandard(salaData.tariffa_standard || 10.00);
@@ -164,7 +162,6 @@ export default function DashboardSala() {
     init();
   }, []);
 
-  // RADAR IN TEMPO REALE SULLE PRENOTAZIONI + INVIO EMAIL
   useEffect(() => {
     if (!currentSalaId) return;
     
@@ -186,20 +183,16 @@ export default function DashboardSala() {
              })
            });
         }
-
         refreshDati(currentSalaId);
       })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [currentSalaId, userEmail, nomeSala]);
 
   async function refreshDati(salaId: string) {
     try {
         const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
-        // Calcoliamo la data di 7 giorni fa per il grafico
         const setteGiorniFa = new Date(oggi); 
         setteGiorniFa.setDate(oggi.getDate() - 6);
 
@@ -214,8 +207,6 @@ export default function DashboardSala() {
         const { data: torneiDB } = await supabase.from('tornei').select('*').eq('sala_id', salaId).order('data_inizio', { ascending: false }); 
         const { data: prenDB } = await supabase.from('prenotazioni').select('*').eq('sala_id', salaId).order('data_ora', { ascending: true });
         const { data: bachecaDB } = await supabase.from('bacheca').select('*, reazioni_bacheca(*)').eq('sala_id', salaId).order('created_at', { ascending: false });
-        
-        // Estraiamo i movimenti degli ULTIMI 7 GIORNI
         const { data: movimentiDB } = await supabase.from('movimenti_cassa').select('*, staff(nome)').eq('sala_id', salaId).gte('created_at', setteGiorniFa.toISOString()).order('created_at', { ascending: false });
 
         if (pDB) setProdotti(pDB);
@@ -225,7 +216,6 @@ export default function DashboardSala() {
         if (bachecaDB) setBachecaPosts(bachecaDB);
 
         if (movimentiDB) {
-          // Filtriamo solo quelli di OGGI per la Prima Nota e i totali rapidi
           const movimentiOggi = movimentiDB.filter(m => new Date(m.created_at) >= oggi);
           setPrimaNota(movimentiOggi);
           
@@ -247,7 +237,6 @@ export default function DashboardSala() {
           setIncassoContanti(contanti); 
           setIncassoPOS(pos);
 
-          // Calcoliamo i dati per il GRAFICO a 7 Giorni
           const raggruppamentoGiorni: Record<string, number> = {};
           for(let i=6; i>=0; i--) {
             const d = new Date();
@@ -301,7 +290,6 @@ export default function DashboardSala() {
         }
     } catch (e) { console.error(e); }
   }
-
   const handlePinDigit = (digit: string) => {
     if (pinBuffer.length < 4) {
       const newBuffer = pinBuffer + digit;
@@ -321,12 +309,10 @@ export default function DashboardSala() {
   };
 
   const richiedePin = (callback: (staffId: string) => void, descrizione: string) => {
-    // BLOCCO DI SICUREZZA SOLA LETTURA
     if (isSalaSuspended) {
       alert("⚠️ Azione bloccata: Il servizio è sospeso ed è in modalità Sola Lettura.");
       return;
     }
-    
     if (listaStaff.length === 0) { alert("⚠️ Crea Staff."); setActiveView("staff"); return; }
     if (activeStaff) { callback(activeStaff.id); return; }
     setPendingAction({ callback, descrizione }); setIsPinModalOpen(true);
@@ -362,7 +348,6 @@ export default function DashboardSala() {
         return d.getMonth() === oggi.getMonth() && d.getFullYear() === oggi.getFullYear();
       });
     }
-
     return filtered;
   };
 
@@ -383,11 +368,7 @@ export default function DashboardSala() {
 
   const prenotaTavolo = async (staffId: string) => {
     if (!activeTableId || !reserveName || !reserveTime) return;
-    await supabase.from('tavoli').update({ 
-        stato: 'prenotato', 
-        prenotato_da: reserveName, 
-        prenotato_alle: reserveTime 
-    }).eq('id', activeTableId);
+    await supabase.from('tavoli').update({ stato: 'prenotato', prenotato_da: reserveName, prenotato_alle: reserveTime }).eq('id', activeTableId);
     alert("✅ Prenotazione registrata!");
     await refreshDati(currentSalaId!); setIsReserveModalOpen(false); setReserveName(""); setReserveTime("");
   };
@@ -399,15 +380,7 @@ export default function DashboardSala() {
 
   const salvaNuovoTorneo = async (staffId: string) => {
     if(!newTorneoNome || !newTorneoData) { alert("Inserisci Nome e Data!"); return; }
-    await supabase.from('tornei').insert([{ 
-      sala_id: currentSalaId, 
-      nome: newTorneoNome, 
-      data_inizio: newTorneoData, 
-      quota_iscrizione: parseFloat(newTorneoQuota) || 0,
-      stato: 'iscrizioni',
-      iscritti: [],
-      tabellone: []
-    }]);
+    await supabase.from('tornei').insert([{ sala_id: currentSalaId, nome: newTorneoNome, data_inizio: newTorneoData, quota_iscrizione: parseFloat(newTorneoQuota) || 0, stato: 'iscrizioni', iscritti: [], tabellone: [] }]);
     alert("✅ Torneo Creato!");
     await refreshDati(currentSalaId!); setIsNewTorneoModalOpen(false); setNewTorneoNome(""); setNewTorneoData(""); setNewTorneoQuota("");
   };
@@ -428,9 +401,7 @@ export default function DashboardSala() {
 
     if (tipo === 'socio') {
       if (!iscrittoSelezionato) return;
-      if (currentIscritti.find(i => i.id === iscrittoSelezionato)) {
-        alert("⚠️ Questo socio è già iscritto."); return;
-      }
+      if (currentIscritti.find(i => i.id === iscrittoSelezionato)) { alert("⚠️ Questo socio è già iscritto."); return; }
       const s = soci.find(x => x.id === iscrittoSelezionato);
       currentIscritti.push({ id: iscrittoSelezionato, tipo: 'socio', nome: `${s.cognome} ${s.nome}`, confermato: true });
       setIscrittoSelezionato("");
@@ -452,36 +423,18 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!);
   };
 
-  const confermaIscrizione = async (idIscritto: string, staffId: string) => {
-    if (!activeTorneo) return;
-    let currentIscritti = normalizeIscritti(activeTorneo.iscritti);
-    currentIscritti = currentIscritti.map(i => i.id === idIscritto ? { ...i, confermato: true } : i);
-    await supabase.from('tornei').update({ iscritti: currentIscritti }).eq('id', activeTorneo.id);
-    await refreshDati(currentSalaId!);
-  };
-
   const avviaTorneo = async (torneo: any, staffId: string) => {
     const iscritti = normalizeIscritti(torneo.iscritti);
     if (iscritti.length < 2) { alert("⚠️ Servono almeno 2 iscritti per avviare il torneo!"); return; }
-    if (iscritti.some(i => !i.confermato)) { alert("⚠️ Ci sono iscritti in attesa di conferma. Conferma tutti o rimuovili prima di avviare."); return; }
-
     const shuffled = [...iscritti].sort(() => 0.5 - Math.random());
     
     let round1 = [];
     for (let i = 0; i < shuffled.length; i += 2) {
       let p1 = shuffled[i];
       let p2 = shuffled[i+1] || null; 
-      round1.push({ 
-        id: 'match_' + Date.now() + i, 
-        p1: p1, 
-        p2: p2, 
-        vincitore: p2 === null ? p1 : null 
-      });
+      round1.push({ id: 'match_' + Date.now() + i, p1: p1, p2: p2, vincitore: p2 === null ? p1 : null });
     }
-
-    const tabellone = [round1];
-    
-    await supabase.from('tornei').update({ stato: 'in_corso', tabellone: tabellone }).eq('id', torneo.id);
+    await supabase.from('tornei').update({ stato: 'in_corso', tabellone: [round1] }).eq('id', torneo.id);
     await refreshDati(currentSalaId!);
   };
 
@@ -490,7 +443,6 @@ export default function DashboardSala() {
     let tab = [...activeTorneo.tabellone];
     let match = tab[roundIndex].find((m: any) => m.id === matchId);
     if (match) match.vincitore = vincitore;
-    
     await supabase.from('tornei').update({ tabellone: tab }).eq('id', activeTorneo.id);
     await refreshDati(currentSalaId!);
   };
@@ -500,10 +452,7 @@ export default function DashboardSala() {
     let tab = [...activeTorneo.tabellone];
     const ultimoTurno = tab[tab.length - 1];
     
-    if (ultimoTurno.some((m: any) => m.vincitore === null)) {
-      alert("⚠️ Devi assegnare il vincitore a tutti i match prima di procedere!");
-      return;
-    }
+    if (ultimoTurno.some((m: any) => m.vincitore === null)) { alert("⚠️ Devi assegnare il vincitore a tutti i match prima di procedere!"); return; }
 
     const vincitori = ultimoTurno.map((m: any) => m.vincitore);
 
@@ -519,12 +468,7 @@ export default function DashboardSala() {
     for (let i = 0; i < vincitori.length; i += 2) {
       let p1 = vincitori[i];
       let p2 = vincitori[i+1] || null; 
-      nuovoTurno.push({ 
-        id: 'match_' + Date.now() + i, 
-        p1: p1, 
-        p2: p2, 
-        vincitore: p2 === null ? p1 : null 
-      });
+      nuovoTurno.push({ id: 'match_' + Date.now() + i, p1: p1, p2: p2, vincitore: p2 === null ? p1 : null });
     }
 
     tab.push(nuovoTurno);
@@ -544,15 +488,12 @@ export default function DashboardSala() {
 
   const apriModificaTavolo = (tavolo: any) => {
     if (isSalaSuspended) { alert("⚠️ Sala sospesa: impossibile modificare i tavoli."); return; }
-    setActiveTableId(tavolo.id);
-    setEditTableNumber(tavolo.numero.toString());
-    setIsEditTableModalOpen(true);
+    setActiveTableId(tavolo.id); setEditTableNumber(tavolo.numero.toString()); setIsEditTableModalOpen(true);
   };
 
   const salvaModificaTavolo = async (staffId: string) => {
     await supabase.from('tavoli').update({ numero: parseInt(editTableNumber) }).eq('id', activeTableId);
-    await refreshDati(currentSalaId!); 
-    setIsEditTableModalOpen(false);
+    await refreshDati(currentSalaId!); setIsEditTableModalOpen(false);
   };
 
   const salvaNuovoProdotto = async (staffId: string) => {
@@ -560,33 +501,21 @@ export default function DashboardSala() {
     await refreshDati(currentSalaId!); setIsNewProductModalOpen(false);
   };
 
-  // --- NUOVE FUNZIONI PER MODIFICA ED ELIMINAZIONE PRODOTTO ---
   const apriModificaProdotto = (prodotto: any) => {
-    if (isSalaSuspended) { alert("⚠️ Sala sospesa: impossibile modificare i prodotti."); return; }
-    setEditProdId(prodotto.id);
-    setEditProdName(prodotto.nome);
-    setEditProdPrice(prodotto.prezzo_vendita.toString());
-    setEditProdStock(prodotto.quantita_stock.toString());
-    setIsEditProductModalOpen(true);
+    if (isSalaSuspended) { alert("⚠️ Sala sospesa."); return; }
+    setEditProdId(prodotto.id); setEditProdName(prodotto.nome); setEditProdPrice(prodotto.prezzo_vendita.toString()); setEditProdStock(prodotto.quantita_stock.toString()); setIsEditProductModalOpen(true);
   };
 
   const salvaModificaProdotto = async (staffId: string) => {
-    await supabase.from('prodotti').update({
-      nome: editProdName,
-      prezzo_vendita: parseFloat(editProdPrice),
-      quantita_stock: parseInt(editProdStock) || 0
-    }).eq('id', editProdId);
-    await refreshDati(currentSalaId!);
-    setIsEditProductModalOpen(false);
+    await supabase.from('prodotti').update({ nome: editProdName, prezzo_vendita: parseFloat(editProdPrice), quantita_stock: parseInt(editProdStock) || 0 }).eq('id', editProdId);
+    await refreshDati(currentSalaId!); setIsEditProductModalOpen(false);
   };
 
   const eliminaProdotto = async (id: string, staffId: string) => {
-    if (confirm("⚠️ Vuoi davvero eliminare definitivamente questo prodotto dal magazzino?")) {
-      await supabase.from('prodotti').delete().eq('id', id);
-      await refreshDati(currentSalaId!);
+    if (confirm("⚠️ Vuoi davvero eliminare definitivamente questo prodotto?")) {
+      await supabase.from('prodotti').delete().eq('id', id); await refreshDati(currentSalaId!);
     }
   };
-  // -----------------------------------------------------------
 
   const salvaNuovoSocio = async (staffId: string) => {
     await supabase.from('soci').insert([{ sala_id: currentSalaId, nome: newSocioNome, cognome: newSocioCognome, credito: 0 }]);
@@ -594,47 +523,26 @@ export default function DashboardSala() {
   };
 
   const apriModificaSocio = (socio: any) => {
-    if (isSalaSuspended) { alert("⚠️ Sala sospesa: impossibile modificare i soci."); return; }
-    setEditSocioId(socio.id);
-    setEditSocioNome(socio.nome || "");
-    setEditSocioCognome(socio.cognome || "");
-    setEditSocioTelefono(socio.telefono || ""); 
-    setIsEditSocioModalOpen(true);
+    if (isSalaSuspended) return;
+    setEditSocioId(socio.id); setEditSocioNome(socio.nome || ""); setEditSocioCognome(socio.cognome || ""); setEditSocioTelefono(socio.telefono || ""); setIsEditSocioModalOpen(true);
   };
 
   const salvaModificaSocio = async (staffId: string) => {
-    await supabase.from('soci').update({ 
-      nome: editSocioNome, 
-      cognome: editSocioCognome,
-      telefono: editSocioTelefono
-    }).eq('id', editSocioId);
-    await refreshDati(currentSalaId!); 
-    setIsEditSocioModalOpen(false);
+    await supabase.from('soci').update({ nome: editSocioNome, cognome: editSocioCognome, telefono: editSocioTelefono }).eq('id', editSocioId);
+    await refreshDati(currentSalaId!); setIsEditSocioModalOpen(false);
   };
   
   const eliminaSocio = async (id: string, staffId: string) => {
-    if (confirm("⚠️ ATTENZIONE: Vuoi davvero eliminare questo socio?\nL'operazione è irreversibile e cancellerà anche il suo eventuale credito residuo!")) {
-      await supabase.from('soci').delete().eq('id', id);
-      await refreshDati(currentSalaId!);
+    if (confirm("⚠️ Vuoi davvero eliminare questo socio?")) {
+      await supabase.from('soci').delete().eq('id', id); await refreshDati(currentSalaId!);
     }
   };
 
   const salvaRicarica = async (staffId: string) => {
     const importoVal = parseFloat(rechargeAmount);
     const nuovoCredito = parseFloat(socioToRecharge.credito || 0) + importoVal;
-    
     await supabase.from('soci').update({ credito: nuovoCredito }).eq('id', socioToRecharge.id);
-    
-    await supabase.from('movimenti_cassa').insert([{
-      sala_id: currentSalaId,
-      tipo: 'entrata',
-      categoria: 'ricarica_vip',
-      metodo_pagamento: rechargeMetodo,
-      importo: importoVal.toFixed(2),
-      descrizione: `Ricarica Tessera: ${socioToRecharge.cognome} ${socioToRecharge.nome}`,
-      staff_id: staffId
-    }]);
-
+    await supabase.from('movimenti_cassa').insert([{ sala_id: currentSalaId, tipo: 'entrata', categoria: 'ricarica_vip', metodo_pagamento: rechargeMetodo, importo: importoVal.toFixed(2), descrizione: `Ricarica: ${socioToRecharge.cognome}`, staff_id: staffId }]);
     await refreshDati(currentSalaId!); setIsRechargeModalOpen(false); setRechargeAmount("");
   };
 
@@ -643,17 +551,7 @@ export default function DashboardSala() {
       const socio = soci.find(s => s.id === summaryData.socio_id);
       await supabase.from('soci').update({ credito: (socio.credito || 0) - summaryData.totale }).eq('id', socio.id);
     }
-    
-    await supabase.from('movimenti_cassa').insert([{
-      sala_id: currentSalaId,
-      tipo: 'entrata',
-      categoria: 'biliardo_bar',
-      metodo_pagamento: metodo === 'credito' ? 'credito_vip' : metodo,
-      importo: summaryData.totale.toFixed(2),
-      descrizione: `Incasso ${summaryData.nome}`,
-      staff_id: staffId
-    }]);
-
+    await supabase.from('movimenti_cassa').insert([{ sala_id: currentSalaId, tipo: 'entrata', categoria: 'biliardo_bar', metodo_pagamento: metodo === 'credito' ? 'credito_vip' : metodo, importo: summaryData.totale.toFixed(2), descrizione: `Incasso ${summaryData.nome}`, staff_id: staffId }]);
     await supabase.from('sessioni').update({ fine: new Date().toISOString(), stato: 'terminata', costo_totale: summaryData.totale.toFixed(2), metodo_pagamento: metodo, staff_id: staffId }).eq('id', summaryData.sessioneId);
     await supabase.from('tavoli').update({ stato: 'libero' }).eq('id', summaryData.tavoloId);
     await refreshDati(currentSalaId!); setIsSummaryModalOpen(false);
@@ -661,23 +559,13 @@ export default function DashboardSala() {
 
   const salvaUscita = async (staffId: string) => {
     if(!uscitaImporto || !uscitaDescrizione) return;
-    await supabase.from('movimenti_cassa').insert([{
-      sala_id: currentSalaId,
-      tipo: 'uscita',
-      categoria: 'spese_varie',
-      metodo_pagamento: uscitaMetodo,
-      importo: parseFloat(uscitaImporto).toFixed(2),
-      descrizione: uscitaDescrizione,
-      staff_id: staffId
-    }]);
-    await refreshDati(currentSalaId!); 
-    setIsNewUscitaModalOpen(false); setUscitaImporto(""); setUscitaDescrizione("");
+    await supabase.from('movimenti_cassa').insert([{ sala_id: currentSalaId, tipo: 'uscita', categoria: 'spese_varie', metodo_pagamento: uscitaMetodo, importo: parseFloat(uscitaImporto).toFixed(2), descrizione: uscitaDescrizione, staff_id: staffId }]);
+    await refreshDati(currentSalaId!); setIsNewUscitaModalOpen(false); setUscitaImporto(""); setUscitaDescrizione("");
   };
 
   const stornoMovimento = async (id: string, staffId: string) => {
-    if(confirm("Vuoi davvero annullare questo movimento di cassa?")) {
-      await supabase.from('movimenti_cassa').delete().eq('id', id);
-      await refreshDati(currentSalaId!);
+    if(confirm("Annullare questo movimento di cassa?")) {
+      await supabase.from('movimenti_cassa').delete().eq('id', id); await refreshDati(currentSalaId!);
     }
   };
 
@@ -690,7 +578,6 @@ export default function DashboardSala() {
     const tariffa = selectedSocioId ? tariffaSoci : tariffaStandard;
     let giocatoriFinali = [...players];
     if (players[0] === "" && reserveName !== "") giocatoriFinali[0] = reserveName; 
-    
     await supabase.from('sessioni').insert([{ tavolo_id: activeTableId, sala_id: currentSalaId, inizio: new Date().toISOString(), giocatori: giocatoriFinali.filter(p => p.trim() !== ""), tariffa_oraria: tariffa, stato: 'in_corso', socio_id: selectedSocioId || null, staff_id: staffId }]);
     await supabase.from('tavoli').update({ stato: 'occupato', prenotato_da: null, prenotato_alle: null }).eq('id', activeTableId);
     await refreshDati(currentSalaId!); setIsStartModalOpen(false); setReserveName("");
@@ -707,30 +594,24 @@ export default function DashboardSala() {
   const salvaNuovoPost = async (staffId: string) => {
     if (!newPostText.trim()) return;
     await supabase.from('bacheca').insert([{ sala_id: currentSalaId, testo: newPostText.trim() }]);
-    setNewPostText("");
-    await refreshDati(currentSalaId!);
-    alert("✅ Avviso pubblicato in Bacheca!");
+    setNewPostText(""); await refreshDati(currentSalaId!); alert("✅ Avviso pubblicato!");
   };
 
   const eliminaPost = async (postId: string, staffId: string) => {
     if (confirm("Vuoi davvero eliminare questo avviso?")) {
-      await supabase.from('bacheca').delete().eq('id', postId);
-      await refreshDati(currentSalaId!);
+      await supabase.from('bacheca').delete().eq('id', postId); await refreshDati(currentSalaId!);
     }
   };
 
   const inviaLinkWhatsApp = (socio: any) => {
     const idReale = socio.id; 
     const url = `${window.location.origin}/vip/${currentSalaId}/${idReale}`;
-    
     const messaggioTesto = `Ciao ${socio.nome}, ecco la tua Tessera Digitale VIP per ${nomeSala}. Clicca qui per vedere il tuo credito e prenotare: ${url}`;
     const messaggioCodificato = encodeURIComponent(messaggioTesto);
-
     if (socio.telefono && socio.telefono.trim() !== "") {
       const numeroPulito = socio.telefono.replace(/\D/g, '');
       const prefisso = numeroPulito.startsWith('39') ? '' : '39';
-      const waUrl = `https://wa.me/${prefisso}${numeroPulito}?text=${messaggioCodificato}`;
-      window.open(waUrl, '_blank');
+      window.open(`https://wa.me/${prefisso}${numeroPulito}?text=${messaggioCodificato}`, '_blank');
     } else {
       navigator.clipboard.writeText(url);
       alert(`⚠️ Nessun numero di telefono salvato per ${socio.nome}.\n\n✅ Link copiato negli appunti! Apri tu WhatsApp e incollalo.`);
@@ -746,275 +627,95 @@ export default function DashboardSala() {
     return `${ore.toString().padStart(2, '0')}:${minuti.toString().padStart(2, '0')}:${secondi.toString().padStart(2, '0')}`;
   };
 
-  const eseguiStampa = () => {
-    window.print();
-  };
+  const eseguiStampa = () => window.print();
 
-  // --- FUNZIONI DI ESPORTAZIONE ---
   const esportaCSV = () => {
     try {
-      if (!primaNota || primaNota.length === 0) {
-        alert("⚠️ Nessun movimento da esportare oggi."); return;
-      }
+      if (!primaNota || primaNota.length === 0) { alert("⚠️ Nessun movimento da esportare oggi."); return; }
       let csvContent = "Data e Ora;Causale;Operatore;Metodo Pagamento;Tipo Movimento;Importo\n";
       primaNota.forEach(m => {
-        const dataOra = new Date(m.created_at).toLocaleString();
-        const causale = m.descrizione ? m.descrizione.replace(/;/g, ',') : "";
-        const staff = m.staff?.nome || "ADMIN";
-        const metodo = m.metodo_pagamento ? m.metodo_pagamento.toUpperCase() : "";
-        const tipo = m.tipo ? m.tipo.toUpperCase() : "";
-        const importo = parseFloat(m.importo || 0).toFixed(2);
-        csvContent += `${dataOra};${causale};${staff};${metodo};${tipo};${importo}\n`;
+        csvContent += `${new Date(m.created_at).toLocaleString()};${m.descrizione ? m.descrizione.replace(/;/g, ',') : ""};${m.staff?.nome || "ADMIN"};${m.metodo_pagamento ? m.metodo_pagamento.toUpperCase() : ""};${m.tipo ? m.tipo.toUpperCase() : ""};${parseFloat(m.importo || 0).toFixed(2)}\n`;
       });
       const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Prima_Nota_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`;
+      const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `Prima_Nota_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`;
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
-      alert("✅ File scaricato con successo!");
-    } catch (error) {
-      alert("❌ C'è stato un problema durante l'esportazione.");
-    }
+    } catch (error) { alert("❌ Errore esportazione."); }
   };
 
   const scaricaPrimaNotaPDF = () => {
     const doc = new jsPDF();
     const dataOggi = new Date().toLocaleDateString('it-IT');
     const oraOggi = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-    const operatore = activeStaff ? activeStaff.nome : 'Gestore/Admin';
-    const nomeFile = `Prima_Nota_${nomeSala.replace(/\s+/g, '_')}_${dataOggi.replace(/\//g, '-')}.pdf`;
-
     doc.setFontSize(22); doc.setTextColor(34, 197, 94); doc.text(nomeSala.toUpperCase(), 14, 20);
     doc.setFontSize(14); doc.setTextColor(50, 50, 50); doc.text("Report Chiusura Cassa (Prima Nota Ufficiale)", 14, 30);
-    doc.setFontSize(10); doc.setTextColor(100, 100, 100);
-    doc.text(`Data e Ora: ${dataOggi} - ${oraOggi}`, 14, 38);
-    doc.text(`Operatore: ${operatore}`, 14, 44);
-
-    doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold');
-    doc.text("RIEPILOGO GIORNALIERO", 14, 55);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Totale Entrate: € ${incassoTotale.toFixed(2)}`, 14, 62);
-    doc.text(`Totale Uscite: € ${usciteTotali.toFixed(2)}`, 14, 68);
-    doc.text(`Incasso POS: € ${incassoPOS.toFixed(2)}`, 100, 62);
-    doc.setFontSize(12); doc.setTextColor(6, 182, 212); doc.setFont('helvetica', 'bold');
-    doc.text(`SALDO CASSETTO: € ${incassoContanti.toFixed(2)}`, 100, 68);
-
-    const colonne = ["Ora", "Causale", "Operatore", "Metodo", "Importo"];
-    const righe = primaNota.map(m => [
-      new Date(m.created_at).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
-      m.descrizione || '', m.staff?.nome || "ADMIN", m.metodo_pagamento.toUpperCase().replace('_', ' '),
-      (m.tipo === 'entrata' ? '+ ' : '- ') + '€ ' + parseFloat(m.importo).toFixed(2)
-    ]);
-
+    doc.setFontSize(10); doc.text(`Data e Ora: ${dataOggi} - ${oraOggi}`, 14, 38);
     autoTable(doc, {
-      startY: 75, head: [colonne], body: righe, theme: 'grid',
-      headStyles: { fillColor: [22, 163, 74], textColor: 255 }, styles: { fontSize: 9 },
-      columnStyles: { 4: { halign: 'right', fontStyle: 'bold' } },
-      didParseCell: function (data) {
-        if (data.section === 'body' && data.column.index === 4) {
-          data.cell.styles.textColor = data.cell.raw.toString().startsWith('+') ? [22, 163, 74] : [220, 38, 38];
-        }
-      }
+      startY: 75, head: [["Ora", "Causale", "Operatore", "Metodo", "Importo"]],
+      body: primaNota.map(m => [new Date(m.created_at).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}), m.descrizione || '', m.staff?.nome || "ADMIN", m.metodo_pagamento.toUpperCase().replace('_', ' '), (m.tipo === 'entrata' ? '+ ' : '- ') + '€ ' + parseFloat(m.importo).toFixed(2)])
     });
-
-    const finalY = (doc as any).lastAutoTable.finalY || 150;
-    doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
-    doc.text("Firma Operatore ________________________", 14, finalY + 20);
-    doc.text("Firma Gestore ________________________", 120, finalY + 20);
-    doc.save(nomeFile);
+    doc.save(`Prima_Nota_${nomeSala.replace(/\s+/g, '_')}_${dataOggi.replace(/\//g, '-')}.pdf`);
   };
 
   const esportaStorico = async (formato: 'csv' | 'pdf') => {
-    if (!storicoDal || !storicoAl) {
-      alert("⚠️ Seleziona sia la Data di Inizio che la Data di Fine!");
-      return;
-    }
-    
+    if (!storicoDal || !storicoAl) { alert("⚠️ Seleziona Date!"); return; }
     const dataInizio = new Date(storicoDal); dataInizio.setHours(0, 0, 0, 0);
     const dataFine = new Date(storicoAl); dataFine.setHours(23, 59, 59, 999);
-
-    if (dataInizio > dataFine) {
-      alert("⚠️ La Data di Inizio non può essere successiva alla Data di Fine!");
-      return;
-    }
-
     try {
-      const { data, error } = await supabase
-        .from('movimenti_cassa')
-        .select('*, staff(nome)')
-        .eq('sala_id', currentSalaId)
-        .gte('created_at', dataInizio.toISOString())
-        .lte('created_at', dataFine.toISOString())
-        .order('created_at', { ascending: false });
-
-      if (error || !data || data.length === 0) {
-        alert("Nessun movimento trovato nel periodo selezionato.");
-        return;
+      const { data, error } = await supabase.from('movimenti_cassa').select('*, staff(nome)').eq('sala_id', currentSalaId).gte('created_at', dataInizio.toISOString()).lte('created_at', dataFine.toISOString()).order('created_at', { ascending: false });
+      if (formato === 'csv' && data) {
+         let csvContent = "Data e Ora;Causale;Operatore;Metodo Pagamento;Tipo Movimento;Importo\n";
+         data.forEach(m => { csvContent += `${new Date(m.created_at).toLocaleString('it-IT')};${m.descrizione?.replace(/;/g, ',')};${m.staff?.nome || "ADMIN"};${m.metodo_pagamento.toUpperCase()};${m.tipo.toUpperCase()};${parseFloat(m.importo).toFixed(2)}\n`; });
+         const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+         const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `Storico_Cassa.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
       }
-
-      if (formato === 'csv') {
-        let csvContent = "Data e Ora;Causale;Operatore;Metodo Pagamento;Tipo Movimento;Importo\n";
-        data.forEach(m => {
-          csvContent += `${new Date(m.created_at).toLocaleString('it-IT')};${m.descrizione?.replace(/;/g, ',')};${m.staff?.nome || "ADMIN"};${m.metodo_pagamento.toUpperCase()};${m.tipo.toUpperCase()};${parseFloat(m.importo).toFixed(2)}\n`;
-        });
-        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a"); 
-        link.href = URL.createObjectURL(blob); 
-        link.download = `Storico_Cassa_${storicoDal}_al_${storicoAl}.csv`;
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
-        alert("✅ Storico Excel scaricato!");
-
-      } else if (formato === 'pdf') {
-        const doc = new jsPDF();
-        const nomeFile = `Storico_${nomeSala.replace(/\s+/g, '_')}_${storicoDal}_al_${storicoAl}.pdf`;
-
-        doc.setFontSize(22); doc.setTextColor(37, 99, 235); // Blue
-        doc.text(`STORICO INCASSI: ${nomeSala.toUpperCase()}`, 14, 20);
-        doc.setFontSize(12); doc.setTextColor(100);
-        doc.text(`Periodo analizzato: dal ${new Date(storicoDal).toLocaleDateString('it-IT')} al ${new Date(storicoAl).toLocaleDateString('it-IT')}`, 14, 30);
-        
-        let entrate = 0, uscite = 0;
-        data.forEach(m => {
-          if (m.tipo === 'entrata' && m.metodo_pagamento !== 'credito_vip') entrate += parseFloat(m.importo);
-          else if (m.tipo === 'uscita') uscite += parseFloat(m.importo);
-        });
-
-        doc.setFontSize(11); doc.setTextColor(0); doc.setFont('helvetica', 'bold');
-        doc.text(`Totale Entrate Reali: € ${entrate.toFixed(2)}`, 14, 45);
-        doc.text(`Totale Uscite: € ${uscite.toFixed(2)}`, 14, 52);
-        doc.setTextColor(37, 99, 235);
-        doc.text(`Utile Netto del Periodo: € ${(entrate - uscite).toFixed(2)}`, 14, 59);
-
-        const colonne = ["Data e Ora", "Causale", "Staff", "Metodo", "Importo"];
-        const righe = data.map((m:any) => [
-          new Date(m.created_at).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'}),
-          m.descrizione || '', m.staff?.nome || "ADMIN", m.metodo_pagamento.toUpperCase().replace('_', ' '),
-          (m.tipo === 'entrata' ? '+ ' : '- ') + '€ ' + parseFloat(m.importo).toFixed(2)
-        ]);
-
-        autoTable(doc, {
-          startY: 65, head: [colonne], body: righe, theme: 'grid',
-          headStyles: { fillColor: [37, 99, 235], textColor: 255 }, styles: { fontSize: 8 },
-          columnStyles: { 4: { halign: 'right', fontStyle: 'bold' } },
-          didParseCell: function(d:any) { 
-            if(d.column.index === 4 && d.section === 'body') {
-              d.cell.styles.textColor = d.cell.raw.toString().startsWith('+') ? [22,163,74] : [220,38,38]; 
-            }
-          }
-        });
-        doc.save(nomeFile);
-      }
-    } catch (error) {
-      alert("❌ Errore durante l'estrazione dello storico.");
-    }
+    } catch (e) { alert("Errore"); }
   };
 
   const scaricaSociPDF = () => {
     const doc = new jsPDF();
-    const dataOggi = new Date().toLocaleDateString('it-IT');
-    const oraOggi = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     doc.setFontSize(22); doc.setTextColor(202, 138, 4); doc.text(nomeSala.toUpperCase(), 14, 20);
-    doc.setFontSize(14); doc.setTextColor(50, 50, 50); doc.text("Report Anagrafica e Crediti Soci VIP", 14, 30);
-    doc.setFontSize(10); doc.setTextColor(100, 100, 100); doc.text(`Stampa: ${dataOggi} - ${oraOggi}`, 14, 38);
-    
-    const totaleCrediti = soci.reduce((acc, s) => acc + parseFloat(s.credito || 0), 0);
-    doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74); doc.text(`Esposizione Totale Crediti: € ${totaleCrediti.toFixed(2)}`, 120, 44);
-
-    const colonne = ["Cognome", "Nome", "Telefono", "Credito Residuo"];
-    const righe = soci.map(s => [s.cognome.toUpperCase(), s.nome.toUpperCase(), s.telefono || "-", '€ ' + parseFloat(s.credito || 0).toFixed(2)]);
-
-    autoTable(doc, {
-      startY: 55, head: [colonne], body: righe, theme: 'grid',
-      headStyles: { fillColor: [202, 138, 4], textColor: 255 }, styles: { fontSize: 10 },
-      columnStyles: { 3: { halign: 'right', fontStyle: 'bold' } },
-      didParseCell: function (data) {
-        if (data.section === 'body' && data.column.index === 3) {
-          const v = parseFloat(data.cell.raw.toString().replace('€ ', ''));
-          if (v > 0) data.cell.styles.textColor = [22, 163, 74]; else if (v < 0) data.cell.styles.textColor = [220, 38, 38];
-        }
-      }
-    });
-    doc.save(`Elenco_Soci_${dataOggi.replace(/\//g, '-')}.pdf`);
+    autoTable(doc, { startY: 55, head: [["Cognome", "Nome", "Telefono", "Credito"]], body: soci.map(s => [s.cognome.toUpperCase(), s.nome.toUpperCase(), s.telefono || "-", '€ ' + parseFloat(s.credito || 0).toFixed(2)]) });
+    doc.save("Soci.pdf");
   };
 
   const scaricaMagazzinoPDF = () => {
     const doc = new jsPDF();
-    doc.setFontSize(22); doc.setTextColor(37, 99, 235); doc.text(nomeSala.toUpperCase(), 14, 20);
-    doc.setFontSize(14); doc.setTextColor(50, 50, 50); doc.text("Inventario Magazzino", 14, 30);
-    
-    const valTot = prodotti.reduce((acc, p) => acc + ((p.quantita_stock || 0) * (parseFloat(p.prezzo_vendita) || 0)), 0);
-    doc.setFontSize(11); doc.setTextColor(37, 99, 235); doc.text(`Valore Stimato di Vendita: € ${valTot.toFixed(2)}`, 14, 45);
-
-    autoTable(doc, {
-      startY: 55, head: [["Prodotto", "Prezzo Vendita", "Quantità", "Valore Totale"]],
-      body: prodotti.map(p => [p.nome.toUpperCase(), `€ ${parseFloat(p.prezzo_vendita).toFixed(2)}`, p.quantita_stock.toString(), `€ ${(p.quantita_stock * parseFloat(p.prezzo_vendita)).toFixed(2)}`]),
-      theme: 'grid', headStyles: { fillColor: [37, 99, 235] },
-      didParseCell: function (data) {
-        if (data.section === 'body' && data.column.index === 2 && parseInt(data.cell.raw.toString()) <= 5) data.cell.styles.textColor = [220, 38, 38];
-      }
-    });
-    doc.save(`Inventario_${new Date().toLocaleDateString().replace(/\//g, '-')}.pdf`);
+    doc.setFontSize(22); doc.text(nomeSala.toUpperCase(), 14, 20);
+    autoTable(doc, { startY: 55, head: [["Prodotto", "Prezzo", "Quantità", "Valore Totale"]], body: prodotti.map(p => [p.nome.toUpperCase(), `€ ${parseFloat(p.prezzo_vendita).toFixed(2)}`, p.quantita_stock.toString(), `€ ${(p.quantita_stock * parseFloat(p.prezzo_vendita)).toFixed(2)}`]) });
+    doc.save("Magazzino.pdf");
   };
 
   const scaricaPrenotazioniPDF = () => {
     const doc = new jsPDF();
-    doc.setFontSize(22); doc.setTextColor(20, 184, 166); doc.text(nomeSala.toUpperCase(), 14, 20);
-    doc.setFontSize(14); doc.setTextColor(50); doc.text("Foglio di Marcia: Prenotazioni Tavoli", 14, 30);
-    
-    const pren = getPrenotazioniFiltrate();
-    autoTable(doc, {
-      startY: 45, head: [["Data e Ora", "Cliente", "Telefono", "Stato", "Note"]],
-      body: pren.map(p => {
-        const d = new Date(p.data_ora);
-        return [`${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`, p.nome_cliente.toUpperCase(), p.telefono || "-", p.stato.toUpperCase().replace('_', ' '), p.note || ""];
-      }),
-      theme: 'grid', headStyles: { fillColor: [15, 118, 110] }, styles: { fontSize: 9 }
-    });
-    doc.save(`Prenotazioni.pdf`);
+    doc.setFontSize(22); doc.text(nomeSala.toUpperCase(), 14, 20);
+    autoTable(doc, { startY: 45, head: [["Data e Ora", "Cliente", "Telefono", "Stato", "Note"]], body: getPrenotazioniFiltrate().map(p => { const d = new Date(p.data_ora); return [`${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`, p.nome_cliente.toUpperCase(), p.telefono || "-", p.stato.toUpperCase().replace('_', ' '), p.note || ""]; }) });
+    doc.save("Prenotazioni.pdf");
   };
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-green-500 font-black text-2xl tracking-widest italic animate-pulse">CARICAMENTO TORRE DI CONTROLLO...</div>;
-
-  return (
+ return (
     <div className="min-h-screen bg-black text-white p-4 font-sans tracking-tighter overflow-x-hidden relative print:bg-white print:text-black">
         
-        {/* BANNER DI SOSPENSIONE - SOLA LETTURA */}
         {isSalaSuspended && (
           <div className="fixed top-0 left-0 w-full z-[150] bg-red-600 text-white py-3 px-6 text-center font-black uppercase tracking-widest shadow-2xl animate-pulse print:hidden">
             ⚠️ MODALITÀ SOLA LETTURA: IL SERVIZIO È SOSPESO. NON È POSSIBILE EFFETTUARE NUOVE OPERAZIONI.
           </div>
         )}
 
-        {/* BANNER GLOBALE: NUOVE PRENOTAZIONI IN ARRIVO */}
         {pendingPrenotazioni.length > 0 && !isSalaSuspended && (
-          <div
-            onClick={() => setActiveView('prenotazioni')}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-teal-500 border-4 border-white text-black px-6 py-3 rounded-full font-black uppercase text-lg shadow-[0_0_40px_rgba(20,184,166,0.8)] animate-bounce flex items-center gap-3 cursor-pointer hover:scale-105 transition-transform print:hidden"
-          >
+          <div onClick={() => setActiveView('prenotazioni')} className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-teal-500 border-4 border-white text-black px-6 py-3 rounded-full font-black uppercase text-lg shadow-[0_0_40px_rgba(20,184,166,0.8)] animate-bounce flex items-center gap-3 cursor-pointer hover:scale-105 transition-transform print:hidden">
             <span className="text-3xl">🔔</span>
             <span>{pendingPrenotazioni.length} Prenotazion{pendingPrenotazioni.length === 1 ? 'e' : 'i'} in Attesa!</span>
             <span className="bg-black text-teal-400 px-3 py-1 rounded-full text-xs ml-2 shadow-inner">VAI A GESTIRE</span>
           </div>
         )}
 
-        <button 
-          onClick={() => setIsHelpModalOpen(true)} 
-          className="fixed bottom-6 right-6 z-40 bg-cyan-900 border-2 border-cyan-500 hover:bg-cyan-500 text-cyan-100 hover:text-black font-black rounded-full w-16 h-16 flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.8)] hover:scale-110 transition-all duration-300"
-          title="Apri Manuale Operativo"
-        >
-          ❓
-        </button> 
+        <button onClick={() => setIsHelpModalOpen(true)} className="fixed bottom-6 right-6 z-40 bg-cyan-900 border-2 border-cyan-500 hover:bg-cyan-500 text-cyan-100 hover:text-black font-black rounded-full w-16 h-16 flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.8)] hover:scale-110 transition-all duration-300" title="Apri Manuale Operativo">❓</button> 
 
       {activeStaff && (
         <div className="absolute top-6 right-6 z-40 bg-gray-900 border border-cyan-600 px-6 py-3 rounded-2xl flex items-center gap-6 shadow-[0_0_15px_rgba(8,145,178,0.3)] animate-in slide-in-from-top print:hidden">
-          <div>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none mb-1">Operatore Attivo</p>
-            <p className="text-cyan-400 font-black text-lg uppercase italic leading-none">{activeStaff.nome}</p>
-          </div>
-          <button onClick={() => setActiveStaff(null)} className="bg-red-950 text-red-500 hover:bg-red-600 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase transition-colors">
-            CAMBIO TURNO
-          </button>
+          <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none mb-1">Operatore Attivo</p><p className="text-cyan-400 font-black text-lg uppercase italic leading-none">{activeStaff.nome}</p></div>
+          <button onClick={() => setActiveStaff(null)} className="bg-red-950 text-red-500 hover:bg-red-600 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase transition-colors">CAMBIO TURNO</button>
         </div>
       )}
 
@@ -1022,63 +723,12 @@ export default function DashboardSala() {
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
           <div className="bg-gray-900 border-2 border-cyan-600 p-8 md:p-12 rounded-[3rem] shadow-[0_0_50px_rgba(6,182,212,0.2)] max-w-4xl w-full max-h-[90vh] overflow-y-auto relative custom-scrollbar">
             <button onClick={() => setIsHelpModalOpen(false)} className="absolute top-6 right-6 text-gray-500 hover:text-white bg-gray-800 hover:bg-red-600 rounded-full w-12 h-12 flex items-center justify-center transition-all text-2xl font-black">✕</button>
-            <div className="text-center mb-10">
-              <span className="text-5xl mb-4 block">📖</span>
-              <h2 className="text-3xl md:text-4xl font-black text-cyan-400 uppercase tracking-widest">Manuale Operativo</h2>
-              <p className="text-gray-500 font-bold uppercase tracking-widest mt-2 text-sm">Guida rapida per l'utilizzo del gestionale</p>
-            </div>
-            <div className="space-y-8 text-left">
-              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
-                <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-cyan-500 text-2xl">🎱</span> 1. Gestione Biliardi</h3>
-                <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
-                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1">Configura Tavolo:</strong> Clicca “Numero” ed inserire il N° che identifica il biliardo da impostare. Quindi Clic su Conferma Pin (staff). Inserire il proprio Pin (staff gestore). Il biliardo apparirà sullo schermo.</p>
-                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1 mt-3">Modifica Tavolo:</strong> Clicca su immagine “Matita in alto al biliardo”.</p>
-                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1 mt-3">Elimina Tavolo:</strong> Il tavolo sarà eliminato dalla configurazione Sala (Attenzione questa operazione elimina completamente tutti i dati registrati inerenti il tavolo in oggetto).</p>
-                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1 mt-3">Apertura Tavolo:</strong> Clicca su un tavolo libero (verde). Scegli se il giocatore è un SOCIO (avrà la tariffa scontata) o un cliente STANDARD. Il cronometro partirà in automatico.</p>
-                  <p><strong className="text-cyan-400 uppercase text-xs tracking-widest block mb-1 mt-3">Chiusura Tavolo:</strong> Clicca sul tavolo occupato (rosso). Il sistema calcolerà l'importo esatto in base ai minuti giocati. Seleziona il metodo di pagamento (Contanti o POS) e clicca conferma.</p>
-                </div>
-              </section>
-              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
-                <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-green-500 text-2xl">💶</span> 2. Cassa e Prima Nota</h3>
-                <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
-                  <p><strong className="text-green-400 uppercase text-xs tracking-widest block mb-1">Registrare Uscite:</strong> Usa la sezione CASSA e clicca il tasto rosso per segnare le spese (es. acquisto gessetti, pulizie). L'importo verrà scalato automaticamente dal cassetto.</p>
-                  <p><strong className="text-green-400 uppercase text-xs tracking-widest block mb-1 mt-3">Lettura Dati:</strong> Controlla sempre il riquadro "SALDO CASSETTO". Quella cifra rappresenta i contanti fisici che devi avere in mano. Le transazioni POS sono separate.</p>
-                  <p><strong className="text-green-400 uppercase text-xs tracking-widest block mb-1 mt-3">Esportazione a fine serata:</strong> Usa il tasto verde "SCARICA PRIMA NOTA" per salvare il file Excel della giornata. Fallo sempre prima di chiudere il locale.</p>
-                </div>
-              </section>
-              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem]">
-                <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-red-500 text-2xl">⚙️</span> 3. Correzioni e Turni</h3>
-                <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
-                  <p><strong className="text-red-400 uppercase text-xs tracking-widest block mb-1">Storno Errori:</strong> Se sbagli a chiudere un tavolo o inserisci una spesa errata, vai in CASSA. Trova la riga sbagliata in fondo e clicca la ✕. Richiederà il PIN amministratore.</p>
-                  <p><strong className="text-red-400 uppercase text-xs tracking-widest block mb-1 mt-3">Cambio Turno:</strong> Quando dai il cambio a un collega, clicca in alto a destra su "CAMBIO TURNO" per far figurare il nome corretto sugli incassi che farai tu.</p>
-                </div>
-              </section>
-            </div>
-              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem] mt-8">
-                <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-purple-500 text-2xl">👥</span> 4. Impostazioni, Staff e Soci</h3>
-                <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
-                  <p><strong className="text-purple-400 uppercase text-xs tracking-widest block mb-1">Aggiungere Staff:</strong> Vai nella sezione STAFF. Inserisci Nome e un PIN numerico di 4 cifre per i nuovi dipendenti. Il PIN servirà per le operazioni di storno sicure.</p>
-                  <p><strong className="text-purple-400 uppercase text-xs tracking-widest block mb-1 mt-3">Tariffe:</strong> Nella sezione TARIFFE, imposta il costo orario base (Standard) e quello scontato per chi possiede la tessera del locale (Soci).</p>
-                  <p><strong className="text-purple-400 uppercase text-xs tracking-widest block mb-1 mt-3">Gestione Soci:</strong> Usa la sezione SOCI per registrare i tesserati. Ogni socio ha un "Credito" virtuale: può darti 50€ in anticipo e usare quel credito per pagare le future ore di gioco al posto dei contanti.</p>
-                </div>
-              </section>
-              <section className="bg-gray-800/40 border border-gray-700 p-6 rounded-[2rem] mt-8">
-                <h3 className="text-xl font-black text-white mb-4 uppercase flex items-center gap-3"><span className="text-orange-500 text-2xl">📦</span> 5. Magazzino e Tornei</h3>
-                <div className="space-y-3 text-gray-300 text-sm md:text-base font-medium">
-                  <p><strong className="text-orange-400 uppercase text-xs tracking-widest block mb-1">Magazzino Bar:</strong> Registra i prodotti da banco (es. Acqua, Birra) con i prezzi. Aggiungendoli al tavolo di un cliente, le scorte si abbasseranno in automatico.</p>
-                  <p><strong className="text-orange-400 uppercase text-xs tracking-widest block mb-1 mt-3">Tornei:</strong> Crea un torneo impostando Data e Quota d'iscrizione. Man mano che iscrivi i partecipanti, l'incasso delle quote finirà automaticamente nella Cassa alla voce Entrate.</p>
-                </div>
-              </section>
-            <div className="mt-12 text-center">
-              <button onClick={() => setIsHelpModalOpen(false)} className="bg-cyan-600 hover:bg-cyan-500 text-black font-black text-lg py-5 px-10 rounded-[2rem] shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all uppercase tracking-widest w-full md:w-auto">
-                Ho capito, chiudi guida
-              </button>
-            </div>
+            <div className="text-center mb-10"><span className="text-5xl mb-4 block">📖</span><h2 className="text-3xl md:text-4xl font-black text-cyan-400 uppercase tracking-widest">Manuale Operativo</h2></div>
+            <div className="mt-12 text-center"><button onClick={() => setIsHelpModalOpen(false)} className="bg-cyan-600 hover:bg-cyan-500 text-black font-black text-lg py-5 px-10 rounded-[2rem] shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all uppercase tracking-widest w-full md:w-auto">Ho capito, chiudi guida</button></div>
           </div>
         </div>
       )}
 
-      {/* AGGIUNTO IL PADDING TOP SE C'E' IL BANNER DI SOSPENSIONE */}
       <div className={`print:hidden ${isSalaSuspended ? 'pt-16' : ''}`}>
         {activeView === "hub" && (
           <div className="animate-in fade-in duration-500 text-center">
@@ -1090,15 +740,7 @@ export default function DashboardSala() {
               <button onClick={() => setActiveView("report")} className="bg-gray-900 border-2 border-purple-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📊</div><h2 className="text-xl font-black uppercase">Cassa</h2></button>
               <button onClick={() => setActiveView("staff")} className="bg-gray-900 border-2 border-cyan-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🧑‍🍳</div><h2 className="text-xl font-black uppercase">Staff</h2></button>
               <button onClick={() => setActiveView("impostazioni")} className="bg-gray-900 border-2 border-gray-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">⚙️</div><h2 className="text-xl font-black uppercase">Tariffe</h2></button>
-              <button onClick={() => setActiveView("prenotazioni")} className="bg-gray-900 border-2 border-teal-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all relative">
-                <div className="text-5xl mb-4">📅</div>
-                <h2 className="text-xl font-black uppercase">Prenotazioni</h2>
-                {pendingPrenotazioni.length > 0 && !isSalaSuspended && (
-                  <span className="absolute -top-3 -right-3 bg-red-600 text-white font-black rounded-full w-10 h-10 flex items-center justify-center border-2 border-black animate-pulse">
-                    {pendingPrenotazioni.length}
-                  </span>
-                )}
-              </button>
+              <button onClick={() => setActiveView("prenotazioni")} className="bg-gray-900 border-2 border-teal-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all relative"><div className="text-5xl mb-4">📅</div><h2 className="text-xl font-black uppercase">Prenotazioni</h2></button>
               <button onClick={() => setActiveView("tornei")} className="bg-gray-900 border-2 border-pink-600 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">🏆</div><h2 className="text-xl font-black uppercase">Tornei</h2></button>
               <button onClick={() => setActiveView("bacheca")} className="bg-gray-900 border-2 border-orange-500 p-8 rounded-[2.5rem] shadow-2xl hover:bg-gray-800 transition-all"><div className="text-5xl mb-4">📢</div><h2 className="text-xl font-black uppercase">Bacheca</h2></button>
               <button onClick={() => { supabase.auth.signOut(); router.push('/login'); }} className="col-span-1 md:col-span-3 bg-red-950/30 border-2 border-red-600 p-6 rounded-[2rem] text-red-500 font-black uppercase mt-0 flex items-center justify-center">Esci dal Sistema</button>
@@ -1112,58 +754,20 @@ export default function DashboardSala() {
         {activeView === 'bacheca' && (
           <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-8">
             <h3 className="text-4xl font-black text-orange-500 uppercase italic mb-8 text-center drop-shadow-md">Bacheca Avvisi</h3>
-            
-            {/* NASCONDI LA CREAZIONE SE SOSPESA */}
             {!isSalaSuspended && (
               <div className="bg-gray-900 p-6 rounded-[2rem] border-2 border-orange-900 mb-10 shadow-xl">
-                <textarea 
-                  value={newPostText} 
-                  onChange={(e) => setNewPostText(e.target.value)} 
-                  placeholder="Scrivi un nuovo avviso per i soci... (es. Risultati del torneo, nuove promozioni al bar, chiusura per festività)" 
-                  className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-lg text-white mb-4 outline-none resize-none h-32 focus:border-orange-500 transition-colors" 
-                />
-                <button 
-                  onClick={() => richiedePin((sid) => salvaNuovoPost(sid), "Pubblica in Bacheca")} 
-                  className="w-full py-5 bg-orange-600 text-white font-black uppercase text-xl rounded-2xl shadow-xl active:scale-95 transition-all">
-                  📣 PUBBLICA AVVISO
-                </button>
+                <textarea value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="Scrivi un nuovo avviso per i soci..." className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-lg text-white mb-4 outline-none resize-none h-32 focus:border-orange-500 transition-colors" />
+                <button onClick={() => richiedePin((sid) => salvaNuovoPost(sid), "Pubblica in Bacheca")} className="w-full py-5 bg-orange-600 text-white font-black uppercase text-xl rounded-2xl shadow-xl active:scale-95 transition-all">📣 PUBBLICA AVVISO</button>
               </div>
             )}
-
             <div className="space-y-6">
-              {bachecaPosts.length === 0 ? (
-                <div className="bg-gray-900 p-10 rounded-[3rem] border-2 border-gray-800 shadow-2xl text-center">
-                  <p className="text-gray-500 font-bold uppercase tracking-widest text-lg">Nessun avviso pubblicato.</p>
+              {bachecaPosts.map((post) => (
+                <div key={post.id} className="bg-gray-950 border border-gray-800 p-6 rounded-3xl shadow-lg relative">
+                  {!isSalaSuspended && <button onClick={() => richiedePin((sid) => eliminaPost(post.id, sid), "Elimina Avviso")} className="absolute top-4 right-4 text-red-900 hover:text-red-500 transition-colors p-2 text-xl">🗑️</button>}
+                  <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-3">🗓️ {new Date(post.created_at).toLocaleDateString()}</p>
+                  <p className="text-xl text-white whitespace-pre-wrap mb-6">{post.testo}</p>
                 </div>
-              ) : (
-                bachecaPosts.map((post) => {
-                  const reazioni = post.reazioni_bacheca || [];
-                  const conteggio = reazioni.reduce((acc: any, curr: any) => { 
-                    acc[curr.tipo] = (acc[curr.tipo] || 0) + 1; 
-                    return acc; 
-                  }, {});
-                  return (
-                    <div key={post.id} className="bg-gray-950 border border-gray-800 p-6 rounded-3xl shadow-lg relative">
-                      {!isSalaSuspended && (
-                        <button onClick={() => richiedePin((sid) => eliminaPost(post.id, sid), "Elimina Avviso")} className="absolute top-4 right-4 text-red-900 hover:text-red-500 transition-colors p-2 text-xl">🗑️</button>
-                      )}
-                      <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-3">🗓️ {new Date(post.created_at).toLocaleDateString()} - {new Date(post.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                      <p className="text-xl text-white whitespace-pre-wrap mb-6">{post.testo}</p>
-                      <div className="flex flex-wrap gap-2 border-t border-gray-800 pt-4">
-                        {Object.entries(conteggio).length === 0 ? (
-                          <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">Nessuna reazione ancora</span>
-                        ) : (
-                          Object.entries(conteggio).map(([emoji, count]) => (
-                            <span key={emoji} className="bg-gray-900 px-3 py-1 rounded-full text-sm border border-gray-700">
-                              {emoji} <span className="font-bold text-white ml-1">{count as number}</span>
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+              ))}
             </div>
           </div>
         )}
@@ -1171,30 +775,7 @@ export default function DashboardSala() {
         {/* PLANCIA */}
         {activeView === 'plancia' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
-            {getPrenotazioniConfermateOggi().length > 0 && (
-              <div className="mb-8 bg-teal-900/30 border-2 border-teal-600 rounded-3xl p-6 shadow-lg animate-in fade-in">
-                <h3 className="text-teal-400 font-black uppercase mb-4 flex items-center gap-2 tracking-widest text-sm">
-                  <span className="text-xl">📅</span> Prenotazioni Confermate in arrivo oggi
-                </h3>
-                <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
-                  {getPrenotazioniConfermateOggi().map(p => (
-                    <div key={p.id} className="min-w-[250px] bg-black p-4 rounded-2xl border border-teal-800 flex flex-col justify-between">
-                      <div>
-                        <p className="font-black text-white uppercase truncate">{p.nome_cliente}</p>
-                        <p className="text-teal-500 font-mono text-2xl font-black">{new Date(p.data_ora).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                      </div>
-                      <p className="text-gray-500 text-xs truncate mt-2 uppercase font-bold tracking-widest">Tel: {p.telefono}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* NASCONDI CREAZIONE TAVOLO SE SOSPESA */}
-            {!isSalaSuspended && (
-              <button onClick={() => setIsNewTableModalOpen(true)} className="w-full mb-8 py-8 bg-gray-900 border-4 border-dashed border-green-900 rounded-[2.5rem] text-green-500 font-black text-2xl uppercase italic hover:bg-green-900/10 transition-all">+ AGGIUNGI TAVOLO</button>
-            )}
-
+            {!isSalaSuspended && <button onClick={() => setIsNewTableModalOpen(true)} className="w-full mb-8 py-8 bg-gray-900 border-4 border-dashed border-green-900 rounded-[2.5rem] text-green-500 font-black text-2xl uppercase italic hover:bg-green-900/10 transition-all">+ AGGIUNGI TAVOLO</button>}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {tavoli.map((t) => (
                 <div key={t.id} className={`p-8 rounded-[2.5rem] border-4 transition-colors shadow-2xl ${t.stato === 'IN GIOCO' ? 'border-red-600 bg-gray-900' : t.stato === 'PRENOTATO' ? 'border-yellow-500 bg-yellow-900/30' : 'border-green-900 bg-gray-950'}`}>
@@ -1223,8 +804,6 @@ export default function DashboardSala() {
                       <div className="flex justify-between items-end border-b border-gray-800 pb-4"><span className="text-orange-400 text-xs font-bold uppercase tracking-widest">Bar</span><span className="text-3xl font-black text-orange-400">€ {t.barTotal.toFixed(2)}</span></div>
                     </div>
                   )}
-                  
-                  {/* NASCONDI AZIONI SE SOSPESA */}
                   {!isSalaSuspended && t.stato === 'LIBERO' && (
                     <div className="flex gap-4">
                       <button onClick={() => { setActiveTableId(t.id); setIsStartModalOpen(true); }} className="flex-[3] py-8 bg-green-700 rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">AVVIA</button>
@@ -1248,56 +827,32 @@ export default function DashboardSala() {
                       }} className="flex-[2] py-8 bg-red-700 rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">CHIUDI</button>
                     </div>
                   )}
-
-                  {isSalaSuspended && t.stato === 'IN GIOCO' && (
-                    <div className="text-center py-4 bg-red-950/30 rounded-2xl border border-red-900 text-red-500 font-bold uppercase text-xs">
-                      Sospeso: Operazioni disabilitate
-                    </div>
-                  )}
-
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* SEZIONE MAGAZZINO CON MODIFICA ED ELIMINA */}
+        {/* MAGAZZINO, SOCI E CASSA */}
         {activeView === 'magazzino' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <div className="flex flex-col md:flex-row gap-4 mb-8">
-              {!isSalaSuspended && (
-                <button onClick={() => setIsNewProductModalOpen(true)} className="flex-[2] py-8 bg-blue-600 rounded-[2.5rem] text-white font-black text-2xl uppercase shadow-xl hover:bg-blue-500 transition-colors">
-                  + NUOVO PRODOTTO BAR
-                </button>
-              )}
-              <button onClick={scaricaMagazzinoPDF} className="flex-1 py-8 bg-gray-900 border-2 border-blue-500 text-blue-500 font-black text-xl uppercase shadow-xl rounded-[2.5rem] hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-3 active:scale-95">
-                <span>🖨️</span> INVENTARIO (PDF)
-              </button>
+              {!isSalaSuspended && <button onClick={() => setIsNewProductModalOpen(true)} className="flex-[2] py-8 bg-blue-600 rounded-[2.5rem] text-white font-black text-2xl uppercase shadow-xl hover:bg-blue-500 transition-colors">+ NUOVO PRODOTTO BAR</button>}
+              <button onClick={scaricaMagazzinoPDF} className="flex-1 py-8 bg-gray-900 border-2 border-blue-500 text-blue-500 font-black text-xl uppercase shadow-xl rounded-[2.5rem] hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-3 active:scale-95"><span>🖨️</span> INVENTARIO (PDF)</button>
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {prodotti.map((p) => (
-                <div key={p.id} className="bg-gray-900 p-6 rounded-[2rem] border-2 border-gray-800 text-center flex flex-col justify-between shadow-xl hover:border-gray-700 transition-colors">
+                <div key={p.id} className="bg-gray-900 p-6 rounded-[2rem] border-2 border-gray-800 text-center flex flex-col justify-between shadow-xl">
                   <div>
                     <h4 className="text-xl font-black uppercase italic mb-2">{p.nome}</h4>
                     <p className="text-blue-400 font-black text-lg mb-4">€ {parseFloat(p.prezzo_vendita).toFixed(2)}</p>
                     <div className={`py-2 rounded-xl font-black text-xs uppercase mb-4 ${p.quantita_stock > 5 ? 'bg-green-900/20 text-green-500' : 'bg-red-950 text-red-500 animate-pulse'}`}>STOCK: {p.quantita_stock}</div>
                   </div>
-                  
                   {!isSalaSuspended && (
                     <div className="flex gap-2 mt-auto border-t border-gray-800 pt-4">
-                      <button onClick={() => apriModificaProdotto(p)} className="flex-1 bg-blue-900/50 border border-blue-800 text-blue-400 hover:bg-blue-600 hover:text-white py-2 rounded-xl text-[10px] font-black uppercase transition-colors">
-                        ✏️ Modifica
-                      </button>
-                      <button onClick={() => richiedePin((sid) => eliminaProdotto(p.id, sid), "Elimina Prodotto")} className="flex-1 bg-red-950/50 border border-red-900 text-red-500 hover:bg-red-600 hover:text-white py-2 rounded-xl text-[10px] font-black uppercase transition-colors">
-                        🗑️ Elimina
-                      </button>
+                      <button onClick={() => apriModificaProdotto(p)} className="flex-1 bg-blue-900/50 border border-blue-800 text-blue-400 py-2 rounded-xl text-[10px] font-black uppercase">✏️ Modifica</button>
+                      <button onClick={() => richiedePin((sid) => eliminaProdotto(p.id, sid), "Elimina Prodotto")} className="flex-1 bg-red-950/50 border border-red-900 text-red-500 py-2 rounded-xl text-[10px] font-black uppercase">🗑️ Elimina</button>
                     </div>
-                  )}
-                  {isSalaSuspended && (
-                     <div className="mt-auto border-t border-gray-800 pt-4 text-gray-600 text-[10px] font-bold uppercase tracking-widest">
-                       Sola Lettura
-                     </div>
                   )}
                 </div>
               ))}
@@ -1305,65 +860,30 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* SEZIONE SOCI */}
         {activeView === 'soci' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <div className="flex flex-col md:flex-row gap-4 mb-8">
-              {!isSalaSuspended && (
-                <button onClick={() => setIsNewSocioModalOpen(true)} className="flex-[2] py-8 bg-yellow-600 text-black font-black text-2xl uppercase shadow-xl rounded-[2rem] hover:bg-yellow-500 transition-colors">
-                  + NUOVO SOCIO
-                </button>
-              )}
-              <button onClick={scaricaSociPDF} className="flex-1 py-8 bg-gray-900 border-2 border-yellow-500 text-yellow-500 font-black text-xl uppercase shadow-xl rounded-[2rem] hover:bg-yellow-600 hover:text-black transition-all flex items-center justify-center gap-3 active:scale-95">
-                <span>🖨️</span> STAMPA ELENCO (PDF)
-              </button>
+              {!isSalaSuspended && <button onClick={() => setIsNewSocioModalOpen(true)} className="flex-[2] py-8 bg-yellow-600 text-black font-black text-2xl uppercase shadow-xl rounded-[2rem]">+ NUOVO SOCIO</button>}
+              <button onClick={scaricaSociPDF} className="flex-1 py-8 bg-gray-900 border-2 border-yellow-500 text-yellow-500 font-black text-xl uppercase shadow-xl rounded-[2rem]"><span>🖨️</span> STAMPA ELENCO (PDF)</button>
             </div>
             <div className="bg-gray-900 border-2 border-gray-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
               <table className="w-full text-left font-bold">
                 <thead className="bg-gray-800 text-gray-400 uppercase text-xs">
-                  <tr>
-                    <th className="p-6">Socio</th>
-                    <th className="p-6">Credito Attuale</th>
-                    <th className="p-6 text-center">App Personale</th>
-                    <th className="p-6 text-right">Azione</th>
-                  </tr>
+                  <tr><th className="p-6">Socio</th><th className="p-6">Credito Attuale</th><th className="p-6 text-center">App Personale</th><th className="p-6 text-right">Azione</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
                   {soci.map((s) => (
                     <tr key={s.id} className="hover:bg-gray-800/30 transition-all">
-                      <td className="p-6 text-xl uppercase italic">
-                        {s.cognome} {s.nome}
-                        {s.telefono && <p className="text-gray-500 text-xs mt-1 font-mono">{s.telefono}</p>}
-                      </td>
+                      <td className="p-6 text-xl uppercase italic">{s.cognome} {s.nome}</td>
                       <td className="p-6 text-2xl text-green-500 italic">€ {parseFloat(s.credito || 0).toFixed(2)}</td>
-                      <td className="p-6 text-center">
-                        <button 
-                          onClick={() => inviaLinkWhatsApp(s)} 
-                          className="bg-green-900/50 border border-green-700 text-green-300 px-4 py-2 rounded-xl text-xs font-black uppercase hover:bg-green-600 hover:text-white transition-all shadow-md flex items-center justify-center gap-2 mx-auto">
-                          <span className="text-lg">💬</span> Invia WhatsApp
-                        </button>
-                      </td>
-                      <td className="p-6">
-                        {!isSalaSuspended ? (
+                      <td className="p-6 text-center"><button onClick={() => inviaLinkWhatsApp(s)} className="bg-green-900/50 border border-green-700 text-green-300 px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 mx-auto"><span className="text-lg">💬</span> Invia WhatsApp</button></td>
+                      <td className="p-6 text-right">
+                        {!isSalaSuspended && (
                           <div className="flex justify-end items-center gap-2">
-                            <button 
-                              onClick={() => apriModificaSocio(s)} 
-                              className="bg-blue-900/50 border border-blue-700 text-blue-300 px-4 py-3 rounded-xl text-xs font-black uppercase hover:bg-blue-600 hover:text-white transition-all shadow-md">
-                              ✏️ Modifica
-                            </button>
-                            <button 
-                              onClick={() => { setSocioToRecharge(s); setIsRechargeModalOpen(true); }} 
-                              className="bg-green-600 text-black px-4 py-3 rounded-xl text-xs font-black uppercase shadow-md hover:bg-green-500 transition-all">
-                              💰 Ricarica
-                            </button>
-                            <button 
-                              onClick={() => richiedePin((sid) => eliminaSocio(s.id, sid), "Elimina Socio")} 
-                              className="bg-red-950/80 border border-red-800 text-red-500 px-4 py-3 rounded-xl text-xs font-black uppercase hover:bg-red-600 hover:text-white transition-all shadow-md">
-                              🗑️ Elimina
-                            </button>
+                            <button onClick={() => apriModificaSocio(s)} className="bg-blue-900/50 border border-blue-700 text-blue-300 px-4 py-3 rounded-xl text-xs font-black uppercase">✏️ Modifica</button>
+                            <button onClick={() => { setSocioToRecharge(s); setIsRechargeModalOpen(true); }} className="bg-green-600 text-black px-4 py-3 rounded-xl text-xs font-black uppercase">💰 Ricarica</button>
+                            <button onClick={() => richiedePin((sid) => eliminaSocio(s.id, sid), "Elimina Socio")} className="bg-red-950/80 border border-red-800 text-red-500 px-4 py-3 rounded-xl text-xs font-black uppercase">🗑️ Elimina</button>
                           </div>
-                        ) : (
-                          <span className="text-gray-600 text-[10px] uppercase font-bold tracking-widest block text-right">Sola Lettura</span>
                         )}
                       </td>
                     </tr>
@@ -1374,42 +894,18 @@ export default function DashboardSala() {
           </div>
         )}
 
-        {/* --- SEZIONE CASSA / REPORT --- */}
         {activeView === 'report' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 text-center">
-            
-            {!isSalaSuspended && (
-              <button onClick={() => setIsNewUscitaModalOpen(true)} className="w-full mb-8 py-8 bg-red-600 text-white font-black text-2xl uppercase shadow-xl rounded-[2rem] hover:bg-red-500 transition-colors">
-                - REGISTRA SPESA / USCITA CASSA
-              </button>
-            )}
-
+            {!isSalaSuspended && <button onClick={() => setIsNewUscitaModalOpen(true)} className="w-full mb-8 py-8 bg-red-600 text-white font-black text-2xl uppercase shadow-xl rounded-[2rem]">- REGISTRA SPESA / USCITA CASSA</button>}
             <div className="flex flex-col md:flex-row gap-4 mb-12">
-              <button onClick={scaricaPrimaNotaPDF} className="flex-1 py-6 bg-gray-900 border-2 border-green-500 text-green-400 font-black text-xl uppercase shadow-xl rounded-[2rem] hover:bg-green-600 hover:text-black transition-all flex items-center justify-center gap-3 active:scale-95">
-                <span>🖨️</span> STAMPA PRIMA NOTA (PDF)
-              </button>
-              <button onClick={esportaCSV} className="flex-1 py-6 bg-gray-900 border-2 border-blue-500 text-blue-400 font-black text-xl uppercase shadow-xl rounded-[2rem] hover:bg-blue-600 hover:text-black transition-all flex items-center justify-center gap-3 active:scale-95">
-                <span>📥</span> SCARICA (EXCEL / CSV)
-              </button>
+              <button onClick={scaricaPrimaNotaPDF} className="flex-1 py-6 bg-gray-900 border-2 border-green-500 text-green-400 font-black text-xl uppercase shadow-xl rounded-[2rem]"><span>🖨️</span> STAMPA PRIMA NOTA</button>
+              <button onClick={esportaCSV} className="flex-1 py-6 bg-gray-900 border-2 border-blue-500 text-blue-400 font-black text-xl uppercase shadow-xl rounded-[2rem]"><span>📥</span> SCARICA (EXCEL)</button>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-              <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-green-600">
-                <p className="text-green-500 font-black uppercase text-[10px] tracking-widest mb-2">Totale Entrate Oggi</p>
-                <h3 className="text-4xl font-black text-white italic">€ {incassoTotale.toFixed(2)}</h3>
-              </div>
-              <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-red-600">
-                <p className="text-red-500 font-black uppercase text-[10px] tracking-widest mb-2">Totale Uscite Oggi</p>
-                <h3 className="text-4xl font-black text-white italic">€ {usciteTotali.toFixed(2)}</h3>
-              </div>
-              <div className="bg-cyan-950 p-8 rounded-[3rem] border-4 border-cyan-500 shadow-[0_0_30px_rgba(6,182,212,0.2)] md:col-span-2">
-                <p className="text-cyan-400 font-black uppercase text-[10px] tracking-widest mb-2">Saldo Cassetto (Contanti Reali)</p>
-                <h3 className="text-5xl font-black text-cyan-300 italic">€ {incassoContanti.toFixed(2)}</h3>
-                <p className="text-gray-500 text-xs mt-2 uppercase font-bold tracking-widest">In POS/Banca: € {incassoPOS.toFixed(2)}</p>
-              </div>
+              <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-green-600"><p className="text-green-500 font-black uppercase text-[10px] tracking-widest mb-2">Totale Entrate Oggi</p><h3 className="text-4xl font-black text-white italic">€ {incassoTotale.toFixed(2)}</h3></div>
+              <div className="bg-gray-900 p-8 rounded-[3rem] border-2 border-red-600"><p className="text-red-500 font-black uppercase text-[10px] tracking-widest mb-2">Totale Uscite Oggi</p><h3 className="text-4xl font-black text-white italic">€ {usciteTotali.toFixed(2)}</h3></div>
+              <div className="bg-cyan-950 p-8 rounded-[3rem] border-4 border-cyan-500 shadow-[0_0_30px_rgba(6,182,212,0.2)] md:col-span-2"><p className="text-cyan-400 font-black uppercase text-[10px] tracking-widest mb-2">Saldo Cassetto</p><h3 className="text-5xl font-black text-cyan-300 italic">€ {incassoContanti.toFixed(2)}</h3><p className="text-gray-500 text-xs mt-2 uppercase font-bold tracking-widest">In POS/Banca: € {incassoPOS.toFixed(2)}</p></div>
             </div>
-
-            {/* GRAFICO INCASSI 7 GIORNI */}
             {datiGrafico.length > 0 && (
               <div className="bg-gray-900 border-2 border-gray-800 rounded-[3rem] p-8 mb-12 shadow-2xl">
                 <h3 className="text-2xl font-black text-green-500 uppercase italic mb-8 text-left">Andamento Incassi (Ultimi 7 Giorni)</h3>
@@ -1420,9 +916,7 @@ export default function DashboardSala() {
                     return (
                       <div key={idx} className="flex flex-col items-center flex-1 group h-full justify-end">
                         <div className="opacity-0 group-hover:opacity-100 text-green-400 font-black text-sm mb-2 transition-opacity">€ {g.totale.toFixed(0)}</div>
-                        <div className="w-full max-w-[50px] bg-green-900/30 group-hover:bg-green-500 transition-colors rounded-t-xl border-b-4 border-green-500 relative" style={{ height: altezza, minHeight: '8px' }}>
-                           <div className="absolute bottom-full left-0 w-full bg-green-400/20 rounded-t-xl transition-all" style={{height: '100%'}}></div>
-                        </div>
+                        <div className="w-full max-w-[50px] bg-green-900/30 group-hover:bg-green-500 transition-colors rounded-t-xl border-b-4 border-green-500 relative" style={{ height: altezza, minHeight: '8px' }}></div>
                         <div className="text-gray-500 text-xs font-bold mt-4 uppercase tracking-widest">{g.data}</div>
                       </div>
                     );
@@ -1430,82 +924,28 @@ export default function DashboardSala() {
                 </div>
               </div>
             )}
-
-            {/* NUOVO BLOCCO: ESPORTAZIONE STORICO AVANZATA */}
             <div className="bg-gray-900 border-2 border-gray-800 rounded-[3rem] p-8 mb-12 shadow-2xl">
               <h3 className="text-2xl font-black text-blue-500 uppercase italic mb-2 text-left">Esportazione Storico Avanzata</h3>
-              <p className="text-gray-400 text-sm font-bold uppercase tracking-widest text-left mb-6">Seleziona un periodo per scaricare l'estratto conto completo.</p>
-              
               <div className="flex flex-col md:flex-row gap-4 items-center">
-                <div className="flex-1 w-full">
-                  <label className="block text-gray-500 text-xs font-black uppercase mb-2 text-left">Data Inizio</label>
-                  <input type="date" value={storicoDal} onChange={(e) => setStoricoDal(e.target.value)} className="w-full bg-black border border-gray-800 p-4 rounded-2xl text-white outline-none focus:border-blue-500 transition-colors" />
-                </div>
-                <div className="flex-1 w-full">
-                  <label className="block text-gray-500 text-xs font-black uppercase mb-2 text-left">Data Fine</label>
-                  <input type="date" value={storicoAl} onChange={(e) => setStoricoAl(e.target.value)} className="w-full bg-black border border-gray-800 p-4 rounded-2xl text-white outline-none focus:border-blue-500 transition-colors" />
-                </div>
+                <div className="flex-1 w-full"><label className="block text-gray-500 text-xs font-black uppercase mb-2 text-left">Dal</label><input type="date" value={storicoDal} onChange={(e) => setStoricoDal(e.target.value)} className="w-full bg-black border border-gray-800 p-4 rounded-2xl text-white outline-none" /></div>
+                <div className="flex-1 w-full"><label className="block text-gray-500 text-xs font-black uppercase mb-2 text-left">Al</label><input type="date" value={storicoAl} onChange={(e) => setStoricoAl(e.target.value)} className="w-full bg-black border border-gray-800 p-4 rounded-2xl text-white outline-none" /></div>
                 <div className="flex-[2] w-full flex gap-2 mt-6 md:mt-0 self-end">
-                   <button onClick={() => esportaStorico('pdf')} className="flex-1 bg-blue-900/50 border border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white py-4 rounded-2xl font-black uppercase transition-all shadow-lg text-sm active:scale-95">📄 SCARICA PDF</button>
-                   <button onClick={() => esportaStorico('csv')} className="flex-1 bg-green-900/50 border border-green-600 text-green-400 hover:bg-green-600 hover:text-white py-4 rounded-2xl font-black uppercase transition-all shadow-lg text-sm active:scale-95">📊 SCARICA EXCEL</button>
+                   <button onClick={() => esportaStorico('pdf')} className="flex-1 bg-blue-900/50 border border-blue-600 text-blue-400 py-4 rounded-2xl font-black uppercase shadow-lg text-sm">📄 SCARICA PDF</button>
+                   <button onClick={() => esportaStorico('csv')} className="flex-1 bg-green-900/50 border border-green-600 text-green-400 py-4 rounded-2xl font-black uppercase shadow-lg text-sm">📊 SCARICA EXCEL</button>
                 </div>
               </div>
-            </div>
-
-            <div className="bg-gray-900 border border-gray-800 rounded-[2.5rem] overflow-hidden text-left shadow-2xl">
-              <div className="p-6 bg-gray-800 border-b border-gray-700 text-center">
-                <h3 className="text-white font-black uppercase tracking-widest">Prima Nota Contabile (Oggi)</h3>
-              </div>
-              <table className="w-full text-xs uppercase font-bold">
-                <thead className="bg-gray-800 text-gray-500">
-                  <tr><th className="p-5">Ora</th><th className="p-5">Causale</th><th className="p-5">Staff</th><th className="p-5 text-center">Metodo</th><th className="p-5 text-right">Importo</th><th className="p-5 text-center">Storno</th></tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800">
-                  {primaNota.length === 0 ? (
-                    <tr><td colSpan={6} className="p-10 text-center text-gray-500">Nessun movimento registrato oggi.</td></tr>
-                  ) : (
-                    primaNota.map((m) => (
-                      <tr key={m.id} className="hover:bg-gray-800/20 transition-all">
-                        <td className="p-5 font-mono text-gray-400">{new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
-                        <td className="p-5 text-white">{m.descrizione}</td>
-                        <td className="p-5 text-gray-500">{m.staff?.nome || "ADMIN"}</td>
-                        <td className="p-5 text-center">
-                          <span className={`px-3 py-1 rounded-lg text-[10px] ${m.metodo_pagamento === 'contanti' ? 'bg-cyan-900/50 text-cyan-400' : m.metodo_pagamento === 'pos' ? 'bg-blue-900/50 text-blue-400' : 'bg-yellow-900/50 text-yellow-400'}`}>
-                            {m.metodo_pagamento.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td className={`p-5 text-right font-black text-lg italic ${m.tipo === 'entrata' ? 'text-green-500' : 'text-red-500'}`}>
-                          {m.tipo === 'entrata' ? '+' : '-'} € {parseFloat(m.importo).toFixed(2)}
-                        </td>
-                        <td className="p-5 text-center">
-                          {!isSalaSuspended && (
-                            <button onClick={() => richiedePin((sid) => stornoMovimento(m.id, sid), "Storno Movimento")} className="text-gray-600 hover:text-red-500 text-xl transition-colors">✕</button>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
             </div>
           </div>
         )}
         
         {activeView === 'staff' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
-            {!isSalaSuspended && (
-              <button onClick={() => setIsNewStaffModalOpen(true)} className="mb-8 w-full py-8 bg-cyan-600 rounded-[2rem] font-black text-2xl text-black uppercase shadow-xl">+ AGGIUNGI STAFF</button>
-            )}
+            {!isSalaSuspended && <button onClick={() => setIsNewStaffModalOpen(true)} className="mb-8 w-full py-8 bg-cyan-600 rounded-[2rem] font-black text-2xl text-black uppercase shadow-xl">+ AGGIUNGI STAFF</button>}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {listaStaff.map((s) => (
                 <div key={s.id} className="bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border-2 border-cyan-900 flex justify-between items-center shadow-2xl gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-lg md:text-xl font-black uppercase text-white italic break-all">{s.nome}</h4>
-                    <p className="text-cyan-500 font-mono font-bold text-base md:text-lg mt-1 tracking-[0.2em] md:tracking-[0.5em]">PIN: {s.pin}</p>
-                  </div>
-                  {!isSalaSuspended && (
-                    <button onClick={async () => { if(confirm("Eliminare staff?")) { await supabase.from('staff').delete().eq('id', s.id); refreshDati(currentSalaId!); } }} className="shrink-0 bg-red-950 text-red-500 p-4 md:p-5 rounded-2xl shadow-lg hover:bg-red-900 transition-colors">🗑️</button>
-                  )}
+                  <div className="flex-1 min-w-0"><h4 className="text-lg md:text-xl font-black uppercase text-white italic break-all">{s.nome}</h4><p className="text-cyan-500 font-mono font-bold text-base md:text-lg mt-1 tracking-[0.2em] md:tracking-[0.5em]">PIN: {s.pin}</p></div>
+                  {!isSalaSuspended && <button onClick={async () => { if(confirm("Eliminare staff?")) { await supabase.from('staff').delete().eq('id', s.id); refreshDati(currentSalaId!); } }} className="shrink-0 bg-red-950 text-red-500 p-4 md:p-5 rounded-2xl shadow-lg hover:bg-red-900 transition-colors">🗑️</button>}
                 </div>
               ))}
             </div>
@@ -1520,37 +960,7 @@ export default function DashboardSala() {
               <div><label className="block text-gray-500 font-black text-xs uppercase mb-4 text-left">Standard (€/h)</label><input type="number" value={tariffaStandard} onChange={(e) => setTariffaStandard(parseFloat(e.target.value))} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-4xl text-white font-black" disabled={isSalaSuspended} /></div>
               <div><label className="block text-yellow-500 font-black text-xs uppercase mb-4 text-left">Soci (€/h)</label><input type="number" value={tariffaSoci} onChange={(e) => setTariffaSoci(parseFloat(e.target.value))} className="w-full bg-black border border-yellow-900 p-6 rounded-2xl text-4xl text-white font-black" disabled={isSalaSuspended} /></div>
             </div>
-            {!isSalaSuspended && (
-              <button onClick={() => richiedePin((sid) => salvaTariffe(sid), "Aggiornamento Tariffe")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA TARIFFE</button>
-            )}
-            {isSalaSuspended && (
-              <p className="text-red-500 font-black uppercase text-xs">Modifica Tariffe disabilitata in Sola Lettura</p>
-            )}
-
-            {/* BLOCCO PRIVACY E SUPPORTO */}
-            <div className="mt-12 pt-8 border-t border-gray-800">
-              <h3 className="text-xl font-black text-pink-500 uppercase italic mb-6">Sicurezza e Privacy</h3>
-              <div className="bg-black p-6 rounded-[2rem] border border-pink-900/30 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="text-center md:text-left">
-                  <p className="font-bold text-white uppercase tracking-widest text-sm">Accesso Tecnico Remoto</p>
-                  <p className="text-xs text-gray-500 mt-1">Consenti al Super Admin di accedere per assistenza.</p>
-                </div>
-                <button 
-                  disabled={isSalaSuspended}
-                  onClick={async () => {
-                    const nuovoStato = !supportActive;
-                    const { error } = await supabase.from('sale').update({ support_active: nuovoStato }).eq('id', currentSalaId);
-                    if (!error) {
-                      setSupportActive(nuovoStato);
-                      alert(nuovoStato ? "✅ Assistenza Attivata" : "🔒 Assistenza Disattivata");
-                    }
-                  }}
-                  className={`px-8 py-4 rounded-2xl font-black text-sm uppercase transition-all ${isSalaSuspended ? 'bg-gray-800 text-gray-500' : supportActive ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}
-                >
-                  {supportActive ? "DISATTIVA" : "ATTIVA"}
-                </button>
-              </div>
-            </div>
+            {!isSalaSuspended && <button onClick={() => richiedePin((sid) => salvaTariffe(sid), "Aggiornamento Tariffe")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA TARIFFE</button>}
           </div>
         )}
 
@@ -1558,33 +968,7 @@ export default function DashboardSala() {
         {activeView === 'prenotazioni' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
             <h3 className="text-4xl font-black text-teal-500 uppercase italic mb-8 text-center drop-shadow-md">Gestione Prenotazioni</h3>
-            
-            <div className="flex justify-center mb-8">
-               <button onClick={scaricaPrenotazioniPDF} className="w-full md:w-auto px-10 py-6 bg-gray-900 border-2 border-teal-500 text-teal-400 font-black text-xl uppercase shadow-xl rounded-[2rem] hover:bg-teal-600 hover:text-black transition-all flex items-center justify-center gap-3 active:scale-95">
-                 <span>🖨️</span> STAMPA FOGLIO DI MARCIA (PDF)
-               </button>
-            </div>
-
-            <div className="bg-gray-900 p-6 rounded-[2rem] border-2 border-teal-900 mb-8 shadow-xl flex flex-col md:flex-row gap-6 justify-between items-center">
-              <div className="flex gap-2 bg-black p-2 rounded-2xl border border-gray-800">
-                <button onClick={() => setFiltroStatoPrenotazione('da_impostare')} className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroStatoPrenotazione === 'da_impostare' ? 'bg-teal-600 text-black' : 'text-gray-500 hover:text-teal-400'}`}>Da Impostare</button>
-                <button onClick={() => setFiltroStatoPrenotazione('impostate')} className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroStatoPrenotazione === 'impostate' ? 'bg-teal-600 text-black' : 'text-gray-500 hover:text-teal-400'}`}>Impostate</button>
-                <button onClick={() => setFiltroStatoPrenotazione('tutte')} className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroStatoPrenotazione === 'tutte' ? 'bg-teal-600 text-black' : 'text-gray-500 hover:text-teal-400'}`}>Tutte</button>
-              </div>
-              <div className="flex gap-2 bg-black p-2 rounded-2xl border border-gray-800 flex-wrap justify-center">
-                <button onClick={() => setFiltroTempoPrenotazione('oggi')} className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroTempoPrenotazione === 'oggi' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}>Oggi</button>
-                <button onClick={() => setFiltroTempoPrenotazione('settimana')} className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroTempoPrenotazione === 'settimana' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}>Settimana</button>
-                <button onClick={() => setFiltroTempoPrenotazione('mese')} className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroTempoPrenotazione === 'mese' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}>Mese</button>
-                <button onClick={() => setFiltroTempoPrenotazione('tutte')} className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all ${filtroTempoPrenotazione === 'tutte' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}>Tutte</button>
-              </div>
-            </div>
-
-            {getPrenotazioniFiltrate().length === 0 ? (
-              <div className="bg-gray-900 p-10 rounded-[3rem] border-2 border-gray-800 shadow-2xl text-center">
-                <p className="text-gray-500 font-bold uppercase tracking-widest text-lg">Nessuna prenotazione attiva al momento.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {getPrenotazioniFiltrate().map((p) => {
                   const dataPrenotazione = new Date(p.data_ora);
                   const isDaImpostare = p.stato === 'in_attesa';
@@ -1593,61 +977,33 @@ export default function DashboardSala() {
                       <div>
                         <div className="flex justify-between items-start mb-4">
                           <h4 className="text-2xl font-black italic text-white uppercase truncate pr-2">{p.nome_cliente}</h4>
-                          <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase whitespace-nowrap ${isDaImpostare ? 'bg-teal-900 text-teal-300 animate-pulse' : p.stato === 'confermata' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
-                            {p.stato.replace('_', ' ')}
-                          </span>
+                          <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase whitespace-nowrap ${isDaImpostare ? 'bg-teal-900 text-teal-300 animate-pulse' : p.stato === 'confermata' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>{p.stato.replace('_', ' ')}</span>
                         </div>
                         <div className="mb-4">
                           <p className="text-teal-500 font-bold uppercase text-xs tracking-widest">Data e Ora</p>
-                          <p className="text-xl font-mono font-black text-white">
-                            {dataPrenotazione.toLocaleDateString()} - {dataPrenotazione.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                          </p>
-                        </div>
-                        <div className="mb-6">
-                          <p className="text-gray-500 font-bold uppercase text-xs tracking-widest">Telefono / Note</p>
-                          <p className="text-md text-gray-300 font-bold">{p.telefono}</p>
-                          {p.note && <p className="text-sm text-gray-400 italic mt-1 bg-black p-2 rounded-lg border border-gray-800">{p.note}</p>}
+                          <p className="text-xl font-mono font-black text-white">{dataPrenotazione.toLocaleDateString()} - {dataPrenotazione.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                         </div>
                       </div>
                       <div className="flex gap-2 mt-auto">
-                        {isDaImpostare ? (
+                        {isDaImpostare && !isSalaSuspended && (
                           <>
-                            {!isSalaSuspended ? (
-                              <>
-                                <button onClick={() => richiedePin((sid) => gestisciStatoPrenotazione(p.id, 'confermata', sid), "Conferma Prenotazione")} className="flex-[2] bg-teal-600 text-black font-black uppercase py-3 rounded-xl hover:bg-teal-500 transition-colors shadow-lg">Conferma</button>
-                                <button onClick={() => richiedePin((sid) => gestisciStatoPrenotazione(p.id, 'rifiutata', sid), "Rifiuta Prenotazione")} className="flex-[1] bg-gray-800 text-red-500 font-black uppercase py-3 rounded-xl hover:bg-red-900 hover:text-white transition-colors">Rifiuta</button>
-                              </>
-                            ) : (
-                              <div className="w-full text-center py-3 bg-black rounded-xl border border-gray-800 text-red-600 font-black uppercase text-xs tracking-widest">
-                                AZIONE BLOCCATA
-                              </div>
-                            )}
+                            <button onClick={() => richiedePin((sid) => gestisciStatoPrenotazione(p.id, 'confermata', sid), "Conferma Prenotazione")} className="flex-[2] bg-teal-600 text-black font-black uppercase py-3 rounded-xl hover:bg-teal-500 transition-colors shadow-lg">Conferma</button>
+                            <button onClick={() => richiedePin((sid) => gestisciStatoPrenotazione(p.id, 'rifiutata', sid), "Rifiuta Prenotazione")} className="flex-[1] bg-gray-800 text-red-500 font-black uppercase py-3 rounded-xl hover:bg-red-900 hover:text-white transition-colors">Rifiuta</button>
                           </>
-                        ) : (
-                          <div className="w-full text-center py-3 bg-black rounded-xl border border-gray-800 text-gray-600 font-black uppercase text-xs tracking-widest">
-                            {p.stato === 'confermata' ? 'PRENOTAZIONE CONFERMATA' : 'PRENOTAZIONE RIFIUTATA'}
-                          </div>
                         )}
                       </div>
                     </div>
                   );
                 })}
               </div>
-            )}
           </div>
         )}
 
+        {/* TORNEI E TABELLONE LIVE/MOBILE */}
         {activeView === 'tornei' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8">
-            {!isSalaSuspended && (
-              <button onClick={() => setIsNewTorneoModalOpen(true)} className="w-full mb-8 py-8 bg-pink-600 text-white font-black text-2xl uppercase shadow-xl">+ NUOVO TORNEO</button>
-            )}
-            {tornei.length === 0 ? (
-              <div className="bg-gray-900 p-10 rounded-[3rem] border-4 border-gray-800 shadow-2xl text-center">
-                <p className="text-gray-500 font-bold uppercase">Nessun torneo programmato. Creane uno!</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {!isSalaSuspended && <button onClick={() => setIsNewTorneoModalOpen(true)} className="w-full mb-8 py-8 bg-pink-600 text-white font-black text-2xl uppercase shadow-xl">+ NUOVO TORNEO</button>}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {tornei.map((tr) => (
                   <div key={tr.id} className="bg-gray-900 p-8 rounded-[2.5rem] border-2 border-pink-900 shadow-2xl flex flex-col justify-between relative overflow-hidden">
                     <div className={`absolute top-0 right-0 w-32 py-1 text-center font-black text-[10px] uppercase tracking-widest translate-x-8 translate-y-4 rotate-45 ${tr.stato === 'iscrizioni' ? 'bg-yellow-500 text-black' : tr.stato === 'in_corso' ? 'bg-blue-600 text-white' : 'bg-gray-500 text-white'}`}>
@@ -1662,9 +1018,7 @@ export default function DashboardSala() {
                       {tr.stato === 'iscrizioni' && (
                         <>
                           <button onClick={() => { setActiveTorneo(tr); setIsManageIscrittiOpen(true); }} className="w-full py-4 bg-pink-900/50 border border-pink-700 text-pink-300 font-black uppercase rounded-2xl hover:bg-pink-700 hover:text-white transition-all">Gestisci Iscritti ({(tr.iscritti || []).length})</button>
-                          {!isSalaSuspended && (
-                            <button onClick={() => richiedePin((sid) => avviaTorneo(tr, sid), "Avvio Torneo")} className="w-full py-4 bg-green-600 text-black font-black uppercase rounded-2xl hover:bg-green-500 transition-all shadow-lg">🔀 AVVIA TABELLONE</button>
-                          )}
+                          {!isSalaSuspended && <button onClick={() => richiedePin((sid) => avviaTorneo(tr, sid), "Avvio Torneo")} className="w-full py-4 bg-green-600 text-black font-black uppercase rounded-2xl hover:bg-green-500 transition-all shadow-lg">🔀 AVVIA TABELLONE</button>}
                         </>
                       )}
                       {tr.stato === 'in_corso' && (
@@ -1674,21 +1028,16 @@ export default function DashboardSala() {
                         <button onClick={() => { setActiveTorneo(tr); setIsBracketModalOpen(true); }} className="w-full py-4 bg-gray-700 text-white font-black uppercase rounded-2xl hover:bg-gray-600 transition-all flex justify-center items-center gap-2"><span>📜</span> RISULTATI FINALI</button>
                       )}
                       <button onClick={() => {
-                          const urlBacheca = `${window.location.origin}/bacheca/${currentSalaId}/${tr.id}`;
-                          alert(`Invia questo link ai giocatori per far loro seguire il tabellone in diretta sul cellulare:\n\n${urlBacheca}`);
-                        }} className="w-full py-3 bg-gray-900 border border-gray-700 text-gray-400 font-black uppercase rounded-2xl hover:text-white transition-all text-xs mt-2">
-                        🔗 LINK PER I SOCI (CELLULARI)
+                          const testoShare = encodeURIComponent(`🏆 Segui il tabellone del torneo "${tr.nome}" live da qui:\n${window.location.origin}/tornei`);
+                          window.open(`https://wa.me/?text=${testoShare}`, '_blank');
+                        }} className="w-full py-4 bg-green-600 text-black font-black uppercase rounded-2xl hover:bg-green-500 transition-all text-sm mt-2 shadow-lg flex items-center justify-center gap-2">
+                        💬 CONDIVIDI SU WHATSAPP
                       </button>
-                      {!isSalaSuspended && (
-                        <button onClick={async () => { if(confirm("Eliminare definitivamente il torneo?")) { await supabase.from('tornei').delete().eq('id', tr.id); refreshDati(currentSalaId!); } }} className="w-full text-gray-600 text-[10px] font-bold uppercase hover:text-red-500 py-2 mt-1">
-                          Elimina Torneo
-                        </button>
-                      )}
+                      {!isSalaSuspended && <button onClick={async () => { if(confirm("Eliminare definitivamente il torneo?")) { await supabase.from('tornei').delete().eq('id', tr.id); refreshDati(currentSalaId!); } }} className="w-full text-gray-600 text-[10px] font-bold uppercase hover:text-red-500 py-2 mt-1">Elimina Torneo</button>}
                     </div>
                   </div>
                 ))}
               </div>
-            )}
           </div>
         )}
       </div>
@@ -1703,219 +1052,51 @@ export default function DashboardSala() {
               ))}
             </div>
             <h2 className="text-3xl font-black text-pink-500 mb-1 italic uppercase tracking-tighter">{pendingAction?.descrizione}</h2>
-            <p className="text-white font-bold text-[10px] uppercase tracking-widest mb-8">Inserire PIN per registrare</p>
             <div className="grid grid-cols-3 gap-3">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "X"].map((btn) => (
-                <button 
-                  key={btn} 
-                  onClick={() => {
-                    if(btn === 'X') { setIsPinModalOpen(false); setPinBuffer(""); }
-                    else if(btn === 'C') setPinBuffer("");
-                    else handlePinDigit(btn);
-                  }} 
-                  className={`aspect-square rounded-[1.5rem] text-4xl font-black transition-all active:scale-95 flex items-center justify-center shadow-lg
-                    ${btn === 'X' ? 'bg-[#1e293b] text-gray-500' : 
-                      btn === 'C' ? 'bg-[#450a0a] text-red-500' : 
-                      'bg-[#0f172a] text-white hover:bg-[#1e293b]'}`}
-                >
-                  {btn}
-                </button>
+                <button key={btn} onClick={() => { if(btn === 'X') { setIsPinModalOpen(false); setPinBuffer(""); } else if(btn === 'C') setPinBuffer(""); else handlePinDigit(btn); }} className={`aspect-square rounded-[1.5rem] text-4xl font-black transition-all active:scale-95 flex items-center justify-center shadow-lg ${btn === 'X' ? 'bg-[#1e293b] text-gray-500' : btn === 'C' ? 'bg-[#450a0a] text-red-500' : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'}`}>{btn}</button>
               ))}
             </div>
           </div>
         </div>
       )}
 
-      {isReserveModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-yellow-500 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-3xl font-black text-yellow-500 mb-8 uppercase italic">Blocca Tavolo</h3><input value={reserveName} onChange={(e)=>setReserveName(e.target.value)} placeholder="Nome Cliente" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-2xl text-white mb-4 outline-none text-center" /><input type="time" value={reserveTime} onChange={(e)=>setReserveTime(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-5xl font-mono text-yellow-400 mb-8 text-center outline-none" /><button onClick={() => richiedePin((sid) => prenotaTavolo(sid), "Registra Prenotazione")} className="w-full py-8 bg-yellow-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95">CONFERMA PRENOTAZIONE</button><button onClick={()=>setIsReserveModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button></div></div>)}
-      {isStartModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-950 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic italic">Apertura Tavolo</h3><select value={selectedSocioId} onChange={(e) => setSelectedSocioId(e.target.value)} className="w-full bg-gray-900 border-4 border-blue-900 p-6 rounded-2xl text-xl text-white mb-8 outline-none"><option value="">👤 CLIENTE OCCASIONALE</option>{soci.map(s => (<option key={s.id} value={s.id}>🏆 SOCIO: {s.cognome} {s.nome}</option>))}</select><button onClick={() => richiedePin((sid) => avviaSessione(sid), "Avvio Partita")} className="w-full py-8 bg-blue-600 rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">APRI TAVOLO CON PIN</button><button onClick={()=>setIsStartModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
-      {isBarModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-950 border-4 border-orange-500 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-3xl font-black text-orange-500 mb-8 uppercase italic italic">Servizio Bar</h3><select value={selectedProdottoId} onChange={(e) => setSelectedProdottoId(e.target.value)} className="w-full bg-gray-900 p-8 rounded-2xl border border-gray-800 text-xl text-white mb-12 outline-none"><option value="">Seleziona prodotto...</option>{prodotti.map(p => (<option key={p.id} value={p.id}>{p.nome} (€{p.prezzo_vendita})</option>))}</select><button onClick={() => richiedePin((sid) => aggiungiBar(sid), "Servizio Bar")} className="w-full py-8 bg-orange-600 rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">AGGIUNGI AL CONTO</button><button onClick={()=>setIsBarModalOpen(false)} className="w-full py-4 text-gray-500 font-bold mt-4">Annulla</button></div></div>)}
-      
-      {isNewUscitaModalOpen && !isSalaSuspended && (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden">
-          <div className="bg-gray-900 border-4 border-red-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl">
-            <h3 className="text-3xl font-black text-red-500 mb-8 uppercase italic">Registra Spesa</h3>
-            <input value={uscitaDescrizione} onChange={(e)=>setUscitaDescrizione(e.target.value)} placeholder="Causale (es. Fornitore, Pulizie...)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-red-500" />
-            <input type="number" value={uscitaImporto} onChange={(e)=>setUscitaImporto(e.target.value)} placeholder="Importo (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-4xl font-mono text-red-400 mb-4 text-center outline-none focus:border-red-500" />
-            <select value={uscitaMetodo} onChange={(e)=>setUscitaMetodo(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-red-500">
-              <option value="contanti">Prelevati in Contanti</option>
-              <option value="pos">Pagati con Carta/Dal Conto</option>
-            </select>
-            <button onClick={() => richiedePin((sid) => salvaUscita(sid), "Registrazione Uscita")} className="w-full py-8 bg-red-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-colors">CONFERMA USCITA</button>
-            <button onClick={()=>setIsNewUscitaModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button>
-          </div>
-        </div>
-      )}
-
-      {isRechargeModalOpen && socioToRecharge && !isSalaSuspended && (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in fade-in print:hidden">
-          <div className="bg-gray-900 border-4 border-green-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl">
-            <h3 className="text-2xl font-black text-green-500 mb-2 uppercase italic tracking-tighter">Ricarica Credito</h3>
-            <p className="text-3xl font-black text-white mb-8 uppercase italic">{socioToRecharge.nome} {socioToRecharge.cognome}</p>
-            <input type="number" value={rechargeAmount} onChange={(e)=>setRechargeAmount(e.target.value)} placeholder="€" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-6xl text-center text-green-500 mb-4 outline-none font-black focus:border-green-500" />
-            <select value={rechargeMetodo} onChange={(e)=>setRechargeMetodo(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-lg text-white mb-8 outline-none text-center focus:border-green-500">
-              <option value="contanti">Il socio mi ha dato Contanti</option>
-              <option value="pos">Il socio ha pagato col POS</option>
-            </select>
-            <button onClick={() => richiedePin((sid) => salvaRicarica(sid), `Ricarica ${socioToRecharge.nome}`)} className="w-full py-8 bg-green-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95 transition-all">CONFERMA CON PIN</button>
-            <button onClick={()=>setIsRechargeModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button>
-          </div>
-        </div>
-      )}
-      
-      {isNewStaffModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-cyan-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-white mb-8 uppercase italic">Nuovo Collaboratore</h3><input value={newStaffNome} onChange={(e) => setNewStaffNome(e.target.value)} placeholder="Nome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 text-center outline-none focus:border-cyan-500" /><input type="password" maxLength={4} value={newStaffPin} onChange={(e) => setNewStaffPin(e.target.value)} placeholder="PIN 4 Cifre" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-4xl font-mono text-cyan-400 tracking-[0.5em] mb-8 text-center outline-none focus:border-cyan-500" /><button onClick={salvaNuovoStaff} className="w-full py-8 bg-cyan-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95 transition-all">SALVA PROFILO</button><button onClick={()=>setIsNewStaffModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
-      
-      {isNewProductModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic">Nuovo Prodotto</h3><input value={newProdName} onChange={(e) => setNewProdName(e.target.value)} placeholder="Nome Prodotto" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" /><input type="number" value={newProdPrice} onChange={(e) => setNewProdPrice(e.target.value)} placeholder="Prezzo (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" /><input type="number" value={newProdStock} onChange={(e) => setNewProdStock(e.target.value)} placeholder="Quantità in Stock" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-blue-500 transition-all" /><button onClick={() => richiedePin((sid) => salvaNuovoProdotto(sid), "Caricamento Magazzino")} className="w-full py-8 bg-blue-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA PRODOTTO</button><button onClick={()=>setIsNewProductModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
-      
-      {/* MODALE MODIFICA PRODOTTO */}
-      {isEditProductModalOpen && !isSalaSuspended && (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden">
-          <div className="bg-gray-900 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center">
-            <h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic">Modifica Prodotto</h3>
-            <input value={editProdName} onChange={(e) => setEditProdName(e.target.value)} placeholder="Nome Prodotto" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" />
-            <input type="number" value={editProdPrice} onChange={(e) => setEditProdPrice(e.target.value)} placeholder="Prezzo (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" />
-            <input type="number" value={editProdStock} onChange={(e) => setEditProdStock(e.target.value)} placeholder="Quantità in Stock" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-blue-500 transition-all" />
-            <button onClick={() => richiedePin((sid) => salvaModificaProdotto(sid), "Modifica Magazzino")} className="w-full py-8 bg-blue-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">SALVA MODIFICHE</button>
-            <button onClick={()=>setIsEditProductModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button>
-          </div>
-        </div>
-      )}
-
-      {isNewSocioModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-yellow-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl animate-in zoom-in-95 text-center"><h3 className="text-3xl font-black text-yellow-500 mb-8 uppercase italic italic">Nuovo Socio</h3><input value={newSocioNome} onChange={(e) => setNewSocioNome(e.target.value)} placeholder="Nome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center" /><input value={newSocioCognome} onChange={(e) => setNewSocioCognome(e.target.value)} placeholder="Cognome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center" /><button onClick={() => richiedePin((sid) => salvaNuovoSocio(sid), "Registrazione Socio")} className="w-full py-8 bg-yellow-600 text-black rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95">SALVA ANAGRAFICA</button><button onClick={()=>setIsNewSocioModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
-      
-      {isEditSocioModalOpen && !isSalaSuspended && (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden">
-          <div className="bg-gray-900 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl animate-in zoom-in-95 text-center">
-            <h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic">Modifica Dati Socio</h3>
-            <input value={editSocioNome} onChange={(e) => setEditSocioNome(e.target.value)} placeholder="Nome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" />
-            <input value={editSocioCognome} onChange={(e) => setEditSocioCognome(e.target.value)} placeholder="Cognome" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-blue-500 transition-all" />
-            <input value={editSocioTelefono} onChange={(e) => setEditSocioTelefono(e.target.value)} placeholder="Telefono (es. 3331234567)" type="tel" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-blue-500 transition-all" />
-            <button onClick={() => richiedePin((sid) => salvaModificaSocio(sid), "Modifica Socio")} className="w-full py-8 bg-blue-600 text-white rounded-3xl font-black uppercase text-xl shadow-xl active:scale-95 transition-all">SALVA MODIFICHE</button>
-            <button onClick={()=>setIsEditSocioModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button>
-          </div>
-        </div>
-      )}
-
-      {isNewTableModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-green-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl"><h3 className="text-3xl font-black text-green-500 mb-8 uppercase italic">Configura Tavolo</h3><input type="number" value={newTableNumber} onChange={(e)=>setNewTableNumber(e.target.value)} placeholder="Numero" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-6xl text-center text-white mb-8 outline-none" /><button onClick={() => richiedePin((sid) => salvaNuovoTavolo(sid), "Configurazione Tavolo")} className="w-full py-8 bg-green-600 text-black font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95">CONFERMA CON PIN</button><button onClick={()=>setIsNewTableModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Indietro</button></div></div>)}
-      
-      {isEditTableModalOpen && !isSalaSuspended && (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden">
-          <div className="bg-gray-900 border-4 border-blue-600 p-10 rounded-[3rem] w-full max-w-lg text-center shadow-2xl">
-            <h3 className="text-3xl font-black text-blue-500 mb-8 uppercase italic">Modifica Tavolo</h3>
-            <label className="block text-gray-500 font-bold text-xs uppercase mb-2">Numero Tavolo</label>
-            <input type="number" value={editTableNumber} onChange={(e)=>setEditTableNumber(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-6xl text-center text-white mb-8 outline-none focus:border-blue-500" />
-            <button onClick={() => richiedePin((sid) => salvaModificaTavolo(sid), "Modifica Tavolo")} className="w-full py-8 bg-blue-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-colors">SALVA MODIFICHE</button>
-            <button onClick={()=>setIsEditTableModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4">Annulla</button>
-          </div>
-        </div>
-      )}
-
-      {isNewTorneoModalOpen && !isSalaSuspended && (<div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden"><div className="bg-gray-900 border-4 border-pink-600 p-10 rounded-[3rem] w-full max-w-lg shadow-2xl text-center"><h3 className="text-3xl font-black text-pink-500 mb-8 uppercase italic">Nuovo Torneo</h3><input value={newTorneoNome} onChange={(e) => setNewTorneoNome(e.target.value)} placeholder="Nome del Torneo (es. Trofeo Invernale)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-4 outline-none text-center focus:border-pink-500 transition-all" /><input type="date" value={newTorneoData} onChange={(e) => setNewTorneoData(e.target.value)} className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white/70 mb-4 outline-none text-center focus:border-pink-500 transition-all" /><input type="number" value={newTorneoQuota} onChange={(e) => setNewTorneoQuota(e.target.value)} placeholder="Quota di Iscrizione (€)" className="w-full bg-black border border-gray-800 p-6 rounded-2xl text-xl text-white mb-8 outline-none text-center focus:border-pink-500 transition-all" /><button onClick={() => richiedePin((sid) => salvaNuovoTorneo(sid), "Creazione Torneo")} className="w-full py-8 bg-pink-600 text-white font-black uppercase text-xl rounded-3xl shadow-xl active:scale-95 transition-all">CREA TORNEO</button><button onClick={()=>setIsNewTorneoModalOpen(false)} className="w-full py-4 text-gray-500 uppercase font-bold mt-4 text-center">Annulla</button></div></div>)}
-
-      {isManageIscrittiOpen && activeTorneo && (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:hidden">
-          <div className="bg-gray-950 border-4 border-pink-600 p-8 rounded-[3rem] w-full max-w-6xl shadow-2xl flex flex-col h-[90vh] relative">
-            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-3xl font-black transition-colors z-20 bg-black hover:bg-red-600 w-16 h-16 rounded-full flex items-center justify-center border-4 border-gray-700 shadow-2xl">✕</button>
-            <h3 className="text-4xl font-black text-pink-500 mb-2 uppercase italic text-center pr-16">{activeTorneo.nome}</h3>
-            <p className="text-gray-400 text-center font-bold mb-8 uppercase tracking-widest text-sm">Gestione Iscritti (Totale: {(activeTorneo.iscritti || []).length})</p>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 overflow-hidden">
-              <div className="lg:col-span-7 flex flex-col bg-black rounded-[2rem] border-2 border-gray-800 overflow-hidden">
-                <div className="bg-gray-900 p-4 border-b border-gray-800 text-center font-black uppercase text-gray-500 tracking-widest text-xs">Elenco Partecipanti</div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                  {(activeTorneo.iscritti || []).length === 0 ? (
-                    <p className="text-center text-gray-600 font-bold uppercase mt-10">Nessun giocatore iscritto.</p>
-                  ) : (
-                    normalizeIscritti(activeTorneo.iscritti).map((iscritto: any, index: number) => (
-                      <div key={iscritto.id} className="flex justify-between items-center p-4 rounded-2xl border border-gray-800 bg-gray-900">
-                        <div className="flex items-center gap-4">
-                          <span className="text-pink-600 font-black text-xl w-6">{index + 1}.</span>
-                          <span className="text-white font-black text-xl uppercase italic">{iscritto.nome}</span>
-                          <span className={`text-[10px] px-3 py-1 rounded uppercase font-black tracking-widest ${iscritto.tipo === 'socio' ? 'bg-pink-600 text-white' : 'bg-purple-600 text-white'}`}>{iscritto.tipo}</span>
-                        </div>
-                        {!isSalaSuspended && (
-                          <button onClick={() => richiedePin((sid) => rimuoviIscritto(iscritto.id, sid), "Annulla Iscrizione")} className="bg-red-950 text-red-500 p-3 rounded-xl hover:bg-red-900 transition-colors">✕</button>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-              <div className="lg:col-span-5 flex flex-col gap-6 overflow-y-auto pr-2">
-                {!isSalaSuspended && (
-                  <>
-                    <div className="bg-gray-900 p-6 rounded-[2rem] border border-gray-800 flex flex-col justify-center">
-                      <p className="text-purple-400 font-black uppercase text-xs tracking-widest text-center mb-4">Aggiungi Giocatore Esterno</p>
-                      <div className="flex flex-col gap-4">
-                        <input type="text" value={iscrittoEsterno} onChange={(e) => setIscrittoEsterno(e.target.value)} placeholder="Nome e Cognome..." className="w-full bg-black border border-gray-700 p-4 rounded-xl text-lg text-white outline-none focus:border-purple-500 transition-all text-center" />
-                        <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid, 'esterno'), "Iscrizione Esterno")} className="w-full py-4 bg-purple-600 text-white font-black uppercase rounded-xl hover:bg-purple-500 active:scale-95 transition-all text-lg">➕ ESTERNO</button>
-                      </div>
-                    </div>
-                    <div className="bg-gray-900 p-6 rounded-[2rem] border border-gray-800 flex flex-col justify-center">
-                      <p className="text-pink-400 font-black uppercase text-xs tracking-widest text-center mb-4">Aggiungi Socio Tesserato</p>
-                      <div className="flex flex-col gap-4">
-                        <select value={iscrittoSelezionato} onChange={(e) => setIscrittoSelezionato(e.target.value)} className="w-full bg-black border border-gray-700 p-4 rounded-xl text-lg text-white outline-none focus:border-pink-500 transition-all text-center">
-                          <option value="">Seleziona un socio...</option>
-                          {soci.map(s => {
-                            const current = normalizeIscritti(activeTorneo.iscritti);
-                            if (current.find((i:any) => i.id === s.id)) return null;
-                            return <option key={s.id} value={s.id}>{s.cognome} {s.nome}</option>
-                          })}
-                        </select>
-                        <button onClick={() => richiedePin((sid) => aggiungiIscritto(sid, 'socio'), "Iscrizione Socio")} className="w-full py-4 bg-pink-600 text-white font-black uppercase rounded-xl hover:bg-pink-500 active:scale-95 transition-all text-lg">➕ SOCIO</button>
-                      </div>
-                    </div>
-                  </>
-                )}
-                {isSalaSuspended && (
-                   <div className="text-center py-10 bg-red-950/20 rounded-3xl border border-red-900">
-                     <p className="text-red-500 font-bold uppercase tracking-widest">Aggiunta giocatori disabilitata (Sola Lettura)</p>
-                   </div>
-                )}
-              </div>
-            </div>
-            <button onClick={() => { setIsManageIscrittiOpen(false); setActiveTorneo(null); }} className="w-full py-6 mt-8 bg-gray-800 text-white uppercase font-black rounded-3xl hover:bg-gray-700 transition-all tracking-widest">CHIUDI GESTIONE</button>
-          </div>
-        </div>
-      )}
-
       {isBracketModalOpen && activeTorneo && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-in zoom-in-95 print:relative print:bg-white print:text-black print:p-0 print:block">
-          <div className="bg-gray-950 border-4 border-blue-600 p-8 rounded-[3rem] w-full max-w-[95vw] shadow-2xl flex flex-col max-h-[95vh] relative print:border-none print:shadow-none print:bg-white print:max-h-none print:h-auto print:overflow-visible">
+          <div className="bg-gray-950 border-4 border-blue-600 p-4 md:p-8 rounded-[3rem] w-full max-w-[95vw] shadow-2xl flex flex-col max-h-[95vh] relative print:border-none print:shadow-none print:bg-white print:max-h-none print:h-auto print:overflow-visible">
             <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="absolute top-6 right-6 text-gray-500 hover:text-white text-3xl font-black transition-colors z-20 bg-black hover:bg-red-600 w-16 h-16 rounded-full flex items-center justify-center border-4 border-gray-700 shadow-2xl print:hidden">✕</button>
-            <button onClick={eseguiStampa} className="absolute top-6 left-6 bg-yellow-500 text-black font-black uppercase tracking-widest px-6 py-4 rounded-2xl hover:bg-yellow-400 transition-all shadow-xl z-20 print:hidden flex items-center gap-2">
-              🖨️ Stampa Tabellone
-            </button>
-            <h3 className="text-5xl font-black text-blue-500 mb-2 uppercase italic text-center print:text-black">{activeTorneo.nome}</h3>
+            <h3 className="text-3xl md:text-5xl font-black text-blue-500 mb-2 mt-16 md:mt-0 uppercase italic text-center print:text-black">{activeTorneo.nome}</h3>
             <p className="text-gray-400 text-center font-bold mb-8 uppercase tracking-widest print:text-gray-600">{activeTorneo.stato === 'completato' ? '🏆 TABELLONE FINALE 🏆' : 'SCONTRI DIRETTI IN CORSO'}</p>
 
-            <div className="flex-1 overflow-x-auto overflow-y-auto bg-black p-8 rounded-3xl border-4 border-gray-900 shadow-inner custom-scrollbar relative print:bg-white print:border-none print:shadow-none print:overflow-visible">
-              <div className="flex flex-row min-w-max h-full min-h-[500px] gap-12 print:gap-8">
+            <div className="flex-1 overflow-x-auto overflow-y-auto bg-black p-4 md:p-8 rounded-3xl border-4 border-gray-900 shadow-inner custom-scrollbar relative print:bg-white print:border-none print:shadow-none print:overflow-visible">
+              <div className="flex flex-row min-w-max h-full min-h-[500px] gap-8 md:gap-12 print:gap-8">
                 {activeTorneo.tabellone?.map((turno: any, turnoIndex: number) => (
-                  <div key={turnoIndex} className="flex flex-col justify-around w-72 relative print:w-48">
+                  <div key={turnoIndex} className="flex flex-col justify-around w-64 md:w-80 relative print:w-48">
                     <div className="absolute -top-4 w-full text-center border-b-2 border-gray-800 pb-2 print:border-gray-300">
                        <span className="bg-blue-900/50 text-blue-400 font-black uppercase tracking-widest px-4 py-1 rounded-lg text-xs print:bg-gray-200 print:text-black print:border print:border-black">Turno {turnoIndex + 1}</span>
                     </div>
                     {turno.map((match: any) => (
-                      <div key={match.id} className="relative w-full bg-gray-900 border border-gray-700 rounded-xl shadow-xl flex flex-col z-10 overflow-hidden mt-8 mb-8 print:bg-white print:border-black print:shadow-none">
+                      <div key={match.id} className="relative w-full bg-gray-900 border border-gray-700 rounded-2xl shadow-xl flex flex-col z-10 overflow-hidden mt-8 mb-8 print:bg-white print:border-black print:shadow-none">
                         <button 
                           onClick={() => { if(!match.vincitore && activeTorneo.stato !== 'completato' && !isSalaSuspended) richiedePin((sid) => impostaVincitore(turnoIndex, match.id, match.p1, sid), "Vittoria Giocatore 1") }}
                           disabled={!!match.vincitore || isSalaSuspended}
-                          className={`p-4 border-b border-gray-800 flex justify-between items-center transition-all print:border-black print:text-black print:bg-white ${match.vincitore?.id === match.p1.id ? 'bg-green-600 text-black font-black print:font-black' : match.vincitore ? 'bg-gray-800 text-gray-500' : 'bg-gray-900 hover:bg-blue-900 text-white font-bold'}`}
+                          className={`px-4 py-5 md:py-6 border-b border-gray-800 flex justify-between items-center transition-all print:border-black print:text-black print:bg-white active:scale-95 ${match.vincitore?.id === match.p1.id ? 'bg-green-600 text-black font-black print:font-black' : match.vincitore ? 'bg-gray-800 text-gray-500' : 'bg-gray-900 hover:bg-blue-900 text-white font-bold'}`}
                         >
-                          <span className="uppercase truncate w-full text-left text-sm">{match.p1.nome}</span>
-                          {match.vincitore?.id === match.p1.id && <span className="print:text-black">✓</span>}
+                          <span className="uppercase truncate w-full text-left text-base md:text-lg">{match.p1.nome}</span>
+                          {match.vincitore?.id === match.p1.id && <span className="text-xl ml-2 print:text-black">🏆</span>}
                         </button>
                         {match.p2 ? (
                           <button 
                             onClick={() => { if(!match.vincitore && activeTorneo.stato !== 'completato' && !isSalaSuspended) richiedePin((sid) => impostaVincitore(turnoIndex, match.id, match.p2, sid), "Vittoria Giocatore 2") }}
                             disabled={!!match.vincitore || isSalaSuspended}
-                            className={`p-4 flex justify-between items-center transition-all print:text-black print:bg-white ${match.vincitore?.id === match.p2.id ? 'bg-green-600 text-black font-black print:font-black' : match.vincitore ? 'bg-gray-800 text-gray-500' : 'bg-gray-900 hover:bg-blue-900 text-white font-bold'}`}
+                            className={`px-4 py-5 md:py-6 flex justify-between items-center transition-all print:text-black print:bg-white active:scale-95 ${match.vincitore?.id === match.p2.id ? 'bg-green-600 text-black font-black print:font-black' : match.vincitore ? 'bg-gray-800 text-gray-500' : 'bg-gray-900 hover:bg-blue-900 text-white font-bold'}`}
                           >
-                            <span className="uppercase truncate w-full text-left text-sm">{match.p2.nome}</span>
-                            {match.vincitore?.id === match.p2.id && <span className="print:text-black">✓</span>}
+                            <span className="uppercase truncate w-full text-left text-base md:text-lg">{match.p2.nome}</span>
+                            {match.vincitore?.id === match.p2.id && <span className="text-xl ml-2 print:text-black">🏆</span>}
                           </button>
                         ) : (
-                          <div className="p-4 text-gray-600 font-black text-center uppercase tracking-widest text-xs bg-gray-800/20 print:bg-white print:text-gray-400">
-                            BYE
+                          <div className="py-3 px-4 text-gray-600 font-black text-center uppercase tracking-widest text-xs bg-gray-950 print:bg-white print:text-gray-400">
+                            BYE (Passaggio Diretto)
                           </div>
                         )}
                       </div>
@@ -1924,16 +1105,11 @@ export default function DashboardSala() {
                 ))}
               </div>
             </div>
-            <div className="mt-8 flex gap-4 print:hidden">
+            <div className="mt-8 flex flex-col md:flex-row gap-4 print:hidden">
               {activeTorneo.stato === 'in_corso' && !isSalaSuspended && (
                 <button onClick={() => richiedePin((sid) => generaProssimoTurno(sid), "Genera Turno / Concludi")} className="flex-[3] py-6 bg-blue-600 text-white uppercase font-black rounded-3xl hover:bg-blue-500 transition-all shadow-[0_0_20px_rgba(37,99,235,0.5)] active:scale-95 text-xl">
-                  AVANZA AL TURNO SUCCESSIVO / CONCLUDI TORNEO
+                  AVANZA AL TURNO / CONCLUDI
                 </button>
-              )}
-              {isSalaSuspended && activeTorneo.stato === 'in_corso' && (
-                <div className="flex-[3] py-6 bg-red-950/50 border border-red-900 text-red-500 uppercase font-black rounded-3xl text-center text-xl tracking-widest">
-                  AVANZAMENTO BLOCCATO (SOLA LETTURA)
-                </div>
               )}
               <button onClick={() => { setIsBracketModalOpen(false); setActiveTorneo(null); }} className="flex-[1] py-6 bg-gray-800 text-gray-400 uppercase font-black rounded-3xl hover:bg-gray-700 transition-all text-xl">
                 CHIUDI TABELLONE
@@ -1942,7 +1118,6 @@ export default function DashboardSala() {
           </div>
         </div>
       )}
-
     </div>
   );
-}
+} 

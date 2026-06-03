@@ -1,48 +1,44 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-export async function POST(req: Request) {
-  try {
-    const { email, password } = await req.json();
+// Inizializziamo Supabase usando la CHIAVE MASTER (Service Role Key).
+// Questa chiave conferisce poteri assoluti al server, permettendo di creare utenti
+// scavalcando le regole RLS. Non viene MAI inviata al browser.
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY! 
+);
 
-    // Controllo di sicurezza: verifica che la chiave sia stata caricata
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Manca la variabile SUPABASE_SERVICE_ROLE_KEY nel file .env.local!");
+export async function POST(request: Request) {
+  try {
+    // Estrazione dei dati inviati dalla Torre di Controllo
+    const { email, password } = await request.json();
+
+    // Validazione geometrica: senza questi dati non si procede
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: 'Parametri incompleti. Email e password sono obbligatori.' }, 
+        { status: 400 }
+      );
     }
 
-    // Inizializza Supabase Admin in modalità "Server-Only"
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false // FONDAMENTALE LATO SERVER: previene errori di sessione
-        }
-      }
-    );
-
-    // Crea l'utente Auth su Supabase
+    // Creazione dell'utente tramite l'API di amministrazione di Supabase Auth
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email: email.trim(),
+      email: email,
       password: password,
-      email_confirm: true // Confermiamo l'email in automatico
+      email_confirm: true // Fondamentale: bypassa la mail di conferma standard di Supabase, poiché inviamo noi l'email di benvenuto personalizzata con Resend
     });
 
+    // Se Supabase rifiuta la creazione (es. email già esistente)
     if (error) {
-      // Se l'utente esiste già, non blocchiamo la creazione della sala!
-      // In questo modo puoi assegnare una nuova sala a un gestore esistente.
-      if (error.message.includes('already registered') || error.message.includes('already exists')) {
-         console.log("Utente già esistente. Procedo con l'associazione alla sala.");
-         return NextResponse.json({ success: true, message: "Utente già esistente" });
-      }
-      throw error;
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, user: data?.user });
+    // Creazione avvenuta con successo, restituiamo semaforo verde alla Torre di Controllo
+    return NextResponse.json({ success: true, user: data.user });
 
-  } catch (error: any) {
-    console.error("Errore API crea-gestore:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (err: any) {
+    // Gestione di eventuali errori critici del server
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
