@@ -647,4 +647,5 @@ export default function DashboardSala() {
     const dataOggi = new Date().toLocaleDateString('it-IT');
     const oraOggi = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     doc.setFontSize(22); doc.setTextColor(34, 197, 94); doc.text(nomeSala.toUpperCase(), 14, 20);
-    doc.setFontSize(14); doc.setTextColor(50, 5
+    doc.setTextColor(50, 5, 5);
+  }}
