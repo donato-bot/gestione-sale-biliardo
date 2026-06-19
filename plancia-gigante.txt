@@ -1,0 +1,16 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from '@supabase/supabase-js';
+import { useParams, useRouter } from "next/navigation";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export default function DashboardSala() {
+  // ... il resto del tuo codice completo ...
+  // Assicurati di incollare l'intero blocco che ho fornito nel messaggio precedente
+}
