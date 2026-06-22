@@ -3,10 +3,15 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(request: Request) {
     try {
+        // 0. SPOSTATO QUI DENTRO: Inizializzazione di Resend al riparo dal build di Vercel
+        const resendKey = process.env.RESEND_API_KEY || '';
+        if (!resendKey) {
+            return NextResponse.json({ error: 'Configurazione mail mancante' }, { status: 500 });
+        }
+        const resend = new Resend(resendKey);
+
         const body = await request.json();
         const nomeSala = body.nomeClub || body.nomeSala;
         const emailManager = body.emailManager;
@@ -58,7 +63,7 @@ export async function POST(request: Request) {
         // 3. Spedizione dell'Email Automatica tramite Resend
         const { error: emailError } = await resend.emails.send({
             from: 'Sistema Gestionale <onboarding@resend.dev>',
-            to: [emailPerSpedizione], // Usa l'email ripulita, es: donatorzz1946@gmail.com
+            to: [emailPerSpedizione], // Usa l'email ripulita
             subject: `Accesso attivato: ${nomeSala}`,
             html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
@@ -73,7 +78,7 @@ export async function POST(request: Request) {
           </div>
           <br/>
           <p>Puoi accedere alla tua dashboard privata da qui:</p>
-          <a href="http://localhost:3000/login" style="background-color: #059669; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Accedi al Pannello</a>
+          <a href="https://sale-biliardo.vercel.app/login" style="background-color: #059669; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Accedi al Pannello</a>
         </div>
       `,
         });
@@ -86,4 +91,5 @@ export async function POST(request: Request) {
         console.log("MOTIVO DEL BLOCCO:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    
 }
