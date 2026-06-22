@@ -14,7 +14,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Stati per il Varo (Onboarding Automatico)
   const [nomeSalaNuova, setNomeSalaNuova] = useState("");
   const [emailNuova, setEmailNuova] = useState("");
   const [passwordNuova, setPasswordNuova] = useState("");
@@ -24,14 +23,18 @@ export default function AdminDashboard() {
   useEffect(() => {
     async function checkAdmin() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session || session.user.email !== 'donatorzz1946@gmail.com') {
-        router.push('/');
+      
+      const emailCorrente = session?.user?.email?.toLowerCase().trim();
+      
+      // IL BLOCCO DI SICUREZZA: Solo il Super Admin passa.
+      if (!session || emailCorrente !== 'donatorzz1946@gmail.com') {
+        router.push('/login');
         return;
       }
       caricaSale();
     }
     checkAdmin();
-  }, []);
+  }, [router]);
 
   async function caricaSale() {
     const { data } = await supabase.from("sale").select("*");
@@ -67,7 +70,7 @@ export default function AdminDashboard() {
         setNomeSalaNuova("");
         setEmailNuova("");
         setPasswordNuova("");
-        caricaSale(); // Aggiorna automaticamente la lista delle sale sotto
+        caricaSale(); 
       } else {
         setMessaggioVaro(`❌ Errore durante il varo: ${data.error}`);
       }
@@ -78,22 +81,25 @@ export default function AdminDashboard() {
     }
   };
 
-  // Logica di filtraggio live
   const filteredSale = sale.filter((sala) => 
     sala.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (loading) return <div className="min-h-screen bg-black text-white p-8">Caricamento Torre di Controllo...</div>;
+  if (loading) return <div className="min-h-screen bg-black text-emerald-500 p-8 flex items-center justify-center font-black animate-pulse">Caricamento Torre di Controllo...</div>;
 
   return (
     <div className="min-h-screen bg-black text-white p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
             <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-violet-500">TORRE DI CONTROLLO</h1>
-            <button onClick={() => router.push('/dashboard')} className="bg-gray-800 px-6 py-2 rounded-xl font-bold hover:bg-gray-700 transition">TORNA DASHBOARD</button>
+            <button 
+              onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }} 
+              className="bg-red-950 border border-red-700 text-red-500 px-6 py-2 rounded-xl font-bold hover:bg-red-900 transition-all uppercase tracking-widest"
+            >
+              ESCI DAL SISTEMA
+            </button>
         </div>
 
-        {/* MODULO ONBOARDING (VARO NUOVO CLUB) */}
         <div className="bg-gray-900 p-8 rounded-3xl border border-gray-800 mb-8 shadow-xl">
           <h2 className="text-2xl font-black mb-6 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 uppercase italic">Varo Nuovo Club</h2>
           <form onSubmit={avviaOnboarding} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -120,7 +126,6 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* Barra di ricerca */}
         <div className="mb-8">
             <input 
                 type="text" 

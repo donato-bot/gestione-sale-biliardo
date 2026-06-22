@@ -5,156 +5,172 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
-export default function Magazzino({ salaId }: { salaId: string }) {
-  const [articoli, setArticoli] = useState<any[]>([]);
-  const [nomeArticolo, setNomeArticolo] = useState('');
-  const [categoria, setCategoria] = useState('Bar');
-  const [quantita, setQuantita] = useState('');
-  const [prezzoVendita, setPrezzoVendita] = useState('');
+export default function Soci({ salaId, setActiveView }: { salaId: string, setActiveView?: (view: string) => void }) {
+  const [soci, setSoci] = useState<any[]>([]);
+  const [nome, setNome] = useState('');
+  const [cognome, setCognome] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [email, setEmail] = useState('');
+  const [scadenzaCertificato, setScadenzaCertificato] = useState('');
   const [loading, setLoading] = useState(false);
   const [ricerca, setRicerca] = useState('');
   const [successo, setSuccesso] = useState<string | null>(null);
+  const [linkCopiato, setLinkCopiato] = useState(false);
 
-  // STATI PER LA MODIFICA IN LINEA
   const [idInModifica, setIdInModifica] = useState<string | null>(null);
   const [modNome, setModNome] = useState('');
-  const [modCategoria, setModCategoria] = useState('Bar');
-  const [modQuantita, setModQuantita] = useState('');
-  const [modPrezzo, setModPrezzo] = useState('');
+  const [modCognome, setModCognome] = useState('');
+  const [modTelefono, setModTelefono] = useState('');
+  const [modEmail, setModEmail] = useState('');
+  const [modScadenza, setModScadenza] = useState('');
 
-  // STATO PER FILTRO SOTTO SCORTA
-  const [filtroSottoScorta, setFiltroSottoScorta] = useState(false);
+  const [mostraSoloScaduti, setMostraSoloScaduti] = useState(false);
 
   useEffect(() => {
-    caricaArticoli();
+    caricaSoci();
   }, [salaId]);
 
-  async function caricaArticoli() {
+  async function caricaSoci() {
     const { data, error } = await supabase
-      .from('magazzino')
+      .from('soci')
       .select('*')
       .eq('sala_id', salaId)
-      .order('nome_articolo', { ascending: true });
+      .order('cognome', { ascending: true });
       
     if (error) {
       alert("ERRORE LETTURA DATABASE: " + error.message);
     } else if (data) {
-      setArticoli(data);
+      setSoci(data);
     }
   }
 
   async function gestisciSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!nomeArticolo || !quantita || !prezzoVendita) return;
+    if (!nome || !cognome) return;
     
     setLoading(true);
     
-    const { error } = await supabase.from('magazzino').insert([{
+    const { error } = await supabase.from('soci').insert([{
       sala_id: salaId,
-      nome_articolo: nomeArticolo,
-      categoria,
-      quantita: parseInt(quantita),
-      prezzo_vendita: parseFloat(prezzoVendita.replace(',', '.'))
+      nome,
+      cognome,
+      telefono,
+      email,
+      scadenza_certificato: scadenzaCertificato || null
     }]);
 
     if (error) {
       alert("ERRORE DI SALVATAGGIO: " + error.message);
     } else {
-      setSuccesso(`Articolo "${nomeArticolo}" registrato a magazzino.`);
+      setSuccesso(`SOCIO "${nome} ${cognome}" REGISTRATO!`);
       setTimeout(() => setSuccesso(null), 3000);
       
-      setNomeArticolo('');
-      setQuantita('');
-      setPrezzoVendita('');
-      setCategoria('Bar');
-      caricaArticoli();
+      setNome(''); setCognome(''); setTelefono(''); setEmail(''); setScadenzaCertificato('');
+      caricaSoci();
     }
     setLoading(false);
   }
 
-  function avviaModifica(articolo: any) {
-    setIdInModifica(articolo.id);
-    setModNome(articolo.nome_articolo);
-    setModCategoria(articolo.categoria);
-    setModQuantita(articolo.quantita.toString());
-    setModPrezzo(articolo.prezzo_vendita.toString());
+  function avviaModifica(socio: any) {
+    setIdInModifica(socio.id);
+    setModNome(socio.nome);
+    setModCognome(socio.cognome);
+    setModTelefono(socio.telefono || '');
+    setModEmail(socio.email || '');
+    setModScadenza(socio.scadenza_certificato || '');
   }
 
   async function salvaModifica(id: string) {
-    if (!modNome || !modQuantita || !modPrezzo) return;
+    if (!modNome || !modCognome) return;
 
     const { error } = await supabase
-      .from('magazzino')
+      .from('soci')
       .update({
-        nome_articolo: modNome,
-        categoria: modCategoria,
-        quantita: parseInt(modQuantita),
-        prezzo_vendita: parseFloat(modPrezzo.replace(',', '.'))
+        nome: modNome,
+        cognome: modCognome,
+        telefono: modTelefono,
+        email: modEmail,
+        scadenza_certificato: modScadenza || null
       })
       .eq('id', id);
 
     if (error) {
       alert("ERRORE DURANTE LA MODIFICA: " + error.message);
     } else {
-      setSuccesso("Articolo aggiornato con successo.");
+      setSuccesso("ANAGRAFICA AGGIORNATA!");
       setTimeout(() => setSuccesso(null), 3000);
       setIdInModifica(null);
-      caricaArticoli();
+      caricaSoci();
     }
   }
 
-  async function eliminaArticolo(id: string) {
-    if (confirm("ATTENZIONE: Sei sicuro di voler eliminare definitivamente questo articolo dalla distinta base?")) {
-      await supabase.from('magazzino').delete().eq('id', id);
-      caricaArticoli();
+  async function eliminaSocio(id: string) {
+    if (confirm("ATTENZIONE: Eliminare definitivamente questo socio dal registro?")) {
+      await supabase.from('soci').delete().eq('id', id);
+      caricaSoci();
     }
   }
 
-  const articoliFiltrati = articoli.filter(a => {
-    const corrispondeRicerca = a.nome_articolo.toLowerCase().includes(ricerca.toLowerCase()) ||
-                              a.categoria.toLowerCase().includes(ricerca.toLowerCase());
+  const certificatoScaduto = (dataScadenza: string) => {
+    if (!dataScadenza) return false;
+    return new Date(dataScadenza) < new Date();
+  };
+
+  const sociFiltrati = soci.filter(s => {
+    const corrispondeRicerca = (s.nome + " " + s.cognome).toLowerCase().includes(ricerca.toLowerCase()) || 
+                               (s.telefono && s.telefono.includes(ricerca));
+    const corrispondeFiltroScadenza = mostraSoloScaduti ? certificatoScaduto(s.scadenza_certificato) : true;
     
-    const corrispondeScorta = filtroSottoScorta ? a.quantita <= 5 : true;
-
-    return corrispondeRicerca && corrispondeScorta;
+    return corrispondeRicerca && corrispondeFiltroScadenza;
   });
 
-  const totaleArticoliSottoScorta = articoli.filter(a => a.quantita <= 5).length;
+  const totaleScaduti = soci.filter(s => certificatoScaduto(s.scadenza_certificato)).length;
+
+  function copiaLinkPubblico() {
+    if (typeof window !== "undefined") {
+      const urlPubblico = `${window.location.origin}/prenota/${salaId}`;
+      navigator.clipboard.writeText(urlPubblico);
+      setLinkCopiato(true);
+      setTimeout(() => setLinkCopiato(false), 3000);
+    }
+  }
 
   const stampaPDF = () => {
     const finestraStampa = window.open('', '_blank');
     if (!finestraStampa) return;
     const dataCorrente = new Date().toLocaleString('it-IT');
     
-    let righeTabella = articoliFiltrati.map(a => `
+    let righeTabella = sociFiltrati.map(s => {
+      const isScaduto = certificatoScaduto(s.scadenza_certificato);
+      return `
       <tr>
-        <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: 800;">${a.nome_articolo}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee; color: #0891b2; font-weight: bold; text-transform: uppercase; font-size: 10px;">${a.categoria}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: ${a.quantita <= 5 ? '#b91c1c' : '#15803d'};">
-          ${a.quantita} pz ${a.quantita <= 5 ? '⚠️' : ''}
+        <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; text-transform: uppercase;">${s.cognome} ${s.nome}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">${s.telefono || '-'}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; color: #555;">${s.email || '-'}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; color: ${isScaduto ? '#b91c1c' : '#15803d'};">
+          ${s.scadenza_certificato ? new Date(s.scadenza_certificato).toLocaleDateString('it-IT') : 'N/D'}
         </td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">€ ${Number(a.prezzo_vendita).toFixed(2)}</td>
       </tr>
-    `).join('');
+    `}).join('');
 
     finestraStampa.document.write(`
       <html>
       <head>
-        <title>Inventario Magazzino - Torre di Controllo</title>
+        <title>Registro Soci</title>
         <style>
-          body { font-family: sans-serif; padding: 40px; color: #333; }
-          .header { border-bottom: 4px solid #0891b2; padding-bottom: 15px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;}
+          body { font-family: sans-serif; padding: 50px; color: #333; }
+          .header { border-bottom: 4px solid #0891b2; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; }
           table { width: 100%; border-collapse: collapse; }
-          th { text-align: left; background: #0891b2; color: white; padding: 10px; font-size: 10px; text-transform: uppercase; }
+          th { text-align: left; background: #0891b2; color: white; padding: 12px; font-size: 10px; text-transform: uppercase; }
         </style>
       </head>
       <body>
         <div class="header">
-          <div><h1>Inventario Magazzino ${filtroSottoScorta ? '[SOLO SOTTO SCORTA]' : ''}</h1></div>
-          <div><p>Data: ${dataCorrente}</p></div>
+          <div><h1 style="margin:0; font-size: 28px; color: #083344;">REGISTRO ANAGRAFICO SOCI</h1><p style="margin:0; color:#666;">Elenco Ufficiale</p></div>
+          <div style="text-align:right;"><p style="margin:0; font-weight:bold;">Sistema Gestionale</p><p style="margin:0; font-size:12px;">Generato il: ${dataCorrente}</p></div>
         </div>
         <table>
-          <thead><tr><th>Nome Articolo</th><th>Reparto</th><th style="text-align:center;">Giacenza</th><th style="text-align:right;">Prezzo Unit.</th></tr></thead>
+          <thead><tr><th>Nominativo</th><th>Telefono</th><th>Email</th><th>Scadenza Cert.</th></tr></thead>
           <tbody>${righeTabella}</tbody>
         </table>
         <script>window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 500); };</script>
@@ -165,229 +181,207 @@ export default function Magazzino({ salaId }: { salaId: string }) {
   };
 
   return (
-    <div className="p-8 text-white font-sans w-full max-w-[1400px] mx-auto min-h-screen">
+    <div className="min-h-screen bg-emerald-50 p-4 sm:p-8 md:p-12 lg:p-16 flex flex-col items-center transition-colors duration-500 font-sans">
       
-      {/* TITOLO MODULO PRINCIPALE */}
-      <div className="mb-12 text-center">
-        <h2 className="text-6xl font-black text-cyan-500 uppercase tracking-tighter italic drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">
-          GIACENZE MAGAZZINO
-        </h2>
-        <div className="h-1 w-48 bg-cyan-500 mx-auto mt-4 rounded-full"></div>
-      </div>
-
-      {/* FEEDBACK SUCCESSO */}
       {successo && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 bg-green-600 px-10 py-4 rounded-2xl border border-green-400 shadow-2xl z-[100]">
-           <span className="font-black uppercase tracking-widest text-sm">✅ {successo}</span>
+        <div className="fixed top-10 left-1/2 transform -translate-x-1/2 bg-white border-4 border-cyan-600 text-cyan-700 px-10 py-5 rounded-2xl shadow-2xl z-[100] animate-bounce font-black uppercase tracking-widest text-xl">
+          ✓ {successo}
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+      {/* POPUP MODIFICA SOCIO */}
+      {idInModifica && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+          <div className="bg-black border-4 border-white p-8 rounded-3xl w-full max-w-lg shadow-[0_0_50px_rgba(255,255,255,0.2)]">
+            <h2 className="text-3xl font-black mb-8 uppercase text-center text-white border-b-2 border-gray-600 pb-4">Modifica Anagrafica</h2>
+            <div className="space-y-6 mb-10">
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Nome</label>
+                  <input type="text" value={modNome} onChange={e => setModNome(e.target.value)} className="w-full bg-gray-100 border-2 border-gray-400 p-4 rounded-xl text-black font-black text-lg outline-none focus:border-cyan-500" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Cognome</label>
+                  <input type="text" value={modCognome} onChange={e => setModCognome(e.target.value)} className="w-full bg-gray-100 border-2 border-gray-400 p-4 rounded-xl text-black font-black text-lg outline-none focus:border-cyan-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Telefono</label>
+                <input type="text" value={modTelefono} onChange={e => setModTelefono(e.target.value)} className="w-full bg-gray-100 border-2 border-gray-400 p-4 rounded-xl text-black font-black text-lg outline-none focus:border-cyan-500" />
+              </div>
+              <div>
+                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Email</label>
+                <input type="email" value={modEmail} onChange={e => setModEmail(e.target.value)} className="w-full bg-gray-100 border-2 border-gray-400 p-4 rounded-xl text-black font-black text-lg outline-none focus:border-cyan-500" />
+              </div>
+              <div>
+                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Scadenza Certificato</label>
+                <input type="date" value={modScadenza} onChange={e => setModScadenza(e.target.value)} className="w-full bg-gray-100 border-2 border-gray-400 p-4 rounded-xl text-black font-black text-lg outline-none focus:border-cyan-500" />
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => setIdInModifica(null)} className="w-1/3 bg-gray-800 hover:bg-gray-700 text-white py-4 rounded-xl font-black uppercase border-2 border-gray-600">Annulla</button>
+              <button onClick={() => salvaModifica(idInModifica)} className="w-2/3 bg-cyan-600 hover:bg-cyan-500 text-white py-4 rounded-xl font-black uppercase shadow-lg border-2 border-cyan-400">Salva Modifiche</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SCHERMO NERO PRINCIPALE */}
+      <div className="w-full max-w-[1600px] bg-[#050505] rounded-[3rem] p-8 sm:p-12 shadow-[0_20px_60px_rgba(0,0,0,0.3)] border-8 border-emerald-100/60 relative overflow-hidden">
         
-        {/* ========================================== */}
-        {/* COLONNA SINISTRA: INSERIMENTO ARTICOLI     */}
-        {/* ========================================== */}
-        <div className="lg:col-span-4 flex flex-col">
+        {/* HEADER */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-gray-800 pb-8 mb-10 gap-4">
+          <div>
+            <p className="text-[10px] text-cyan-500 font-black uppercase tracking-widest mb-1">Anagrafica e Tesseramento</p>
+            <h2 className="text-4xl font-black text-white uppercase italic tracking-tight">REGISTRO SOCI</h2>
+          </div>
           
-          {/* TITOLAZIONE SEZIONE SINISTRA */}
-          <h3 className="text-2xl font-black text-cyan-400 uppercase tracking-widest mb-6 border-b-2 border-gray-800 pb-3">
-            INSERIMENTO ARTICOLI
-          </h3>
-
-          <div className="space-y-8">
-            <form onSubmit={gestisciSubmit} className="bg-[#11131a] p-8 rounded-[40px] border border-gray-800 shadow-2xl">
-              
-              <div className="mb-6">
-                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Nome Articolo</label>
-                <input 
-                  type="text" value={nomeArticolo} onChange={e => setNomeArticolo(e.target.value)}
-                  placeholder="Es. Stecca Fibra, Coca Cola..."
-                  className="w-full bg-black p-5 rounded-2xl border border-gray-800 font-bold text-sm text-white focus:outline-none focus:border-cyan-500" 
-                  required 
-                />
-              </div>
-
-              <div className="mb-6">
-                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Reparto / Categoria</label>
-                <select 
-                  value={categoria} onChange={e => setCategoria(e.target.value)}
-                  className="w-full bg-black p-5 rounded-2xl border border-gray-800 font-bold text-sm text-white focus:outline-none focus:border-cyan-500 appearance-none"
-                >
-                  <option value="Bar">☕ Reparto Bar / Snack</option>
-                  <option value="Tecnico">🎱 Materiale Tecnico Sala</option>
-                  <option value="Altro">📦 Altro / Vario</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-10">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Scorta Iniziale</label>
-                  <input 
-                    type="number" value={quantita} onChange={e => setQuantita(e.target.value)}
-                    placeholder="0" min="0"
-                    className="w-full bg-black p-5 rounded-2xl border border-gray-800 font-black text-2xl text-center text-cyan-400 focus:outline-none focus:border-cyan-500" 
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Prezzo (€)</label>
-                  <input 
-                    type="number" step="0.01" value={prezzoVendita} onChange={e => setPrezzoVendita(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full bg-black p-5 rounded-2xl border border-gray-800 font-black text-2xl text-center text-green-500 focus:outline-none focus:border-cyan-500" 
-                    required 
-                  />
-                </div>
-              </div>
-
-              <button 
-                type="submit" disabled={loading}
-                className="w-full bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-800 py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95 shadow-lg"
-              >
-                {loading ? 'Elaborazione...' : 'Inserisci in Distinta'}
-              </button>
-            </form>
+          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+            <button 
+              onClick={() => setActiveView && setActiveView('hub')}
+              className="bg-cyan-600 text-white hover:bg-cyan-500 px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all border-2 border-cyan-400 w-full sm:w-auto shadow-[0_0_20px_rgba(6,182,212,0.4)] active:scale-95 text-center"
+            >
+              ← Torre di Controllo
+            </button>
+            <button 
+              onClick={stampaPDF} 
+              className="bg-zinc-800 hover:bg-zinc-700 text-white px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all border-2 border-zinc-600 w-full sm:w-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] active:scale-95 text-center"
+            >
+              📄 Stampa Registro
+            </button>
           </div>
         </div>
 
-        {/* ========================================== */}
-        {/* COLONNA DESTRA: ELENCO ARTICOLI            */}
-        {/* ========================================== */}
-        <div className="lg:col-span-8 flex flex-col">
-          
-          {/* TITOLAZIONE SEZIONE DESTRA */}
-          <h3 className="text-2xl font-black text-cyan-400 uppercase tracking-widest mb-6 border-b-2 border-gray-800 pb-3">
-            ELENCO ARTICOLI
-          </h3>
+        {/* ZONA LINK APP SOCI */}
+        <div className="mb-10 p-8 rounded-[2rem] bg-black border-[3px] border-cyan-900 shadow-[0_0_30px_rgba(6,182,212,0.2)] flex flex-col md:flex-row justify-between items-center gap-8">
+          <div>
+            <h4 className="font-black text-xl uppercase tracking-wider text-cyan-400 mb-2">Terminale Interattivo App Soci</h4>
+            <p className="text-sm text-gray-400 font-bold max-w-2xl">Condividi questo link con i tesserati. Tramite l'App Web potranno prenotare i biliardi in autonomia, iscriversi ai tornei in programma e consultare gli avvisi in bacheca direttamente dal loro smartphone.</p>
+          </div>
+          <button 
+            onClick={copiaLinkPubblico} 
+            className="w-full md:w-auto bg-white hover:bg-gray-200 text-black px-10 py-5 rounded-xl font-black text-sm uppercase tracking-widest border-2 border-gray-400 transition-all shadow-lg active:scale-95"
+          >
+            {linkCopiato ? '✓ LINK APP COPIATO!' : '📋 COPIA LINK APP SOCI'}
+          </button>
+        </div>
 
-          <div className="flex flex-col gap-8">
-            {/* BARRA CONTROLLO E FILTRI */}
-            <div className="bg-[#11131a] p-8 rounded-[40px] border border-gray-800 flex flex-col md:flex-row justify-between items-center gap-8 shadow-2xl">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          
+          {/* COLONNA SINISTRA: ELENCO */}
+          <div className="lg:col-span-8 flex flex-col gap-8">
+            
+            {/* BARRA DI RICERCA E SCADUTI */}
+            <div className="p-8 rounded-[2rem] bg-black border-[3px] border-gray-400 shadow-[0_0_30px_rgba(0,0,0,0.6)] flex flex-col md:flex-row justify-between items-center gap-8">
               <div className="w-full md:w-1/2 relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
+                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl">🔍</span>
                 <input 
-                  type="text" placeholder="Ricerca per nome o reparto..." value={ricerca} onChange={(e) => setRicerca(e.target.value)}
-                  className="w-full bg-black pl-12 pr-5 py-4 rounded-2xl border border-gray-800 text-white font-bold text-sm focus:outline-none focus:border-cyan-500"
+                  type="text" placeholder="Ricerca per nome o telefono..." value={ricerca} onChange={(e) => setRicerca(e.target.value)}
+                  className="w-full bg-gray-100 border-2 border-gray-400 p-5 pl-14 rounded-xl text-black font-black text-xl outline-none focus:border-cyan-500 placeholder-gray-500"
                 />
               </div>
-              
-              <div className="flex gap-6 items-center">
-                <div className="text-center">
-                  <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Referenze</p>
-                  <p className="text-2xl font-black text-cyan-500 tabular-nums">{articoliFiltrati.length}</p>
+              <div className="flex gap-4 items-center w-full md:w-auto">
+                <div className="text-center bg-gray-900 px-6 py-3 rounded-xl border-2 border-gray-700">
+                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Totale Iscritti</p>
+                  <p className="text-3xl font-black text-white tabular-nums">{sociFiltrati.length}</p>
                 </div>
-
                 <button 
-                  type="button"
-                  onClick={() => setFiltroSottoScorta(!filtroSottoScorta)}
-                  className={`text-center border px-6 py-2 rounded-2xl transition-all active:scale-95 ${filtroSottoScorta ? 'bg-red-950/40 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'border-gray-800 hover:border-red-900'}`}
+                  onClick={() => setMostraSoloScaduti(!mostraSoloScaduti)} 
+                  className={`text-center px-6 py-3 rounded-xl border-2 transition-all ${mostraSoloScaduti ? 'bg-red-600 border-red-400 shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-gray-900 border-gray-700 hover:border-red-500'}`}
                 >
-                  <p className="text-[10px] text-red-500/80 font-black uppercase tracking-widest">Sotto Scorta</p>
-                  <p className={`text-2xl font-black tabular-nums ${totaleArticoliSottoScorta > 0 ? 'text-red-500' : 'text-gray-600'}`}>
-                    {totaleArticoliSottoScorta} {filtroSottoScorta ? '⏳' : ''}
-                  </p>
-                </button>
-
-                <button onClick={stampaPDF} className="bg-cyan-800/40 hover:bg-cyan-700 border border-cyan-600 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white transition-all active:scale-95 flex items-center gap-3">
-                  📄 Stampa
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${mostraSoloScaduti ? 'text-white' : 'text-red-500'}`}>Cert. Scaduti</p>
+                  <p className={`text-3xl font-black tabular-nums ${mostraSoloScaduti ? 'text-white' : 'text-red-500'}`}>{totaleScaduti}</p>
                 </button>
               </div>
             </div>
 
-            {/* REGISTRO TABELLARE */}
-            <div className="bg-[#11131a] p-6 rounded-[40px] border border-gray-800 flex-1 shadow-2xl overflow-hidden flex flex-col">
-              <div className="overflow-x-auto h-full max-h-[600px] custom-scrollbar">
+            {/* TABELLA SOCI */}
+            <div className="p-8 rounded-[2rem] bg-black border-[3px] border-gray-400 shadow-[0_0_30px_rgba(0,0,0,0.6)] flex-1 overflow-hidden flex flex-col min-h-[500px]">
+              <div className="overflow-x-auto h-full max-h-[600px] pr-2 custom-scrollbar">
                 <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-[#11131a] z-10">
-                    <tr className="border-b border-gray-800">
-                      <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-cyan-500">Articolo</th>
-                      <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-cyan-500">Reparto</th>
-                      <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-cyan-500 text-center">Giacenza</th>
-                      <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-cyan-500 text-right">Listino</th>
+                  <thead className="sticky top-0 bg-black z-10">
+                    <tr className="border-b-2 border-gray-600">
+                      <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-cyan-500">Nominativo</th>
+                      <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-cyan-500">Recapiti</th>
+                      <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-cyan-500 text-center">Scadenza Medica</th>
                       <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-cyan-500 text-center">Azioni</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800/50">
-                    {articoliFiltrati.length === 0 ? (
+                  <tbody className="divide-y divide-gray-800">
+                    {sociFiltrati.map((s) => {
+                      const isScaduto = certificatoScaduto(s.scadenza_certificato);
+                      return (
+                        <tr key={s.id} className="hover:bg-gray-900 transition-colors group">
+                          <td className="py-6 px-4 font-black text-white text-lg uppercase tracking-wide">{s.cognome} {s.nome}</td>
+                          <td className="py-6 px-4">
+                            <span className="block font-bold text-gray-300 mb-1">{s.telefono || '—'}</span>
+                            <span className="block text-[10px] font-mono text-gray-500">{s.email || '—'}</span>
+                          </td>
+                          <td className="py-6 px-4 text-center">
+                            {s.scadenza_certificato ? (
+                              <span className={`inline-block px-3 py-1.5 rounded-lg text-xs font-black tracking-widest border-2 ${isScaduto ? 'bg-red-950 text-red-500 border-red-800' : 'bg-green-950 text-green-500 border-green-800'}`}>
+                                {new Date(s.scadenza_certificato).toLocaleDateString('it-IT')}
+                              </span>
+                            ) : (
+                              <span className="text-gray-600 font-bold italic text-xs uppercase">Nessun dato</span>
+                            )}
+                          </td>
+                          <td className="py-6 px-4 text-center space-x-4">
+                            <button onClick={() => avviaModifica(s)} className="text-2xl opacity-50 hover:opacity-100 transition-opacity" title="Modifica">✏️</button>
+                            <button onClick={() => eliminaSocio(s.id)} className="text-2xl opacity-50 hover:opacity-100 transition-opacity" title="Elimina">🗑️</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {sociFiltrati.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-20 text-center text-gray-700 opacity-50">
-                          <span className="text-6xl block mb-4">📦</span>
-                          <p className="font-black text-lg uppercase tracking-widest">Nessuna Referenza Trovata</p>
+                        <td colSpan={4} className="py-24 text-center text-gray-500 opacity-50">
+                          <span className="text-6xl block mb-4">📇</span>
+                          <p className="font-black text-xl uppercase tracking-widest">Nessun socio trovato</p>
                         </td>
                       </tr>
-                    ) : (
-                      articoliFiltrati.map((a) => {
-                        const sottoScorta = a.quantita <= 5;
-                        
-                        if (idInModifica === a.id) {
-                          return (
-                            <tr key={a.id} className="bg-cyan-950/20 border-b border-cyan-800/50">
-                              <td className="py-3 px-2">
-                                <input type="text" value={modNome} onChange={e => setModNome(e.target.value)} className="bg-black border border-gray-700 p-3 rounded-xl text-sm w-full text-white font-bold outline-none focus:border-cyan-500" />
-                              </td>
-                              <td className="py-3 px-2">
-                                <select value={modCategoria} onChange={e => setModCategoria(e.target.value)} className="bg-black border border-gray-700 p-3 rounded-xl text-sm text-white font-bold outline-none focus:border-cyan-500">
-                                  <option value="Bar">Bar</option>
-                                  <option value="Tecnico">Tecnico</option>
-                                  <option value="Altro">Altro</option>
-                                </select>
-                              </td>
-                              <td className="py-3 px-2 text-center">
-                                <input type="number" value={modQuantita} onChange={e => setModQuantita(e.target.value)} className="bg-black border border-gray-700 p-3 rounded-xl text-sm w-20 text-center text-white font-black outline-none focus:border-cyan-500" />
-                              </td>
-                              <td className="py-3 px-2 text-right">
-                                <input type="text" value={modPrezzo} onChange={e => setModPrezzo(e.target.value)} className="bg-black border border-gray-700 p-3 rounded-xl text-sm w-24 text-right text-green-400 font-black outline-none focus:border-cyan-500" />
-                              </td>
-                              <td className="py-3 px-2 text-center space-x-2 whitespace-nowrap">
-                                <button onClick={() => salvaModifica(a.id)} className="bg-green-700 hover:bg-green-600 px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest">Salva</button>
-                                <button onClick={() => setIdInModifica(null)} className="bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest">Annulla</button>
-                              </td>
-                            </tr>
-                          );
-                        }
-
-                        return (
-                          <tr key={a.id} className={`hover:bg-gray-900/30 transition-colors group ${sottoScorta ? 'bg-red-950/10' : ''}`}>
-                            <td className="py-4 px-4 font-bold text-white">{a.nome_articolo}</td>
-                            <td className="py-4 px-4">
-                              <span className={`inline-block px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${a.categoria === 'Bar' ? 'bg-amber-950/40 text-amber-500' : a.categoria === 'Tecnico' ? 'bg-cyan-950/40 text-cyan-500' : 'bg-gray-800 text-gray-400'}`}>
-                                {a.categoria}
-                              </span>
-                            </td>
-                            <td className="py-4 px-4 text-center">
-                              <span className={`text-xl font-black tabular-nums tracking-tighter ${sottoScorta ? 'text-red-500 font-extrabold' : 'text-gray-300'}`}>
-                                {a.quantita} <span className="text-xs text-gray-600 font-normal">pz</span>
-                              </span>
-                            </td>
-                            <td className="py-4 px-4 text-right">
-                              <span className="text-lg font-black text-green-500 tabular-nums tracking-tighter">
-                                € {Number(a.prezzo_vendita).toFixed(2)}
-                              </span>
-                            </td>
-                            <td className="py-4 px-4 text-center space-x-3">
-                              <button 
-                                onClick={() => avviaModifica(a)} 
-                                className="w-8 h-8 inline-flex items-center justify-center rounded-xl bg-cyan-950/20 text-cyan-500/40 hover:bg-cyan-900 hover:text-white transition-all opacity-0 group-hover:opacity-100"
-                                title="Modifica Articolo"
-                              >
-                                ✏️
-                              </button>
-                              <button 
-                                onClick={() => eliminaArticolo(a.id)} 
-                                className="w-8 h-8 inline-flex items-center justify-center rounded-xl bg-red-950/20 text-red-500/40 hover:bg-red-900 hover:text-white transition-all opacity-0 group-hover:opacity-100"
-                                title="Elimina Articolo"
-                              >
-                                ✕
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })
                     )}
                   </tbody>
                 </table>
               </div>
             </div>
+
+          </div>
+
+          {/* COLONNA DESTRA: INSERIMENTO HIGH-CONTRAST */}
+          <div className="lg:col-span-4 flex flex-col">
+            <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-6 border-b-2 border-gray-800 pb-3">Nuova Iscrizione</h3>
+            
+            <form onSubmit={gestisciSubmit} className="p-8 rounded-[2rem] bg-black border-[3px] border-gray-400 shadow-[0_0_30px_rgba(0,0,0,0.6)]">
+              <div className="mb-6">
+                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Nome</label>
+                <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Es. Mario" className="w-full bg-gray-100 border-2 border-gray-400 p-5 rounded-xl text-black font-black text-lg outline-none focus:border-cyan-500 placeholder-gray-400" required />
+              </div>
+
+              <div className="mb-6">
+                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Cognome</label>
+                <input type="text" value={cognome} onChange={e => setCognome(e.target.value)} placeholder="Es. Rossi" className="w-full bg-gray-100 border-2 border-gray-400 p-5 rounded-xl text-black font-black text-lg outline-none focus:border-cyan-500 placeholder-gray-400" required />
+              </div>
+
+              <div className="mb-6">
+                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Telefono</label>
+                <input type="text" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="Cellulare..." className="w-full bg-gray-100 border-2 border-gray-400 p-5 rounded-xl text-black font-bold text-lg outline-none focus:border-cyan-500 placeholder-gray-400" />
+              </div>
+
+              <div className="mb-6">
+                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Indirizzo Email</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="email@esempio.it" className="w-full bg-gray-100 border-2 border-gray-400 p-5 rounded-xl text-black font-bold text-lg outline-none focus:border-cyan-500 placeholder-gray-400" />
+              </div>
+
+              <div className="mb-10">
+                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Scadenza Cert. Medico</label>
+                <input type="date" value={scadenzaCertificato} onChange={e => setScadenzaCertificato(e.target.value)} className="w-full bg-gray-100 border-2 border-gray-400 p-5 rounded-xl text-black font-black text-lg outline-none focus:border-cyan-500" />
+              </div>
+
+              <button disabled={loading} type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-6 rounded-2xl font-black text-xl uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)] border-2 border-cyan-400 disabled:opacity-50">
+                {loading ? 'Attendere...' : 'Registra Socio'}
+              </button>
+            </form>
           </div>
 
         </div>

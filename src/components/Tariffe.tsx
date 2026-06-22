@@ -179,58 +179,7 @@ export default function Tariffe({ salaId }: { salaId: string }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         
         {/* ========================================== */}
-        {/* COLONNA SINISTRA: NUOVA TARIFFA            */}
-        {/* ========================================== */}
-        <div className="lg:col-span-4 flex flex-col">
-          
-          <h3 className="text-2xl font-black text-amber-400 uppercase tracking-widest mb-6 border-b-2 border-gray-800 pb-3">
-            NUOVA VOCE LISTINO
-          </h3>
-
-          <div className="space-y-8">
-            <form onSubmit={gestisciSubmit} className="bg-[#11131a] p-8 rounded-[40px] border border-gray-800 shadow-2xl">
-              
-              <div className="mb-6">
-                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Nome Tariffa / Specialità</label>
-                <input 
-                  type="text" value={nomeTariffa} onChange={e => setNomeTariffa(e.target.value)}
-                  placeholder="Es. Internazionale, Goriziana..."
-                  className="w-full bg-black p-5 rounded-2xl border border-gray-800 font-bold text-sm text-white focus:outline-none focus:border-amber-500" 
-                  required 
-                />
-              </div>
-
-              <div className="mb-6">
-                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Costo Orario (€/Ora)</label>
-                <input 
-                  type="number" step="0.01" value={tariffaOraria} onChange={e => setTariffaOraria(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full bg-black p-5 rounded-2xl border border-gray-800 font-black text-3xl text-center text-amber-400 focus:outline-none focus:border-amber-500" 
-                  required 
-                />
-              </div>
-
-              <div className="mb-10">
-                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Note e Condizioni</label>
-                <textarea 
-                  value={note} onChange={e => setNote(e.target.value)}
-                  placeholder="Es. Tariffa feriale o riservata soci..."
-                  className="w-full bg-black p-5 rounded-2xl border border-gray-800 font-bold text-sm text-white h-28 resize-none focus:outline-none focus:border-amber-500" 
-                />
-              </div>
-
-              <button 
-                type="submit" disabled={loading}
-                className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-gray-800 py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95 shadow-lg"
-              >
-                {loading ? 'Elaborazione...' : 'Aggiungi al Listino'}
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {/* ========================================== */}
-        {/* COLONNA DESTRA: ELENCO TARIFFE             */}
+        {/* COLONNA SINISTRA: ELENCO TARIFFE           */}
         {/* ========================================== */}
         <div className="lg:col-span-8 flex flex-col">
           
@@ -345,6 +294,58 @@ export default function Tariffe({ salaId }: { salaId: string }) {
           </div>
 
         </div>
+
+        {/* ========================================== */}
+        {/* COLONNA DESTRA: NUOVA TARIFFA              */}
+        {/* ========================================== */}
+        <div className="lg:col-span-4 flex flex-col">
+          
+          <h3 className="text-2xl font-black text-amber-400 uppercase tracking-widest mb-6 border-b-2 border-gray-800 pb-3">
+            NUOVA VOCE LISTINO
+          </h3>
+
+          <div className="space-y-8">
+            <form onSubmit={gestisciSubmit} className="bg-[#11131a] p-8 rounded-[40px] border border-gray-800 shadow-2xl">
+              
+              <div className="mb-6">
+                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Nome Tariffa / Specialità</label>
+                <input 
+                  type="text" value={nomeTariffa} onChange={e => setNomeTariffa(e.target.value)}
+                  placeholder="Es. Internazionale, Goriziana..."
+                  className="w-full bg-black p-5 rounded-2xl border border-gray-800 font-bold text-sm text-white focus:outline-none focus:border-amber-500" 
+                  required 
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Costo Orario (€/Ora)</label>
+                <input 
+                  type="number" step="0.01" value={tariffaOraria} onChange={e => setTariffaOraria(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-black p-5 rounded-2xl border border-gray-800 font-black text-3xl text-center text-amber-400 focus:outline-none focus:border-amber-500" 
+                  required 
+                />
+              </div>
+
+              <div className="mb-10">
+                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Note e Condizioni</label>
+                <textarea 
+                  value={note} onChange={e => setNote(e.target.value)}
+                  placeholder="Es. Tariffa feriale o riservata soci..."
+                  className="w-full bg-black p-5 rounded-2xl border border-gray-800 font-bold text-sm text-white h-28 resize-none focus:outline-none focus:border-amber-500" 
+                />
+              </div>
+
+              <button 
+                type="submit" disabled={loading}
+                className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-gray-800 py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95 shadow-lg"
+              >
+                {loading ? 'Elaborazione...' : 'Aggiungi al Listino'}
+              </button>
+            </form>
+          </div>
+        </div>
+
       </div>
     </div>
   );
