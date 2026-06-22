@@ -2,10 +2,15 @@ export const dynamic = 'force-dynamic';
 import { Resend } from 'resend';
 import { NextResponse } from 'next/server';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(request: Request) {
   try {
+    // 0. SPOSTATO QUI DENTRO: Inizializzazione di Resend al riparo dall'ispezione di Vercel
+    const resendKey = process.env.RESEND_API_KEY || '';
+    if (!resendKey) {
+        return NextResponse.json({ error: 'Configurazione mail mancante' }, { status: 500 });
+    }
+    const resend = new Resend(resendKey);
+
     const { managerEmail, salaName, cliente, dataOra } = await request.json();
     const dataFormattata = new Date(dataOra).toLocaleString('it-IT');
 
