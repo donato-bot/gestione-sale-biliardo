@@ -3,17 +3,23 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
-// Connessione Admin a Supabase
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
-
-// Inizializzazione del motore Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(request: Request) {
   try {
+    // 0. Inizializziamo i motori QUI DENTRO, così Vercel non si blocca durante il caricamento statico
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: 'Configurazione database mancante' }, { status: 500 });
+    }
+    const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+
+    const resendKey = process.env.RESEND_API_KEY || '';
+    if (!resendKey) {
+      return NextResponse.json({ error: 'Configurazione mail mancante' }, { status: 500 });
+    }
+    const resend = new Resend(resendKey);
+
     const body = await request.json();
     const { email, password } = body;
 
@@ -84,5 +90,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-
 }
