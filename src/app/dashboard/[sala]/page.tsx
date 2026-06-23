@@ -9,7 +9,7 @@ import Plancia from "../../../components/Plancia";
 import BachecaGestore from "../../../components/BachecaGestore";
 import Soci from "../../../components/Soci";
 import Magazzino from "../../../components/Magazzino";
-import Cassa from "../../../components/Cassa";
+import Report from "../../../components/Report"; // Nuovo modulo Movimenti Contabili
 import Prenotazioni from "../../../components/Prenotazioni";
 import Tornei from "../../../components/Tornei";
 import Staff from "../../../components/Staff";
@@ -66,7 +66,7 @@ export default function DashboardGestore({ params }: { params: { sala: string } 
         {sezioneAttiva === "bacheca" && <BachecaGestore salaId={params.sala} setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "soci" && <Soci salaId={params.sala} setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "magazzino" && <Magazzino salaId={params.sala} setActiveView={setSezioneAttiva} />}
-        {sezioneAttiva === "report" && <Cassa salaId={params.sala} setActiveView={setSezioneAttiva} />}
+        {sezioneAttiva === "report" && <Report salaId={params.sala} onBack={() => setSezioneAttiva("hub")} />}
         {sezioneAttiva === "prenotazioni" && <Prenotazioni salaId={params.sala} setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "tornei" && <Tornei salaId={params.sala} setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "staff" && <Staff salaId={params.sala} setActiveView={setSezioneAttiva} />}
