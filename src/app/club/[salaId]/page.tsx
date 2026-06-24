@@ -12,9 +12,32 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
   const [partite, setPartite] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Stato form prenotazione (Mockup iniziale)
-  const [formPrenotazione, setFormPrenotazione] = useState({ nome: '', data: '', ora: '', note: '' });
+  // Stato form prenotazione ampliato
+  const [formPrenotazione, setFormPrenotazione] = useState({ 
+    nome: '', 
+    email: '', 
+    telefono: '', 
+    data: '', 
+    ora: '', 
+    note: '' 
+  });
   const [prenotazioneInviata, setPrenotazioneInviata] = useState(false);
+
+  // MEMORIA INTELLIGENTE: Carica i dati del socio dal suo telefono al primo avvio
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedNome = localStorage.getItem('club_socio_nome') || '';
+      const savedEmail = localStorage.getItem('club_socio_email') || '';
+      const savedTelefono = localStorage.getItem('club_socio_telefono') || '';
+      
+      setFormPrenotazione(prev => ({
+        ...prev,
+        nome: savedNome,
+        email: savedEmail,
+        telefono: savedTelefono
+      }));
+    }
+  }, []);
 
   useEffect(() => {
     async function fetchDatiPubblici() {
@@ -66,11 +89,21 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
 
   const handleInviaPrenotazione = (e: any) => {
     e.preventDefault();
-    // Qui in futuro collegheremo Supabase per salvare la prenotazione
+    
+    // MEMORIA INTELLIGENTE: Salva i dati personali nel cellulare del socio
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('club_socio_nome', formPrenotazione.nome);
+      localStorage.setItem('club_socio_email', formPrenotazione.email);
+      localStorage.setItem('club_socio_telefono', formPrenotazione.telefono);
+    }
+
+    // Qui in futuro collegheremo Supabase per salvare la prenotazione sul database
     setPrenotazioneInviata(true);
+    
     setTimeout(() => {
       setPrenotazioneInviata(false);
-      setFormPrenotazione({ nome: '', data: '', ora: '', note: '' });
+      // Manteniamo nome, email e telefono, ma svuotiamo data, ora e note per la prossima volta
+      setFormPrenotazione(prev => ({ ...prev, data: '', ora: '', note: '' }));
       setActiveView("hub");
     }, 3000);
   };
@@ -97,11 +130,7 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
         <main className="flex-1 p-6 w-full max-w-lg mx-auto flex flex-col gap-4 mt-2">
           <p className="text-center text-gray-500 font-bold text-sm mb-2 uppercase tracking-widest">Scegli una sezione</p>
 
-          {/* Tasto Tornei */}
-          <button 
-            onClick={() => setActiveView("tornei")}
-            className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#00E5FF] p-5 rounded-3xl shadow-lg flex items-center justify-between group transition-all"
-          >
+          <button onClick={() => setActiveView("tornei")} className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#00E5FF] p-5 rounded-3xl shadow-lg flex items-center justify-between group transition-all">
             <div className="text-left">
               <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">🏆</span>
               <h2 className="text-white font-black uppercase tracking-widest text-lg">Area Tornei</h2>
@@ -110,11 +139,7 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
             <div className="text-[#00E5FF] font-black text-xl">→</div>
           </button>
 
-          {/* Tasto Prenotazioni */}
-          <button 
-            onClick={() => setActiveView("prenotazioni")}
-            className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#FFCC00] p-5 rounded-3xl shadow-lg flex items-center justify-between group transition-all"
-          >
+          <button onClick={() => setActiveView("prenotazioni")} className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#FFCC00] p-5 rounded-3xl shadow-lg flex items-center justify-between group transition-all">
             <div className="text-left">
               <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">🗓️</span>
               <h2 className="text-white font-black uppercase tracking-widest text-lg">Prenotazioni</h2>
@@ -123,11 +148,7 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
             <div className="text-[#FFCC00] font-black text-xl">→</div>
           </button>
 
-          {/* Tasto Bacheca */}
-          <button 
-            onClick={() => setActiveView("bacheca")}
-            className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#E91E63] p-5 rounded-3xl shadow-lg flex items-center justify-between group transition-all"
-          >
+          <button onClick={() => setActiveView("bacheca")} className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#E91E63] p-5 rounded-3xl shadow-lg flex items-center justify-between group transition-all">
             <div className="text-left">
               <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">📌</span>
               <h2 className="text-white font-black uppercase tracking-widest text-lg">Bacheca Avvisi</h2>
@@ -144,7 +165,6 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
   // VISTA 2: SEZIONE TORNEI (IL TABELLONE LIVE)
   // ==========================================
   if (activeView === "tornei") {
-    // ... [Il codice dei tornei rimane identico a prima, lo mantengo per intero]
     return (
       <div className="min-h-screen bg-[#E6F0EB] font-sans flex flex-col">
         <header className="bg-[#0B0D14] border-b border-[#1E222B] p-4 sticky top-0 z-20 shadow-md flex justify-between items-center">
@@ -232,8 +252,8 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
           </div>
         </header>
 
-        <main className="flex-1 p-6 flex items-start justify-center pt-10">
-          <div className="bg-[#0B0D14] rounded-3xl p-8 border border-[#1E222B] shadow-2xl max-w-md w-full">
+        <main className="flex-1 p-6 flex items-start justify-center pt-8 pb-12">
+          <div className="bg-[#0B0D14] rounded-3xl p-6 md:p-8 border border-[#1E222B] shadow-2xl max-w-md w-full">
             <div className="text-center mb-8">
               <span className="text-4xl mb-4 block">🗓️</span>
               <h2 className="text-white font-black uppercase tracking-widest text-xl">Riserva un Tavolo</h2>
@@ -258,6 +278,30 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
                     value={formPrenotazione.nome}
                     onChange={(e) => setFormPrenotazione({...formPrenotazione, nome: e.target.value})}
                   />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Telefono</label>
+                    <input 
+                      type="tel" 
+                      required 
+                      className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-xl border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors" 
+                      placeholder="Es. 333 1234567"
+                      value={formPrenotazione.telefono}
+                      onChange={(e) => setFormPrenotazione({...formPrenotazione, telefono: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Email (Opzionale)</label>
+                    <input 
+                      type="email" 
+                      className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-xl border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors" 
+                      placeholder="mario@email.it"
+                      value={formPrenotazione.email}
+                      onChange={(e) => setFormPrenotazione({...formPrenotazione, email: e.target.value})}
+                    />
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
@@ -287,7 +331,7 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
                   <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Note / Preferenze (Opzionale)</label>
                   <textarea 
                     className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-xl border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors resize-none" 
-                    placeholder="Es. Preferenza tavolo internazionale..."
+                    placeholder="Es. Preferenza tavolo internazionale, durata stimata..."
                     rows={3}
                     value={formPrenotazione.note}
                     onChange={(e) => setFormPrenotazione({...formPrenotazione, note: e.target.value})}
