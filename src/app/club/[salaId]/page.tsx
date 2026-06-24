@@ -5,12 +5,16 @@ import { supabase } from "../../lib/supabase";
 
 export default function VetrinaClub({ params }: { params: { salaId: string } }) {
   const [nomeSala, setNomeSala] = useState<string>("Caricamento Club...");
-  const [activeView, setActiveView] = useState<string>("hub"); // Gestisce la navigazione: hub, tornei, bacheca
+  const [activeView, setActiveView] = useState<string>("hub"); // hub, tornei, bacheca, info, prenotazioni
   
   // Dati Torneo
   const [torneoAttivo, setTorneoAttivo] = useState<any>(null);
   const [partite, setPartite] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Stato form prenotazione (Mockup iniziale)
+  const [formPrenotazione, setFormPrenotazione] = useState({ nome: '', data: '', ora: '', note: '' });
+  const [prenotazioneInviata, setPrenotazioneInviata] = useState(false);
 
   useEffect(() => {
     async function fetchDatiPubblici() {
@@ -60,6 +64,17 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
     return `Turno Preliminare`;
   };
 
+  const handleInviaPrenotazione = (e: any) => {
+    e.preventDefault();
+    // Qui in futuro collegheremo Supabase per salvare la prenotazione
+    setPrenotazioneInviata(true);
+    setTimeout(() => {
+      setPrenotazioneInviata(false);
+      setFormPrenotazione({ nome: '', data: '', ora: '', note: '' });
+      setActiveView("hub");
+    }, 3000);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0B0D14] flex items-center justify-center">
@@ -79,13 +94,13 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
           <h1 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tight">{nomeSala}</h1>
         </header>
 
-        <main className="flex-1 p-6 w-full max-w-lg mx-auto flex flex-col gap-5 mt-4">
+        <main className="flex-1 p-6 w-full max-w-lg mx-auto flex flex-col gap-4 mt-2">
           <p className="text-center text-gray-500 font-bold text-sm mb-2 uppercase tracking-widest">Scegli una sezione</p>
 
           {/* Tasto Tornei */}
           <button 
             onClick={() => setActiveView("tornei")}
-            className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#00E5FF] p-6 rounded-3xl shadow-lg flex items-center justify-between group transition-all"
+            className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#00E5FF] p-5 rounded-3xl shadow-lg flex items-center justify-between group transition-all"
           >
             <div className="text-left">
               <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">🏆</span>
@@ -95,10 +110,23 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
             <div className="text-[#00E5FF] font-black text-xl">→</div>
           </button>
 
+          {/* Tasto Prenotazioni */}
+          <button 
+            onClick={() => setActiveView("prenotazioni")}
+            className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#FFCC00] p-5 rounded-3xl shadow-lg flex items-center justify-between group transition-all"
+          >
+            <div className="text-left">
+              <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">🗓️</span>
+              <h2 className="text-white font-black uppercase tracking-widest text-lg">Prenotazioni</h2>
+              <p className="text-gray-500 text-xs font-bold mt-1">Prenota il tuo tavolo</p>
+            </div>
+            <div className="text-[#FFCC00] font-black text-xl">→</div>
+          </button>
+
           {/* Tasto Bacheca */}
           <button 
             onClick={() => setActiveView("bacheca")}
-            className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#E91E63] p-6 rounded-3xl shadow-lg flex items-center justify-between group transition-all"
+            className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#E91E63] p-5 rounded-3xl shadow-lg flex items-center justify-between group transition-all"
           >
             <div className="text-left">
               <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">📌</span>
@@ -106,19 +134,6 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
               <p className="text-gray-500 text-xs font-bold mt-1">Comunicazioni del club</p>
             </div>
             <div className="text-[#E91E63] font-black text-xl">→</div>
-          </button>
-
-          {/* Tasto Info */}
-          <button 
-            onClick={() => setActiveView("info")}
-            className="bg-[#0B0D14] border border-[#1E222B] hover:border-[#00E676] p-6 rounded-3xl shadow-lg flex items-center justify-between group transition-all opacity-70"
-          >
-            <div className="text-left">
-              <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">ℹ️</span>
-              <h2 className="text-white font-black uppercase tracking-widest text-lg">Altro / Info</h2>
-              <p className="text-gray-500 text-xs font-bold mt-1">Regolamenti e contatti</p>
-            </div>
-            <div className="text-[#00E676] font-black text-xl">→</div>
           </button>
         </main>
       </div>
@@ -129,6 +144,7 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
   // VISTA 2: SEZIONE TORNEI (IL TABELLONE LIVE)
   // ==========================================
   if (activeView === "tornei") {
+    // ... [Il codice dei tornei rimane identico a prima, lo mantengo per intero]
     return (
       <div className="min-h-screen bg-[#E6F0EB] font-sans flex flex-col">
         <header className="bg-[#0B0D14] border-b border-[#1E222B] p-4 sticky top-0 z-20 shadow-md flex justify-between items-center">
@@ -195,6 +211,98 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
               </div>
             </div>
           )}
+        </main>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // VISTA 4: PRENOTAZIONI
+  // ==========================================
+  if (activeView === "prenotazioni") {
+    return (
+      <div className="min-h-screen bg-[#E6F0EB] font-sans flex flex-col">
+        <header className="bg-[#0B0D14] border-b border-[#1E222B] p-4 sticky top-0 z-20 shadow-md flex justify-between items-center">
+          <button onClick={() => setActiveView("hub")} className="text-gray-400 hover:text-white font-black text-xs uppercase bg-[#1A1D24] px-4 py-2 rounded-lg border border-gray-800">
+            ← Menu
+          </button>
+          <div className="text-right">
+            <p className="text-[10px] text-[#FFCC00] font-black uppercase tracking-widest mb-1">Prenotazioni</p>
+            <h1 className="text-sm md:text-base font-black text-white uppercase italic tracking-tight">{nomeSala}</h1>
+          </div>
+        </header>
+
+        <main className="flex-1 p-6 flex items-start justify-center pt-10">
+          <div className="bg-[#0B0D14] rounded-3xl p-8 border border-[#1E222B] shadow-2xl max-w-md w-full">
+            <div className="text-center mb-8">
+              <span className="text-4xl mb-4 block">🗓️</span>
+              <h2 className="text-white font-black uppercase tracking-widest text-xl">Riserva un Tavolo</h2>
+              <p className="text-gray-500 text-xs font-bold mt-2">Invia la tua richiesta alla direzione.</p>
+            </div>
+
+            {prenotazioneInviata ? (
+              <div className="bg-[#00E676]/10 border border-[#00E676]/30 p-6 rounded-2xl text-center animate-in fade-in zoom-in duration-300">
+                <span className="text-3xl block mb-2">✅</span>
+                <h3 className="text-[#00E676] font-black uppercase tracking-widest mb-2">Richiesta Inviata!</h3>
+                <p className="text-white text-sm font-bold">La tua prenotazione è stata inoltrata alla direzione.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleInviaPrenotazione} className="space-y-5">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Nome e Cognome</label>
+                  <input 
+                    type="text" 
+                    required 
+                    className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-xl border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors" 
+                    placeholder="Es. Mario Rossi"
+                    value={formPrenotazione.nome}
+                    onChange={(e) => setFormPrenotazione({...formPrenotazione, nome: e.target.value})}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Data</label>
+                    <input 
+                      type="date" 
+                      required 
+                      className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-xl border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors" 
+                      value={formPrenotazione.data}
+                      onChange={(e) => setFormPrenotazione({...formPrenotazione, data: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Ora Arrivo</label>
+                    <input 
+                      type="time" 
+                      required 
+                      className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-xl border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors" 
+                      value={formPrenotazione.ora}
+                      onChange={(e) => setFormPrenotazione({...formPrenotazione, ora: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Note / Preferenze (Opzionale)</label>
+                  <textarea 
+                    className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-xl border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors resize-none" 
+                    placeholder="Es. Preferenza tavolo internazionale..."
+                    rows={3}
+                    value={formPrenotazione.note}
+                    onChange={(e) => setFormPrenotazione({...formPrenotazione, note: e.target.value})}
+                  ></textarea>
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="w-full bg-[#FFCC00] hover:bg-[#E6B800] text-black py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all active:scale-95 mt-4"
+                >
+                  Invia Richiesta
+                </button>
+              </form>
+            )}
+          </div>
         </main>
       </div>
     );
