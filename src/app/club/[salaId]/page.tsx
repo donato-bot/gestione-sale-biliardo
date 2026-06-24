@@ -4,13 +4,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function VetrinaClub({ params }: { params: { salaId: string } }) {
-  const [nomeSala, setNomeSala] = useState<string>("Caricamento Club...");
+  const [nomeSala, setNomeSala] = useState<string>("Caricamento...");
   const [activeView, setActiveView] = useState<string>("hub");
-  
-  const [torneoAttivo, setTorneoAttivo] = useState<any>(null);
-  const [partite, setPartite] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
+  
   const [formPrenotazione, setFormPrenotazione] = useState({ 
     nome: '', email: '', telefono: '', data: '', ora: '', note: '' 
   });
@@ -29,30 +26,13 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
   }, []);
 
   useEffect(() => {
-    async function fetchDatiPubblici() {
-      const { data: salaData } = await supabase.from('sale').select('name').eq('id', params.salaId).single();
-      if (salaData) setNomeSala(salaData.name);
-
-      const { data: torneiData } = await supabase
-        .from('tornei')
-        .select('*')
-        .eq('sala_id', params.salaId)
-        .in('stato', ['in_corso', 'concluso'])
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (torneiData && torneiData.length > 0) {
-        setTorneoAttivo(torneiData[0]);
-        const { data: partiteData } = await supabase
-          .from('partite_torneo')
-          .select('*')
-          .eq('torneo_id', torneiData[0].id)
-          .order('partita_num', { ascending: true });
-        if (partiteData) setPartite(partiteData);
-      }
+    async function fetchDati() {
+      if (!params.salaId) return;
+      const { data } = await supabase.from('sale').select('name').eq('id', params.salaId).single();
+      if (data) setNomeSala(data.name);
       setLoading(false);
     }
-    if (params.salaId) fetchDatiPubblici();
+    fetchDati();
   }, [params.salaId]);
 
   const handleInviaPrenotazione = async (e: any) => {
@@ -85,30 +65,30 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
         setActiveView("hub");
       }, 3000);
     } else {
-      alert("Errore nell'invio della prenotazione.");
+      console.error("Errore Supabase:", error);
+      alert("Errore: " + error.message);
     }
     setInvioInCorso(false);
   };
 
-  if (loading) return <div className="min-h-screen bg-[#0B0D14] flex items-center justify-center text-[#00ADC6] font-black uppercase tracking-widest">Caricamento...</div>;
+  if (loading) return <div className="p-10 text-center text-white">Caricamento...</div>;
 
   return (
-    <div className="min-h-screen bg-[#E6F0EB] font-sans p-6">
+    <div className="min-h-screen bg-[#E6F0EB] p-6 font-sans">
       {activeView === "hub" && (
         <div className="flex flex-col gap-4 max-w-lg mx-auto">
           <h1 className="text-3xl font-black text-center mb-6 uppercase italic">{nomeSala}</h1>
-          <button onClick={() => setActiveView("tornei")} className="bg-[#0B0D14] text-white p-5 rounded-3xl font-black uppercase">Area Tornei</button>
-          <button onClick={() => setActiveView("prenotazioni")} className="bg-[#0B0D14] text-white p-5 rounded-3xl font-black uppercase">Prenotazioni</button>
+          <button onClick={() => setActiveView("prenotazioni")} className="bg-[#0B0D14] text-white p-5 rounded-3xl font-black uppercase">Prenota Tavolo</button>
         </div>
       )}
 
       {activeView === "prenotazioni" && (
         <div className="max-w-md mx-auto">
-          <button onClick={() => setActiveView("hub")} className="mb-4 text-xs font-bold uppercase underline">← Indietro</button>
+          <button onClick={() => setActiveView("hub")} className="mb-4 text-xs font-bold underline">← INDIETRO</button>
           <div className="bg-[#0B0D14] p-8 rounded-3xl text-white shadow-2xl">
             <h2 className="text-xl font-black mb-6 uppercase">Riserva un Tavolo</h2>
             {prenotazioneInviata ? (
-              <p className="text-[#00E676] font-black text-center p-4">Richiesta inviata con successo!</p>
+              <p className="text-[#00E676] font-black text-center">Richiesta inviata!</p>
             ) : (
               <form onSubmit={handleInviaPrenotazione} className="space-y-4">
                 <input type="text" placeholder="Nome" required value={formPrenotazione.nome} onChange={(e) => setFormPrenotazione({...formPrenotazione, nome: e.target.value})} className="w-full p-3 rounded-xl bg-[#1A1D24]" />
@@ -119,18 +99,11 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
                   <input type="time" required value={formPrenotazione.ora} onChange={(e) => setFormPrenotazione({...formPrenotazione, ora: e.target.value})} className="w-full p-3 rounded-xl bg-[#1A1D24]" />
                 </div>
                 <button type="submit" disabled={invioInCorso} className="w-full bg-[#FFCC00] text-black py-4 rounded-xl font-black uppercase">
-                  {invioInCorso ? "Invio..." : "Invia Richiesta"}
+                  {invioInCorso ? "INVIO..." : "INVIA RICHIESTA"}
                 </button>
               </form>
             )}
           </div>
-        </div>
-      )}
-
-      {activeView === "tornei" && (
-        <div className="text-center">
-          <button onClick={() => setActiveView("hub")} className="mb-4 text-xs font-bold uppercase underline">← Indietro</button>
-          <p className="font-bold text-gray-600">Area tornei in aggiornamento...</p>
         </div>
       )}
     </div>
