@@ -5,21 +5,18 @@ import { supabase } from "../../lib/supabase";
 
 export default function VetrinaClub({ params }: { params: { salaId: string } }) {
   const [nomeSala, setNomeSala] = useState<string>("Caricamento Club...");
-  const [activeView, setActiveView] = useState<string>("hub"); // hub, tornei, bacheca, info, prenotazioni
+  const [activeView, setActiveView] = useState<string>("hub");
   
-  // Dati Torneo
   const [torneoAttivo, setTorneoAttivo] = useState<any>(null);
   const [partite, setPartite] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Stato form prenotazione
   const [formPrenotazione, setFormPrenotazione] = useState({ 
     nome: '', email: '', telefono: '', data: '', ora: '', note: '' 
   });
   const [prenotazioneInviata, setPrenotazioneInviata] = useState(false);
   const [invioInCorso, setInvioInCorso] = useState(false);
 
-  // Carica i dati salvati dal telefono dell'utente all'apertura
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setFormPrenotazione(prev => ({
@@ -33,11 +30,9 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
 
   useEffect(() => {
     async function fetchDatiPubblici() {
-      // 1. Recupera nome sala
       const { data: salaData } = await supabase.from('sale').select('name').eq('id', params.salaId).single();
       if (salaData) setNomeSala(salaData.name);
 
-      // 2. Recupera torneo attivo
       const { data: torneiData } = await supabase
         .from('tornei')
         .select('*')
@@ -64,14 +59,12 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
     e.preventDefault();
     setInvioInCorso(true);
 
-    // Salva dati nel telefono dell'utente
     if (typeof window !== 'undefined') {
       localStorage.setItem('club_socio_nome', formPrenotazione.nome);
       localStorage.setItem('club_socio_email', formPrenotazione.email);
       localStorage.setItem('club_socio_telefono', formPrenotazione.telefono);
     }
 
-    // Invia al database
     const { error } = await supabase.from('prenotazioni').insert([
       {
         sala_id: params.salaId,
@@ -101,7 +94,6 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
 
   return (
     <div className="min-h-screen bg-[#E6F0EB] font-sans p-6">
-      {/* MENU HUB */}
       {activeView === "hub" && (
         <div className="flex flex-col gap-4 max-w-lg mx-auto">
           <h1 className="text-3xl font-black text-center mb-6 uppercase italic">{nomeSala}</h1>
@@ -110,10 +102,9 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
         </div>
       )}
 
-      {/* VISTA PRENOTAZIONI */}
       {activeView === "prenotazioni" && (
         <div className="max-w-md mx-auto">
-          <button onClick={() => setActiveView("hub")} className="mb-4 text-xs font-bold uppercase">← Indietro</button>
+          <button onClick={() => setActiveView("hub")} className="mb-4 text-xs font-bold uppercase underline">← Indietro</button>
           <div className="bg-[#0B0D14] p-8 rounded-3xl text-white shadow-2xl">
             <h2 className="text-xl font-black mb-6 uppercase">Riserva un Tavolo</h2>
             {prenotazioneInviata ? (
@@ -136,11 +127,10 @@ export default function VetrinaClub({ params }: { params: { salaId: string } }) 
         </div>
       )}
 
-      {/* VISTA TORNEI (Placeholder semplificato) */}
       {activeView === "tornei" && (
         <div className="text-center">
-          <button onClick={() => setActiveView("hub")} className="mb-4 text-xs font-bold uppercase">← Indietro</button>
-          <p className="font-bold text-gray-600">Visualizzazione tabelloni attiva...</p>
+          <button onClick={() => setActiveView("hub")} className="mb-4 text-xs font-bold uppercase underline">← Indietro</button>
+          <p className="font-bold text-gray-600">Area tornei in aggiornamento...</p>
         </div>
       )}
     </div>
