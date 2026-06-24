@@ -24,6 +24,13 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
   const [partitaDaArbitrare, setPartitaDaArbitrare] = useState<any>(null);
   const [vistaCompatta, setVistaCompatta] = useState(false);
 
+  // STATO PER MODALE CONDIVISIONE QR / LINK
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // URL generato dinamicamente per l'app dei soci
+  const urlSoci = typeof window !== "undefined" ? `${window.location.origin}/club/${salaId}` : "";
+
   // ==========================================
   // FETCH INIZIALE CON PROIEZIONE AUTOMATICA
   // ==========================================
@@ -38,7 +45,6 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
     if (!error && data) {
       setTorneiList(data);
       
-      // AUTOMATISMO: Se è il caricamento iniziale e trova un torneo attivo, lo apre subito
       if (isInitial) {
         const torneoAttivo = data.find(t => t.stato === 'in_corso');
         if (torneoAttivo) {
@@ -49,7 +55,7 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
   }
 
   useEffect(() => {
-    fetchTornei(true); // Indica che è l'accesso iniziale al modulo
+    fetchTornei(true);
   }, [salaId]);
 
   async function fetchIscrittiEPartite(torneo: any) {
@@ -67,7 +73,7 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
   }, [torneoSelezionato]);
 
   // ==========================================
-  // AZIONI: CREA BANDO E ISCRIZIONI
+  // AZIONI REAZIONALI
   // ==========================================
   const handleCreaTorneo = async (e: any) => {
     e.preventDefault();
@@ -100,9 +106,6 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
     fetchIscrittiEPartite(torneoSelezionato);
   };
 
-  // ==========================================
-  // MOTORE: GENERAZIONE ORGANIGRAMMA COMPLETO
-  // ==========================================
   const handleGeneraTabellone = async () => {
     if (iscritti.length < 2) return alert("Servono almeno 2 iscritti.");
     if (!window.confirm("Attenzione: stai per chiudere le iscrizioni e generare l'intero organigramma. Procedere?")) return;
@@ -171,9 +174,6 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
     setLoading(false);
   };
 
-  // ==========================================
-  // MOTORE: AVANZAMENTO TABELLONE
-  // ==========================================
   const dichiaraVincitore = async (vincitoreId: string | null, vincitoreNome: string) => {
     if (!partitaDaArbitrare) return;
     setLoading(true);
@@ -206,17 +206,19 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
     setLoading(false);
   };
 
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(urlSoci);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
+  };
+
   const handleReturn = () => {
     if (torneoSelezionato) { 
       setTorneoSelezionato(null); 
-      fetchTornei(false); // Disabilita l'auto-apertura quando si torna indietro volutamente
+      fetchTornei(false); 
     } else if (typeof setActiveView === 'function') {
       setActiveView("hub");
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const getNomeTurno = (numPartite: number) => {
@@ -228,79 +230,118 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
     return `Turno Preliminare`;
   };
 
-  // ==========================================
-  // RENDER: VISTA 3 - DIREZIONE DI GARA LIVE
-  // ==========================================
-  if (torneoSelezionato && (torneoSelezionato.stato === 'in_corso' || torneoSelezionato.stato === 'concluso')) {
-    const turni = [...new Set(partite.map(p => p.turno))].sort((a, b) => a - b);
+  return (
+    <div className="min-h-screen bg-[#E6F0EB] py-10 px-4 sm:px-6 lg:px-8 font-sans animate-in fade-in duration-300 flex items-start justify-center print:bg-white print:py-0 print:px-0">
+      
+      {/* SEZIONE COMPONENTI DI STAMPA */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          @page { size: A4 landscape; margin: 8mm; }
+          body { background-color: #ffffff !important; color: #000000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .print-area { transform: scale(0.85); transform-origin: top left; width: 115% !important; }
+        }
+      `}} />
 
-    return (
-      <div className="min-h-screen bg-[#E6F0EB] py-10 px-4 sm:px-6 lg:px-8 font-sans animate-in fade-in duration-300 flex items-start justify-center print:bg-white print:py-0 print:px-0">
-        
-        <style dangerouslySetInnerHTML={{__html: `
-          @media print {
-            @page {
-              size: A4 landscape;
-              margin: 8mm;
-            }
-            body {
-              background-color: #ffffff !important;
-              color: #000000 !important;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            .print-area {
-              transform: scale(0.85);
-              transform-origin: top left;
-              width: 115% !important; 
-            }
-          }
-        `}} />
-
-        {/* MODALE ARBITRAGGIO */}
-        {partitaDaArbitrare && (
-          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
-            <div className="bg-[#0B0D14] border border-[#2A2E39] p-8 rounded-2xl w-full max-w-md shadow-2xl">
-              <h3 className="text-[#E91E63] font-black uppercase tracking-widest text-sm mb-6 text-center border-b border-gray-800 pb-4">Decretare il Vincitore</h3>
-              <div className="space-y-4">
-                <button onClick={() => dichiaraVincitore(partitaDaArbitrare.giocatore1_id, partitaDaArbitrare.giocatore1_nome)} className="w-full bg-[#1A1D24] hover:bg-[#2A2E39] border border-gray-700 hover:border-[#00E5FF] text-white font-bold p-5 rounded-xl transition-all">🏆 {partitaDaArbitrare.giocatore1_nome}</button>
-                <div className="text-center text-gray-600 font-black text-xs uppercase">VS</div>
-                <button onClick={() => dichiaraVincitore(partitaDaArbitrare.giocatore2_id, partitaDaArbitrare.giocatore2_nome)} className="w-full bg-[#1A1D24] hover:bg-[#2A2E39] border border-gray-700 hover:border-[#00E5FF] text-white font-bold p-5 rounded-xl transition-all">🏆 {partitaDaArbitrare.giocatore2_nome}</button>
-              </div>
-              <button onClick={() => setPartitaDaArbitrare(null)} className="w-full mt-8 text-gray-500 hover:text-white uppercase text-xs font-bold tracking-widest">Annulla</button>
-            </div>
-          </div>
-        )}
-
-        <div className="w-full max-w-[95%] bg-[#0B0D14] border border-[#1E222B] rounded-[2.5rem] p-8 md:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col print:shadow-none print:border-none print:p-0 print:bg-white print:text-black">
-          
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-[#1E222B] pb-6 gap-6 shrink-0 print:border-b-2 print:border-gray-300 print:mb-4">
-            <div>
-              <p className="text-[10px] text-[#00E676] font-black uppercase tracking-widest mb-1 print:text-gray-500">
-                {torneoSelezionato.stato === 'concluso' ? '🏆 Torneo Concluso' : '🔴 Live: Organigramma Torneo'}
-              </p>
-              <h2 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tight print:text-black">{torneoSelezionato.nome}</h2>
-            </div>
+      {/* MODALE DI CONDIVISIONE LINK & QR CODE */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
+          <div className="bg-[#0B0D14] border border-[#2A2E39] p-8 rounded-[2rem] w-full max-w-sm text-center shadow-2xl">
+            <h3 className="text-white font-black uppercase tracking-widest text-sm mb-2">App Pubblica Soci</h3>
+            <p className="text-gray-400 text-xs mb-6 font-bold">Fai inquadrare questo codice o condividi il link per mostrare i tabelloni live.</p>
             
-            <div className="flex gap-3 print:hidden">
+            {/* Generatore automatico di QR Code tramite API pubblica leggera */}
+            <div className="bg-white p-4 rounded-xl inline-block mb-6 shadow-inner">
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(urlSoci)}`} 
+                alt="QR Code Club" 
+                className="w-40 h-40"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <input 
+                type="text" 
+                readOnly 
+                value={urlSoci} 
+                className="w-full bg-black text-xs text-gray-400 p-3 rounded-lg border border-[#2A2E39] text-center select-all focus:outline-none"
+              />
               <button 
-                onClick={() => setVistaCompatta(!vistaCompatta)} 
-                className="bg-[#1A1D24] hover:bg-[#2A2E39] text-white border border-gray-700 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors"
+                onClick={copyToClipboard}
+                className={`w-full py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-colors ${copied ? 'bg-[#00E676] text-black' : 'bg-[#00ADC6] hover:bg-[#008A9E] text-white'}`}
               >
-                {vistaCompatta ? "🔎 Espandi Griglia" : "📱 Vista Compatta"}
-              </button>
-              <button onClick={handlePrint} className="bg-[#E91E63] hover:bg-[#C2185B] text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase flex items-center gap-2 transition-colors">
-                🖨️ Stampa PDF
-              </button>
-              <button onClick={handleReturn} className="bg-[#1A1D24] hover:bg-[#2A2E39] text-white border border-gray-700 px-5 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors">
-                ← Torna ai Tornei
+                {copied ? "✓ Copiato negli Appunti" : "Copia Link Rapido"}
               </button>
             </div>
-          </div>
 
+            <button 
+              onClick={() => setShowShareModal(false)}
+              className="mt-6 text-gray-500 hover:text-white uppercase text-[10px] font-black tracking-widest block mx-auto"
+            >
+              Chiudi Finestra
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE ARBITRAGGIO */}
+      {partitaDaArbitrare && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
+          <div className="bg-[#0B0D14] border border-[#2A2E39] p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <h3 className="text-[#E91E63] font-black uppercase tracking-widest text-sm mb-6 text-center border-b border-gray-800 pb-4">Decretare il Vincitore</h3>
+            <div className="space-y-4">
+              <button onClick={() => dichiaraVincitore(partitaDaArbitrare.giocatore1_id, partitaDaArbitrare.giocatore1_nome)} className="w-full bg-[#1A1D24] hover:bg-[#2A2E39] border border-gray-700 hover:border-[#00E5FF] text-white font-bold p-5 rounded-xl transition-all">🏆 {partitaDaArbitrare.giocatore1_nome}</button>
+              <div className="text-center text-gray-600 font-black text-xs uppercase">VS</div>
+              <button onClick={() => dichiaraVincitore(partitaDaArbitrare.giocatore2_id, partitaDaArbitrare.giocatore2_nome)} className="w-full bg-[#1A1D24] hover:bg-[#2A2E39] border border-gray-700 hover:border-[#00E5FF] text-white font-bold p-5 rounded-xl transition-all">🏆 {partitaDaArbitrare.giocatore2_nome}</button>
+            </div>
+            <button onClick={() => setPartitaDaArbitrare(null)} className="w-full mt-8 text-gray-500 hover:text-white uppercase text-xs font-bold tracking-widest">Annulla</button>
+          </div>
+        </div>
+      )}
+
+      <div className="w-full max-w-[95%] bg-[#0B0D14] border border-[#1E222B] rounded-[2.5rem] p-8 md:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col print:shadow-none print:border-none print:p-0 print:bg-white print:text-black">
+        
+        {/* INTERFACCIA DI INTESTAZIONE UNIFICATA */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-[#1E222B] pb-6 gap-6 shrink-0 print:border-b-2 print:border-gray-300 print:mb-4">
+          <div>
+            <p className="text-[10px] text-[#00E676] font-black uppercase tracking-widest mb-1 print:text-gray-500">
+              {torneoSelezionato ? (torneoSelezionato.stato === 'concluso' ? '🏆 Torneo Concluso' : '🔴 Live: Organigramma Torneo') : 'Direzione Gara'}
+            </p>
+            <h2 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tight print:text-black">
+              {torneoSelezionato ? torneoSelezionato.nome : 'Gestione Tornei'}
+            </h2>
+          </div>
+          
+          <div className="flex flex-wrap gap-3 print:hidden">
+            <button 
+              onClick={() => setShowShareModal(true)}
+              className="bg-[#00E5FF]/10 hover:bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/30 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-all"
+            >
+              🔗 Condividi Club
+            </button>
+            {torneoSelezionato && (torneoSelezionato.stato === 'in_corso' || torneoSelezionato.stato === 'concluso') && (
+              <>
+                <button 
+                  onClick={() => setVistaCompatta(!vistaCompatta)} 
+                  className="bg-[#1A1D24] hover:bg-[#2A2E39] text-white border border-gray-700 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors"
+                >
+                  {vistaCompatta ? "🔎 Espandi Griglia" : "📱 Vista Compatta"}
+                </button>
+                <button onClick={() => window.print()} className="bg-[#E91E63] hover:bg-[#C2185B] text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors">
+                  🖨️ Stampa PDF
+                </button>
+              </>
+            )}
+            <button onClick={handleReturn} className="bg-[#1A1D24] hover:bg-[#2A2E39] text-white border border-gray-700 px-5 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors">
+              {torneoSelezionato ? "← Torna ai Tornei" : "← Torre di Controllo"}
+            </button>
+          </div>
+        </div>
+
+        {/* CONTENUTO IN CORSO (VISTA 3) */}
+        {torneoSelezionato && (torneoSelezionato.stato === 'in_corso' || torneoSelezionato.stato === 'concluso') && (
           <div className="bg-[#0B0D14] border border-gray-800 rounded-2xl p-6 flex-1 overflow-x-auto custom-scrollbar print:border-none print:p-0 print:overflow-visible print:bg-white">
             <div className="print-area flex gap-12 min-w-max h-full min-h-[600px] items-stretch pb-4 print:min-h-0 print:pb-0">
-              {turni.map(turnoNum => {
+              {[...new Set(partite.map(p => p.turno))].sort((a, b) => a - b).map(turnoNum => {
                 const partiteTurno = partite.filter(p => p.turno === turnoNum);
                 return (
                   <div key={turnoNum} className="flex flex-col shrink-0 print:w-[230px]" style={{ width: vistaCompatta ? '230px' : '320px', transition: 'all 0.3s' }}>
@@ -311,12 +352,10 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
                       {partiteTurno.map((p) => (
                         <div key={p.id} className={`bg-[#1A1D24] border ${p.stato === 'conclusa' ? 'border-[#00E676]/50' : 'border-[#2A2E39]'} rounded-xl ${vistaCompatta ? 'p-2.5 shadow-md' : 'p-4 shadow-lg'} relative z-10 group print:border-gray-400 print:bg-white print:shadow-none print:break-inside-avoid`}>
                           <div className={`absolute top-0 left-0 w-1 h-full rounded-l-xl print:hidden ${p.stato === 'conclusa' ? 'bg-[#00E676]' : (p.turno === 1 ? 'bg-[#E91E63]' : 'bg-[#00ADC6]')}`}></div>
-                          
                           <div className="flex justify-between items-center mb-2">
                             <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest print:text-black">Incontro #{p.partita_num}</span>
                             {p.stato === 'conclusa' && <span className="text-[9px] text-[#00E676] font-black uppercase tracking-widest print:text-gray-500">✓</span>}
                           </div>
-                          
                           <div className="space-y-1.5">
                             <div className="flex justify-between items-center bg-[#0B0D14] p-2 rounded-lg border border-[#2A2E39] print:bg-white print:border-gray-300">
                               <span className={`font-bold truncate print:text-black ${vistaCompatta ? 'text-[11px]' : 'text-xs'} ${p.giocatore1_nome?.includes('BYE') || p.giocatore1_nome === 'In Attesa' ? 'text-gray-600 print:text-gray-400' : 'text-white'}`}>{p.giocatore1_nome}</span>
@@ -325,14 +364,8 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
                               <span className={`font-bold truncate print:text-black ${vistaCompatta ? 'text-[11px]' : 'text-xs'} ${p.giocatore2_nome?.includes('BYE') || p.giocatore2_nome === 'In Attesa' ? 'text-gray-600 print:text-gray-400' : 'text-white'}`}>{p.giocatore2_nome}</span>
                             </div>
                           </div>
-                          
                           {p.stato !== 'conclusa' && p.giocatore1_nome !== 'In Attesa' && p.giocatore2_nome !== 'In Attesa' && (
-                            <button 
-                              onClick={() => setPartitaDaArbitrare(p)}
-                              className={`w-full border border-gray-700 hover:border-[#00E5FF] hover:text-[#00E5FF] text-gray-500 font-bold uppercase tracking-widest rounded-md transition-colors print:hidden ${vistaCompatta ? 'text-[8px] py-1 mt-2' : 'text-[9px] py-1.5 mt-3'}`}
-                            >
-                              Arbitra
-                            </button>
+                            <button onClick={() => setPartitaDaArbitrare(p)} className={`w-full border border-gray-700 hover:border-[#00E5FF] hover:text-[#00E5FF] text-gray-500 font-bold uppercase tracking-widest rounded-md transition-colors print:hidden ${vistaCompatta ? 'text-[8px] py-1 mt-2' : 'text-[9px] py-1.5 mt-3'}`}>Arbitra</button>
                           )}
                         </div>
                       ))}
@@ -342,27 +375,10 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
               })}
             </div>
           </div>
-        </div>
-      </div>
-    );
-  }
+        )}
 
-  // ==========================================
-  // RENDER: VISTA 2 - BOTTEGHINO ISCRIZIONI
-  // ==========================================
-  if (torneoSelezionato && torneoSelezionato.stato === 'iscrizioni') {
-    const postiDisponibili = torneoSelezionato.max_iscritti - iscritti.length;
-    return (
-      <div className="min-h-screen bg-[#E6F0EB] py-10 px-4 sm:px-6 lg:px-8 font-sans animate-in slide-in-from-right-8 duration-300 flex items-start justify-center">
-        <div className="w-full max-w-7xl bg-[#0B0D14] border border-[#1E222B] rounded-[2.5rem] p-8 md:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-[#1E222B] pb-6 gap-6">
-            <div>
-              <p className="text-[10px] text-[#E91E63] font-black uppercase tracking-widest mb-1">Gestione Iscrizioni (Botteghino)</p>
-              <h2 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tight">{torneoSelezionato.nome}</h2>
-            </div>
-            <button onClick={handleReturn} className="bg-[#1A1D24] border border-gray-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors">← Torna ai Tornei</button>
-          </div>
-
+        {/* ISCRIZIONI APERTE (VISTA 2) */}
+        {torneoSelezionato && torneoSelezionato.stato === 'iscrizioni' && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
             <div className="col-span-1 md:col-span-8 bg-transparent border border-gray-700 rounded-2xl p-6 flex flex-col min-h-[500px]">
               <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
@@ -386,12 +402,14 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
             <div className="col-span-1 md:col-span-4 bg-transparent border border-gray-700 rounded-2xl p-6 h-fit sticky top-6">
               <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-[#E91E63] border-b border-gray-800 pb-4">Nuovo Iscritto</h3>
               <form onSubmit={handleIscriviGiocatore} className="space-y-5">
-                <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63]" placeholder="Es. Mario Rossi" value={nomeGiocatore} onChange={(e) => setNomeGiocatore(e.target.value)} disabled={postiDisponibili <= 0} />
+                <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63]" placeholder="Es. Mario Rossi" value={nomeGiocatore} onChange={(e) => setNomeGiocatore(e.target.value)} disabled={iscritti.length >= torneoSelezionato.max_iscritti} />
                 <label className="flex items-center gap-3 cursor-pointer p-3 bg-[#1A1D24] border border-[#2A2E39] rounded-lg">
-                  <input type="checkbox" className="w-5 h-5 accent-[#E91E63]" checked={quotaPagata} onChange={(e) => setQuotaPagata(e.target.checked)} disabled={postiDisponibili <= 0}/>
+                  <input type="checkbox" className="w-5 h-5 accent-[#E91E63]" checked={quotaPagata} onChange={(e) => setQuotaPagata(e.target.checked)} disabled={iscritti.length >= torneoSelezionato.max_iscritti}/>
                   <span className="text-sm font-bold text-white">Quota Versata (€ {torneoSelezionato.quota})</span>
                 </label>
-                <button type="submit" disabled={postiDisponibili <= 0 || !nomeGiocatore} className="w-full bg-[#E91E63] hover:bg-[#C2185B] disabled:bg-gray-800 disabled:text-gray-500 text-white py-4 rounded-xl font-black uppercase text-sm mt-4">{postiDisponibili <= 0 ? "Torneo Completo" : "Iscrivi"}</button>
+                <button type="submit" disabled={iscritti.length >= torneoSelezionato.max_iscritti || !nomeGiocatore} className="w-full bg-[#E91E63] hover:bg-[#C2185B] disabled:bg-gray-800 disabled:text-gray-500 text-white py-4 rounded-xl font-black uppercase text-sm mt-4">
+                  {iscritti.length >= torneoSelezionato.max_iscritti ? "Torneo Completo" : "Iscrivi"}
+                </button>
               </form>
               <div className="mt-8 pt-6 border-t border-gray-800">
                 <button onClick={handleGeneraTabellone} disabled={iscritti.length < 2 || loading} className="w-full bg-[#00ADC6] hover:bg-[#008A9E] disabled:bg-gray-800 text-white py-4 rounded-xl font-black uppercase text-xs shadow-[0_5px_15px_rgba(0,173,198,0.2)]">
@@ -400,96 +418,72 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    );
-  }
+        )}
 
-  // ==========================================
-  // RENDER: VISTA 1 - LISTA TORNEI DEFAULT
-  // ==========================================
-  return (
-    <div className="min-h-screen bg-[#E6F0EB] py-10 px-4 sm:px-6 lg:px-8 font-sans animate-in fade-in duration-300 flex items-start justify-center">
-      <div className="w-full max-w-7xl bg-[#0B0D14] border border-[#1E222B] rounded-[2.5rem] p-8 md:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-[#1E222B] pb-6 gap-6">
-          <div>
-            <p className="text-[10px] text-[#00E5FF] font-black uppercase tracking-widest mb-1">Direzione Gara</p>
-            <h2 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tight">Gestione Tornei</h2>
-          </div>
-          <button onClick={handleReturn} className="bg-[#00ADC6] hover:bg-[#008A9E] text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors">← Torre di Controllo</button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-          <div className="col-span-1 md:col-span-8 flex flex-col gap-6">
-            <div className="bg-transparent border border-gray-700 rounded-2xl p-6 flex-1 flex flex-col min-h-[500px]">
-              <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#E91E63] animate-pulse"></span> Archivio Competizioni</h3>
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-3">
-                {torneiList.map((torneo) => (
-                  <div key={torneo.id} onClick={() => setTorneoSelezionato(torneo)} className="bg-[#1A1D24] border border-[#2A2E39] p-5 rounded-xl flex justify-between items-center hover:border-[#E91E63] hover:shadow-[0_0_15px_rgba(233,30,99,0.2)] transition-all cursor-pointer group">
-                    <div>
-                      <h4 className="text-white font-black text-lg uppercase tracking-tight group-hover:text-[#E91E63] transition-colors">{torneo.nome}</h4>
-                      <div className="flex gap-3 mt-2">
-                        <span className="text-[10px] text-[#00E5FF] font-black uppercase bg-[#00E5FF]/10 px-2 py-0.5 rounded-sm">{torneo.disciplina}</span>
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-sm ${torneo.stato === 'in_corso' ? 'bg-[#00E676]/10 text-[#00E676]' : (torneo.stato === 'concluso' ? 'bg-gray-600/20 text-gray-400' : 'bg-[#FFCC00]/10 text-[#FFCC00]')}`}>
-                          {torneo.stato === 'in_corso' ? 'In Corso' : (torneo.stato === 'concluso' ? 'Concluso' : 'Iscrizioni Aperte')}
-                        </span>
+        {/* SCHERMATA DEFAULT ARCHIVIO (VISTA 1) */}
+        {!torneoSelezionato && (
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+            <div className="col-span-1 md:col-span-8 flex flex-col gap-6">
+              <div className="bg-transparent border border-gray-700 rounded-2xl p-6 flex-1 flex flex-col min-h-[500px]">
+                <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
+                  <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#E91E63] animate-pulse"></span> Archivio Competizioni</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-3">
+                  {torneiList.map((torneo) => (
+                    <div key={torneo.id} onClick={() => setTorneoSelezionato(torneo)} className="bg-[#1A1D24] border border-[#2A2E39] p-5 rounded-xl flex justify-between items-center hover:border-[#E91E63] hover:shadow-[0_0_15px_rgba(233,30,99,0.2)] transition-all cursor-pointer group">
+                      <div>
+                        <h4 className="text-white font-black text-lg uppercase tracking-tight group-hover:text-[#E91E63] transition-colors">{torneo.nome}</h4>
+                        <div className="flex gap-3 mt-2">
+                          <span className="text-[10px] text-[#00E5FF] font-black uppercase bg-[#00E5FF]/10 px-2 py-0.5 rounded-sm">{torneo.disciplina}</span>
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-sm ${torneo.stato === 'in_corso' ? 'bg-[#00E676]/10 text-[#00E676]' : (torneo.stato === 'concluso' ? 'bg-gray-600/20 text-gray-400' : 'bg-[#FFCC00]/10 text-[#FFCC00]')}`}>
+                            {torneo.stato === 'in_corso' ? 'In Corso' : (torneo.stato === 'concluso' ? 'Concluso' : 'Iscrizioni Aperte')}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="col-span-1 md:col-span-4 bg-transparent border border-gray-700 rounded-2xl p-6 h-fit sticky top-6">
-            <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-[#E91E63] border-b border-gray-800 pb-4">Nuovo Bando</h3>
-            <form onSubmit={handleCreaTorneo} className="space-y-4">
-              <div>
-                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Nome Torneo</label>
-                <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" placeholder="Es. 1° Trofeo Cittadino" value={nomeTorneo} onChange={(e) => setNomeTorneo(e.target.value)} required />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            
+            <div className="col-span-1 md:col-span-4 bg-transparent border border-gray-700 rounded-2xl p-6 h-fit sticky top-6">
+              <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-[#E91E63] border-b border-gray-800 pb-4">Nuovo Bando</h3>
+              <form onSubmit={handleCreaTorneo} className="space-y-4">
                 <div>
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Disciplina</label>
-                  <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors appearance-none" value={disciplina} onChange={(e) => setDisciplina(e.target.value)}>
-                    <option>5 Birilli</option>
-                    <option>Goriziana</option>
-                    <option>Boccette</option>
-                    <option>Pool (Palla 8)</option>
-                  </select>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Nome Torneo</label>
+                  <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" placeholder="Es. 1° Trofeo Cittadino" value={nomeTorneo} onChange={(e) => setNomeTorneo(e.target.value)} required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Disciplina</label>
+                    <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors appearance-none" value={disciplina} onChange={(e) => setDisciplina(e.target.value)}>
+                      <option>5 Birilli</option><option>Goriziana</option><option>Boccette</option><option>Pool (Palla 8)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Max Iscritti</label>
+                    <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors appearance-none" value={iscrittiMax} onChange={(e) => setIscrittiMax(e.target.value)}>
+                      <option>8</option><option>16</option><option>32</option><option>64</option>
+                    </select>
+                  </div>
                 </div>
                 <div>
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Max Iscritti</label>
-                  <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors appearance-none" value={iscrittiMax} onChange={(e) => setIscrittiMax(e.target.value)}>
-                    <option>8</option>
-                    <option>16</option>
-                    <option>32</option>
-                    <option>64</option>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Quota Iscrizione (€)</label>
+                  <input type="number" className="w-full bg-[#1A1D24] text-[#E91E63] font-black text-xl p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" placeholder="0.00" value={quota} onChange={(e) => setQuota(e.target.value)} required />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Formula di Gara</label>
+                  <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors appearance-none" value={formula} onChange={(e) => setFormula(e.target.value)}>
+                    <option>Eliminazione Diretta</option><option>Doppia Eliminazione (In Sviluppo)</option><option>Gironi (In Sviluppo)</option>
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Quota Iscrizione (€)</label>
-                <input type="number" className="w-full bg-[#1A1D24] text-[#E91E63] font-black text-xl p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" placeholder="0.00" value={quota} onChange={(e) => setQuota(e.target.value)} required />
-              </div>
-
-              <div>
-                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Formula di Gara</label>
-                <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors appearance-none" value={formula} onChange={(e) => setFormula(e.target.value)}>
-                  <option>Eliminazione Diretta</option>
-                  <option>Doppia Eliminazione (In Sviluppo)</option>
-                  <option>Gironi (In Sviluppo)</option>
-                </select>
-              </div>
-
-              <button type="submit" disabled={loading} className="w-full bg-[#E91E63] hover:bg-[#C2185B] text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all active:scale-95 mt-4">
-                {loading ? "Generazione..." : "Genera Bando"}
-              </button>
-            </form>
+                <button type="submit" disabled={loading} className="w-full bg-[#E91E63] hover:bg-[#C2185B] text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all active:scale-95 mt-4">
+                  {loading ? "Generazione..." : "Genera Bando"}
+                </button>
+              </form>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
