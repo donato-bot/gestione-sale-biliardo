@@ -9,7 +9,7 @@ import Plancia from "../../../components/Plancia";
 import BachecaGestore from "../../../components/BachecaGestore";
 import Soci from "../../../components/Soci";
 import Magazzino from "../../../components/Magazzino";
-import Report from "../../../components/Report"; // Nuovo modulo Movimenti Contabili
+import Report from "../../../components/Report";
 import Prenotazioni from "../../../components/Prenotazioni";
 import Tornei from "../../../components/Tornei";
 import Staff from "../../../components/Staff";

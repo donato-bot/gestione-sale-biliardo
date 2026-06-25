@@ -61,15 +61,15 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
         note: notaFormattata
       }]);
 
-      if (error) {
-        alert("ERRORE DI SALVATAGGIO: " + error.message);
-      } else {
-        setSuccesso(`PRENOTAZIONE "${nomeCliente}" CONFERMATA!`);
-        setTimeout(() => setSuccesso(null), 3000);
+          if (error) {
+            alert("ERRORE DI SALVATAGGIO: " + error.message);
+          } else {
+            setSuccesso(`PRENOTAZIONE "${nomeCliente}" CONFERMATA!`);
+            setTimeout(() => setSuccesso(null), 3000);
 
-        setNomeCliente(''); setTavoloNumero(''); setDataOra(''); setNote(''); setSorgente('telefono');
-        caricaPrenotazioni();
-      }
+            setNomeCliente(''); setTavoloNumero(''); setDataOra(''); setNote(''); setSorgente('telefono');
+            caricaPrenotazioni();
+          }
     } catch (err: any) {
       alert("Errore di rete: " + err.message);
     } finally {
@@ -113,8 +113,22 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
 
   async function annullaPrenotazione(id: string) {
     if (confirm("ATTENZIONE: Sei sicuro di voler annullare questa prenotazione?")) {
-      await supabase.from('prenotazioni').delete().eq('id', id);
-      caricaPrenotazioni();
+      try {
+        const { error } = await supabase
+          .from('prenotazioni')
+          .delete()
+          .eq('id', id);
+
+        if (error) {
+          alert("ERRORE DURANTE L'ANNULLAMENTO: " + error.message);
+        } else {
+          setSuccesso("PRENOTAZIONE ELIMINATA CON SUCCESSO!");
+          setTimeout(() => setSuccesso(null), 3000);
+          caricaPrenotazioni();
+        }
+      } catch (err: any) {
+        alert("Errore di rete: " + err.message);
+      }
     }
   }
 
