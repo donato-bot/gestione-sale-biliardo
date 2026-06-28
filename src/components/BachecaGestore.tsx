@@ -83,15 +83,7 @@ export default function BachecaGestore({ salaId, setActiveView }: { salaId: stri
             <p className="text-[10px] text-[#00E5FF] font-black uppercase tracking-widest mb-1">Comunicazioni Interne</p>
             <h2 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tight">Bacheca Club</h2>
           </div>
-          
-          <div className="flex gap-3">
-            <button onClick={handleReturn} className="bg-[#00ADC6] hover:bg-[#008A9E] text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase flex items-center gap-2 transition-colors shadow-[0_0_15px_rgba(0,173,198,0.2)]">
-              ← Torre di Controllo
-            </button>
-            <button onClick={() => window.print()} className="bg-[#1A1D24] hover:bg-[#2A2E39] border border-gray-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase flex items-center gap-2 transition-colors">
-              ⚙ Stampa Avvisi
-            </button>
-          </div>
+  
         </div>
 
         {/* LAYOUT A DUE COLONNE */}
