@@ -3,7 +3,17 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../app/lib/supabase";
 
-export default function Plancia({ salaId, userRole, setActiveView }: { salaId: string, userRole?: string, setActiveView?: (view: string) => void }) {
+export default function Plancia({ 
+  salaId, 
+  userRole, 
+  userEmail, 
+  setActiveView 
+}: { 
+  salaId: string, 
+  userRole?: string, 
+  userEmail?: string,
+  setActiveView?: (view: string) => void 
+}) {
   const [tables, setTables] = useState<any[]>([]);
   const [now, setNow] = useState(new Date());
   const [mode, setMode] = useState<'operativa' | 'configurazione'>('operativa');
@@ -125,13 +135,15 @@ export default function Plancia({ salaId, userRole, setActiveView }: { salaId: s
           </div>
           
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-            {/* TASTO TORRE DI CONTROLLO - VIVIDO E IMPATTANTE */}
-            <button 
-              onClick={() => setActiveView && setActiveView('hub')} 
-              className="bg-cyan-600 text-white hover:bg-cyan-500 px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all border-2 border-cyan-400 w-full sm:w-auto shadow-[0_0_20px_rgba(6,182,212,0.4)] active:scale-95 text-center"
-            >
-              ← Torre di Controllo
-            </button>
+            {/* TASTO TORRE DI CONTROLLO - SEGRETO */}
+            {userEmail === 'donatorzz1946@gmail.com' && (
+              <button 
+                onClick={() => setActiveView && setActiveView('hub')} 
+                className="bg-cyan-600 text-white hover:bg-cyan-500 px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all border-2 border-cyan-400 w-full sm:w-auto shadow-[0_0_20px_rgba(6,182,212,0.4)] active:scale-95 text-center"
+              >
+                ← Torre di Controllo
+              </button>
+            )}
 
             {/* TASTO CONFIGURA NOMI - ANTRACITE AD ALTO CONTRASTO */}
             {userRole === 'gestore' && (
