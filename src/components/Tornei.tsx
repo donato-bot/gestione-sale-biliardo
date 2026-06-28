@@ -11,6 +11,13 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
   const [quota, setQuota] = useState("");
   const [iscrittiMax, setIscrittiMax] = useState("32");
   const [formula, setFormula] = useState("Eliminazione Diretta");
+  
+  // Nuovi campi Bando
+  const [dataInizio, setDataInizio] = useState("");
+  const [dataFine, setDataFine] = useState("");
+  const [scadenzaIscrizioni, setScadenzaIscrizioni] = useState("");
+  const [note, setNote] = useState("");
+  
   const [loading, setLoading] = useState(false);
 
   // LIVELLO 2: BOTTEGHINO & TABELLONE
@@ -24,9 +31,12 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
   const [partitaDaArbitrare, setPartitaDaArbitrare] = useState<any>(null);
   const [vistaCompatta, setVistaCompatta] = useState(false);
 
-  // STATO PER MODALE CONDIVISIONE QR / LINK
+  // STATO PER MODAL CONDIVISIONE E MODIFICA
   const [showShareModal, setShowShareModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
 
   // URL generato dinamicamente per l'app dei soci
   const urlSoci = typeof window !== "undefined" ? `${window.location.origin}/club/${salaId}` : "";
@@ -73,23 +83,92 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
   }, [torneoSelezionato]);
 
   // ==========================================
-  // AZIONI REAZIONALI
+  // AZIONI REAZIONALI BANDO
   // ==========================================
   const handleCreaTorneo = async (e: any) => {
     e.preventDefault();
     if (!nomeTorneo || !quota) return;
     setLoading(true);
-    const { error } = await supabase.from('tornei').insert([{
-      sala_id: salaId, nome: nomeTorneo, disciplina, max_iscritti: parseInt(iscrittiMax), quota: parseFloat(quota), formula, stato: 'iscrizioni'
-    }]);
+    
+    const payload = {
+      sala_id: salaId, 
+      nome: nomeTorneo, 
+      disciplina, 
+      max_iscritti: parseInt(iscrittiMax), 
+      quota: parseFloat(quota), 
+      formula, 
+      stato: 'iscrizioni',
+      data_inizio: dataInizio || null,
+      data_fine: dataFine || null,
+      scadenza_iscrizioni: scadenzaIscrizioni || null,
+      note: note
+    };
+
+    const { error } = await supabase.from('tornei').insert([payload]);
+    
     setLoading(false);
     if (error) alert(`DIAGNOSTICA: ${error.message}`);
-    else { setNomeTorneo(""); setQuota(""); fetchTornei(false); }
+    else { 
+      setNomeTorneo(""); setQuota(""); setDataInizio(""); setDataFine(""); setScadenzaIscrizioni(""); setNote("");
+      fetchTornei(false); 
+    }
   };
 
+  const apriModifica = () => {
+    setEditForm({
+      nome: torneoSelezionato.nome || "",
+      disciplina: torneoSelezionato.disciplina || "5 Birilli",
+      max_iscritti: torneoSelezionato.max_iscritti || 32,
+      quota: torneoSelezionato.quota || 0,
+      formula: torneoSelezionato.formula || "Eliminazione Diretta",
+      data_inizio: torneoSelezionato.data_inizio || "",
+      data_fine: torneoSelezionato.data_fine || "",
+      scadenza_iscrizioni: torneoSelezionato.scadenza_iscrizioni || "",
+      note: torneoSelezionato.note || ""
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSalvaModifiche = async (e: any) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const payload = {
+      nome: editForm.nome,
+      disciplina: editForm.disciplina,
+      max_iscritti: parseInt(editForm.max_iscritti),
+      quota: parseFloat(editForm.quota),
+      formula: editForm.formula,
+      data_inizio: editForm.data_inizio || null,
+      data_fine: editForm.data_fine || null,
+      scadenza_iscrizioni: editForm.scadenza_iscrizioni || null,
+      note: editForm.note
+    };
+
+    const { error } = await supabase.from('tornei').update(payload).eq('id', torneoSelezionato.id);
+
+    setLoading(false);
+    if (error) {
+      alert(`DIAGNOSTICA: ${error.message}`);
+    } else {
+      const torneoAggiornato = { ...torneoSelezionato, ...payload };
+      setTorneoSelezionato(torneoAggiornato);
+      fetchTornei(false); 
+      setShowEditModal(false);
+    }
+  };
+
+  // ==========================================
+  // GESTIONE ISCRITTI ED EVENTI
+  // ==========================================
   const handleIscriviGiocatore = async (e: any) => {
     e.preventDefault();
-    if (!nomeGiocatore || iscritti.length >= torneoSelezionato.max_iscritti) return;
+    if (iscritti.length >= torneoSelezionato.max_iscritti) {
+      alert("🚨 Attenzione: Raggiunto il limite massimo di iscritti per questo torneo!");
+      return;
+    }
+    
+    if (!nomeGiocatore) return;
     const { error } = await supabase.from('iscritti_torneo').insert([{ torneo_id: torneoSelezionato.id, nominativo: nomeGiocatore, pagato: quotaPagata }]);
     if (error) alert(`DIAGNOSTICA: ${error.message}`);
     else { setNomeGiocatore(""); setQuotaPagata(false); fetchIscrittiEPartite(torneoSelezionato); }
@@ -235,12 +314,81 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
       
       {/* SEZIONE COMPONENTI DI STAMPA */}
       <style dangerouslySetInnerHTML={{__html: `
-        @media print {
-          @page { size: A4 landscape; margin: 8mm; }
-          body { background-color: #ffffff !important; color: #000000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .print-area { transform: scale(0.85); transform-origin: top left; width: 115% !important; }
-        }
+      @media print {
+        @page { size: A4 landscape; margin: 8mm; }
+        body { background-color: #ffffff !important; color: #000000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .print-area { transform: scale(0.85); transform-origin: top left; width: 115% !important; }
+      }
       `}} />
+
+      {/* MODALE MODIFICA BANDO */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
+          <div className="bg-[#0B0D14] border border-[#2A2E39] p-8 rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar">
+            <h3 className="text-[#FFCC00] font-black uppercase tracking-widest text-lg mb-6 border-b border-[#2A2E39] pb-4">⚙️ Modifica Bando</h3>
+            <form onSubmit={handleSalvaModifiche} className="space-y-4">
+              <div>
+                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Nome Torneo</label>
+                <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors" value={editForm.nome} onChange={(e) => setEditForm({...editForm, nome: e.target.value})} required />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Disciplina</label>
+                  <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors appearance-none" value={editForm.disciplina} onChange={(e) => setEditForm({...editForm, disciplina: e.target.value})}>
+                    <option>5 Birilli</option><option>Goriziana</option><option>Boccette</option><option>Pool (Palla 8)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Max Iscritti</label>
+                  <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors appearance-none" value={editForm.max_iscritti} onChange={(e) => setEditForm({...editForm, max_iscritti: e.target.value})}>
+                    <option>8</option><option>16</option><option>32</option><option>64</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Quota Iscrizione (€)</label>
+                <input type="number" className="w-full bg-[#1A1D24] text-[#E91E63] font-black text-xl p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors" value={editForm.quota} onChange={(e) => setEditForm({...editForm, quota: e.target.value})} required />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Formula di Gara</label>
+                <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors appearance-none" value={editForm.formula} onChange={(e) => setEditForm({...editForm, formula: e.target.value})}>
+                  <option>Eliminazione Diretta</option><option>Doppia Eliminazione (In Sviluppo)</option><option>Gironi (In Sviluppo)</option>
+                </select>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Data Inizio</label>
+                  <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors" value={editForm.data_inizio} onChange={(e) => setEditForm({...editForm, data_inizio: e.target.value})} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Data Fine</label>
+                  <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors" value={editForm.data_fine} onChange={(e) => setEditForm({...editForm, data_fine: e.target.value})} />
+                </div>
+              </div>
+              
+              <div className="mt-2">
+                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Scadenza Iscrizioni</label>
+                <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors" value={editForm.scadenza_iscrizioni} onChange={(e) => setEditForm({...editForm, scadenza_iscrizioni: e.target.value})} />
+              </div>
+              
+              <div className="mt-2 mb-6">
+                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Note / Istruzioni</label>
+                <textarea className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] transition-colors resize-none h-24" value={editForm.note} onChange={(e) => setEditForm({...editForm, note: e.target.value})}></textarea>
+              </div>
+
+              <div className="flex gap-4 pt-4 border-t border-[#2A2E39]">
+                <button type="button" onClick={() => setShowEditModal(false)} className="w-1/3 bg-[#1A1D24] hover:bg-[#2A2E39] text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-colors">
+                  Annulla
+                </button>
+                <button type="submit" disabled={loading} className="w-2/3 bg-[#FFCC00] hover:bg-[#E6B800] text-black py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all active:scale-95">
+                  {loading ? "Salvataggio..." : "Salva Modifiche"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* MODALE DI CONDIVISIONE LINK & QR CODE */}
       {showShareModal && (
@@ -248,37 +396,16 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
           <div className="bg-[#0B0D14] border border-[#2A2E39] p-8 rounded-[2rem] w-full max-w-sm text-center shadow-2xl">
             <h3 className="text-white font-black uppercase tracking-widest text-sm mb-2">App Pubblica Soci</h3>
             <p className="text-gray-400 text-xs mb-6 font-bold">Fai inquadrare questo codice o condividi il link per mostrare i tabelloni live.</p>
-            
-            {/* Generatore automatico di QR Code tramite API pubblica leggera */}
             <div className="bg-white p-4 rounded-xl inline-block mb-6 shadow-inner">
-              <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(urlSoci)}`} 
-                alt="QR Code Club" 
-                className="w-40 h-40"
-              />
+              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(urlSoci)}`} alt="QR Code Club" className="w-40 h-40" />
             </div>
-
             <div className="space-y-3">
-              <input 
-                type="text" 
-                readOnly 
-                value={urlSoci} 
-                className="w-full bg-black text-xs text-gray-400 p-3 rounded-lg border border-[#2A2E39] text-center select-all focus:outline-none"
-              />
-              <button 
-                onClick={copyToClipboard}
-                className={`w-full py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-colors ${copied ? 'bg-[#00E676] text-black' : 'bg-[#00ADC6] hover:bg-[#008A9E] text-white'}`}
-              >
+              <input type="text" readOnly value={urlSoci} className="w-full bg-black text-xs text-gray-400 p-3 rounded-lg border border-[#2A2E39] text-center select-all focus:outline-none" />
+              <button onClick={copyToClipboard} className={`w-full py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-colors ${copied ? 'bg-[#00E676] text-black' : 'bg-[#00ADC6] hover:bg-[#008A9E] text-white'}`}>
                 {copied ? "✓ Copiato negli Appunti" : "Copia Link Rapido"}
               </button>
             </div>
-
-            <button 
-              onClick={() => setShowShareModal(false)}
-              className="mt-6 text-gray-500 hover:text-white uppercase text-[10px] font-black tracking-widest block mx-auto"
-            >
-              Chiudi Finestra
-            </button>
+            <button onClick={() => setShowShareModal(false)} className="mt-6 text-gray-500 hover:text-white uppercase text-[10px] font-black tracking-widest block mx-auto">Chiudi Finestra</button>
           </div>
         </div>
       )}
@@ -304,7 +431,7 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-[#1E222B] pb-6 gap-6 shrink-0 print:border-b-2 print:border-gray-300 print:mb-4">
           <div>
             <p className="text-[10px] text-[#00E676] font-black uppercase tracking-widest mb-1 print:text-gray-500">
-              {torneoSelezionato ? (torneoSelezionato.stato === 'concluso' ? '🏆 Torneo Concluso' : '🔴 Live: Organigramma Torneo') : 'Direzione Gara'}
+              {torneoSelezionato ? (torneoSelezionato.stato === 'concluso' ? '🏆 Torneo Concluso' : (torneoSelezionato.stato === 'iscrizioni' ? '🟢 Iscrizioni Aperte' : '🔴 Live: Organigramma Torneo')) : 'Direzione Gara'}
             </p>
             <h2 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tight print:text-black">
               {torneoSelezionato ? torneoSelezionato.nome : 'Gestione Tornei'}
@@ -312,18 +439,19 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
           </div>
           
           <div className="flex flex-wrap gap-3 print:hidden">
-            <button 
-              onClick={() => setShowShareModal(true)}
-              className="bg-[#00E5FF]/10 hover:bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/30 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-all"
-            >
+            {torneoSelezionato && torneoSelezionato.stato === 'iscrizioni' && (
+              <button onClick={apriModifica} className="bg-[#FFCC00]/10 hover:bg-[#FFCC00]/20 text-[#FFCC00] border border-[#FFCC00]/30 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-all">
+                ⚙️ Modifica Bando
+              </button>
+            )}
+            
+            <button onClick={() => setShowShareModal(true)} className="bg-[#00E5FF]/10 hover:bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/30 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-all">
               🔗 Condividi Club
             </button>
+            
             {torneoSelezionato && (torneoSelezionato.stato === 'in_corso' || torneoSelezionato.stato === 'concluso') && (
               <>
-                <button 
-                  onClick={() => setVistaCompatta(!vistaCompatta)} 
-                  className="bg-[#1A1D24] hover:bg-[#2A2E39] text-white border border-gray-700 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors"
-                >
+                <button onClick={() => setVistaCompatta(!vistaCompatta)} className="bg-[#1A1D24] hover:bg-[#2A2E39] text-white border border-gray-700 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors">
                   {vistaCompatta ? "🔎 Espandi Griglia" : "📱 Vista Compatta"}
                 </button>
                 <button onClick={() => window.print()} className="bg-[#E91E63] hover:bg-[#C2185B] text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors">
@@ -407,7 +535,7 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
                   <input type="checkbox" className="w-5 h-5 accent-[#E91E63]" checked={quotaPagata} onChange={(e) => setQuotaPagata(e.target.checked)} disabled={iscritti.length >= torneoSelezionato.max_iscritti}/>
                   <span className="text-sm font-bold text-white">Quota Versata (€ {torneoSelezionato.quota})</span>
                 </label>
-                <button type="submit" disabled={iscritti.length >= torneoSelezionato.max_iscritti || !nomeGiocatore} className="w-full bg-[#E91E63] hover:bg-[#C2185B] disabled:bg-gray-800 disabled:text-gray-500 text-white py-4 rounded-xl font-black uppercase text-sm mt-4">
+                <button type="submit" disabled={!nomeGiocatore && iscritti.length < torneoSelezionato.max_iscritti} className={`w-full py-4 rounded-xl font-black uppercase text-sm mt-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${iscritti.length >= torneoSelezionato.max_iscritti ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-[#E91E63] text-white hover:bg-[#C2185B]'}`}>
                   {iscritti.length >= torneoSelezionato.max_iscritti ? "Torneo Completo" : "Iscrivi"}
                 </button>
               </form>
@@ -477,6 +605,28 @@ export default function Tornei({ salaId, setActiveView }: { salaId: string, setA
                     <option>Eliminazione Diretta</option><option>Doppia Eliminazione (In Sviluppo)</option><option>Gironi (In Sviluppo)</option>
                   </select>
                 </div>
+                
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Data Inizio</label>
+                    <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Data Fine</label>
+                    <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" value={dataFine} onChange={(e) => setDataFine(e.target.value)} />
+                  </div>
+                </div>
+                
+                <div className="mt-2">
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Scadenza Iscrizioni</label>
+                  <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" value={scadenzaIscrizioni} onChange={(e) => setScadenzaIscrizioni(e.target.value)} />
+                </div>
+                
+                <div className="mt-2 mb-6">
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Note / Istruzioni</label>
+                  <textarea className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors resize-none h-24" placeholder="Es. Iscrizioni aperte tramite AppWeb o al bancone..." value={note} onChange={(e) => setNote(e.target.value)}></textarea>
+                </div>
+
                 <button type="submit" disabled={loading} className="w-full bg-[#E91E63] hover:bg-[#C2185B] text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all active:scale-95 mt-4">
                   {loading ? "Generazione..." : "Genera Bando"}
                 </button>

@@ -1,64 +1,55 @@
+// components/BachecaSocio.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react';
-// Importazione centralizzata dal cuore del progetto
-import { supabase } from "../app/lib/supabase";
+import { useEffect, useState } from "react";
+import { supabase } from "@/app/lib/supabase";
 
-export default function BachecaSocio({ salaId, socioId }: { salaId: string, socioId: string }) {
-  const [notizie, setNotizie] = useState<any[]>([]);
+export default function BachecaSocio({ salaId }: { salaId: string }) {
+  const [messaggi, setMessaggi] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { caricaNotizie(); }, [salaId]);
+  useEffect(() => {
+    async function fetchBacheca() {
+      // Query isolata: il socio vede solo i messaggi della propria sala
+      const { data, error } = await supabase
+        .from('bacheca') 
+        .select('*')
+        .eq('sala_id', salaId)
+        .order('created_at', { ascending: false });
 
-  async function caricaNotizie() {
-    const { data, error } = await supabase
-      .from('bacheca')
-      .select('*')
-      .eq('sala_id', salaId)
-      .order('created_at', { ascending: false });
-    
-    if (data) setNotizie(data);
-    if (error) console.error("Errore caricamento bacheca:", error);
-  }
-
-  async function iscriviti(bachecaId: string) {
-    const { error } = await supabase
-      .from('iscrizioni_torneo')
-      .insert([{ bacheca_id: bachecaId, socio_id: socioId }]);
-      
-    if (error) {
-      if (error.code === '23505') alert("Ti sei già iscritto a questo torneo!");
-      else alert("Errore durante l'iscrizione: " + error.message);
-    } else {
-      alert("✅ Iscrizione effettuata con successo!");
+      if (error) {
+        console.error("Errore nel recupero della bacheca:", error);
+      } else if (data) {
+        setMessaggi(data);
+      }
+      setLoading(false);
     }
-  }
+    
+    fetchBacheca();
+  }, [salaId]);
+
+  if (loading) return <div className="text-gray-500 p-4 text-xs font-bold">Caricamento Bacheca...</div>;
 
   return (
-    <div className="w-full space-y-4">
-      <h3 className="text-xl font-black text-amber-500 uppercase mb-6">📰 Bacheca</h3>
-      {notizie.length === 0 && <p className="text-gray-500 italic">Nessun avviso in bacheca.</p>}
+    <div className="text-white bg-[#1A1D24] p-6 rounded-lg border border-[#2A2E39] shadow-lg animate-in fade-in duration-300">
+      <h2 className="text-2xl font-black uppercase tracking-wider mb-4 text-[#FFCC00]">Comunicazioni</h2>
       
-      {notizie.map((n) => (
-        <div key={n.id} className="p-6 rounded-3xl border bg-[#11131a] border-gray-800">
-          {/* Badge Categoria */}
-          <span className="inline-block px-3 py-1 mb-2 text-[10px] font-bold uppercase rounded-full bg-gray-800 text-gray-400">
-            {n.categoria}
-          </span>
-          
-          <h4 className="font-black text-white text-lg">{n.titolo}</h4>
-          <p className="text-sm text-gray-300 mt-2">{n.contenuto}</p>
-          
-          {/* Pulsante Partecipa */}
-          {n.categoria === 'torneo' && n.accetta_iscrizioni && (
-            <button 
-              onClick={() => iscriviti(n.id)} 
-              className="w-full mt-4 bg-[#ff9900] hover:bg-orange-500 py-3 rounded-xl text-black font-black uppercase text-sm transition-all"
-            >
-              Partecipa al Torneo
-            </button>
-          )}
+      {messaggi.length === 0 ? (
+        <div className="mt-6 text-gray-500 text-sm">
+          Nessuna nuova comunicazione dal gestore per questa sala.
         </div>
-      ))}
+      ) : (
+        <ul className="space-y-4 mt-6">
+          {messaggi.map((msg, index) => (
+            <li key={index} className="bg-[#0B0D14] p-4 rounded border border-[#2A2E39] hover:border-[#FFCC00] transition-colors duration-300">
+              <p className="text-[10px] text-[#00E5FF] mb-2 font-black uppercase tracking-widest">
+                {new Date(msg.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}
+              </p>
+              <p className="text-sm text-gray-300 leading-relaxed">{msg.messaggio}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

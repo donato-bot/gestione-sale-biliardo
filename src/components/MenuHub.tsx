@@ -76,6 +76,14 @@ export default function MenuHub({
             )}
           </button>
 
+         <button 
+           onClick={() => setActiveView("torre")}
+           className="bg-[#1A1D24] p-6 rounded-2xl border border-gray-700 hover:border-[#00BFA5] transition-all text-left group"
+>
+            <div className="text-white font-black text-lg group-hover:text-[#00BFA5]">TORRE DI CONTROLLO</div>
+           <div className="text-gray-400 text-xs">Pannello operativo rapido</div>
+         </button> 
+
           {/* ANAGRAFICA SOCI */}
           <button onClick={() => setActiveView("soci")} className="bg-[#0B0D14] hover:bg-[#151821] border border-[#1E222B] hover:border-yellow-600/50 p-8 rounded-[2.5rem] text-left transition-all duration-300 active:scale-95 shadow-[0_10px_30px_rgba(0,0,0,0.15)] group">
             <div className="text-4xl mb-5 bg-[#1A1D24] w-16 h-16 rounded-2xl flex items-center justify-center border border-[#2A2E39] group-hover:border-yellow-900 transition-colors">👤</div>

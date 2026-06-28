@@ -1,46 +1,59 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { supabase } from "../../lib/supabase";
+import { useState } from "react";
+import BachecaSocio from "@/components/BachecaSocio"; 
+import TorneiSocio from "@/components/TorneiSocio";
+import PrenotazioniSocio from "@/components/PrenotazioniSocio";
 
-export default function DashboardAdmin() {
-  const [prenotazioni, setPrenotazioni] = useState<any[]>([]);
+export default function AppSoci({ params }: { params: { salaId?: string } }) {
+  // Estrazione sicura: previene il crash se la pagina è ancora in caricamento
+  const salaId = params?.salaId;
+  const [view, setView] = useState("bacheca");
 
-  useEffect(() => {
-    async function fetchPrenotazioni() {
-      const { data } = await supabase.from('prenotazioni').select('*');
-      if (data) setPrenotazioni(data);
-    }
-    fetchPrenotazioni();
-  }, []);
-
-  async function elimina(id: string) {
-    console.log("Eliminazione in corso per:", id);
-    const { error } = await supabase.from('prenotazioni').delete().eq('id', id);
-    
-    if (error) {
-      alert("Errore database: " + error.message);
-    } else {
-      // Aggiornamento stato
-      setPrenotazioni(prenotazioni.filter(p => p.id !== id));
-      alert("Prenotazione eliminata!");
-    }
+  // Guardia: Mostra un caricamento se i parametri non sono ancora pronti
+  if (!salaId) {
+    return (
+      <div className="min-h-screen bg-[#0B0D14] text-[#FFCC00] flex items-center justify-center font-black uppercase tracking-widest text-sm animate-pulse">
+        Caricamento Sala...
+      </div>
+    );
   }
 
   return (
-    <div style={{ padding: '20px', background: '#000', color: '#fff' }}>
-      <h1>Torre di Controllo</h1>
-      {prenotazioni.map((p) => (
-        <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', margin: '10px 0', padding: '10px', border: '1px solid #444' }}>
-          <span>{p.nome_cliente}</span>
-          <button 
-            onClick={() => elimina(p.id)}
-            style={{ padding: '10px', background: 'red', color: 'white', cursor: 'pointer' }}
-          >
-            ELIMINA ORA
-          </button>
-        </div>
-      ))}
+    <div className="min-h-screen bg-[#0B0D14] text-white">
+      {/* MENU DI NAVIGAZIONE */}
+      <nav className="flex justify-around p-4 border-b border-[#2A2E39] bg-[#1A1D24] sticky top-0 z-50 shadow-lg">
+        <button 
+          onClick={() => setView("bacheca")} 
+          className={`font-black uppercase text-xs transition-all duration-200 ${view === 'bacheca' ? 'text-[#FFCC00] scale-110' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          Bacheca
+        </button>
+        <button 
+          onClick={() => setView("prenotazioni")} 
+          className={`font-black uppercase text-xs transition-all duration-200 ${view === 'prenotazioni' ? 'text-[#FFCC00] scale-110' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          Prenotazioni
+        </button>
+        <button 
+          onClick={() => setView("tornei")} 
+          className={`font-black uppercase text-xs transition-all duration-200 ${view === 'tornei' ? 'text-[#FFCC00] scale-110' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          Tornei
+        </button>
+      </nav>
+
+      {/* CONTENUTO DINAMICO */}
+      <main className="p-4 animate-in fade-in duration-300">
+        {view === "bacheca" && <BachecaSocio salaId={salaId} />}
+        {view === "prenotazioni" && <PrenotazioniSocio salaId={salaId} />}
+        {view === "tornei" && <TorneiSocio salaId={salaId} />}
+      </main>
+
+      {/* FOOTER */}
+      <footer className="text-center py-10 text-gray-700 text-[9px] font-black uppercase tracking-widest border-t border-[#2A2E39] mt-10">
+        Il Campione AppWeb • {new Date().getFullYear()}
+      </footer>
     </div>
   );
 }
