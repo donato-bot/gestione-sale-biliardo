@@ -12,7 +12,7 @@ interface Movimento {
   id: string;
   data_operazione: string;
   tipo_movimento: "ENTRATA" | "USCITA";
-  causale_origine: "Biliardi" | "Bar" | "Magazzino" | "Prima Nota";
+  causale_origine: "Biliardi" | "Bar" | "Magazzino" | "Prima Nota" | "Incasso Sospeso";
   importo: number;
   descrizione: string;
 }
@@ -167,6 +167,7 @@ export default function Report({ salaId, onBack }: ReportProps) {
               <option value="Bar">Servizi Bar</option>
               <option value="Magazzino">Acquisti Magazzino</option>
               <option value="Prima Nota">Spese Varie (Prima Nota)</option>
+              <option value="Incasso Sospeso">Incasso Sospeso (Debiti Saldati)</option>
             </select>
           </div>
         </div>
