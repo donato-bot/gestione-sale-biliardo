@@ -38,11 +38,13 @@ body {
     text-transform: uppercase;
     text-align: left;
     padding: 10px !important;
+    color: #000000 !important;
   }
 
   td {
     border-bottom: 1px solid #cccccc !important;
     padding: 10px !important;
+    color: #000000 !important;
   }
 
   /* 4. Forza i colori dei numeri in stampa */

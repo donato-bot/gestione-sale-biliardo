@@ -1,9 +1,9 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../app/lib/supabase";
 
-// Importazione di TUTTI i moduli
 import MenuHub from "../../../components/MenuHub";
 import Plancia from "../../../components/Plancia";
 import BachecaGestore from "../../../components/BachecaGestore";
@@ -16,7 +16,6 @@ import Staff from "../../../components/Staff";
 import Impostazioni from "../../../components/Impostazioni";
 import Servizi from "../../../components/Servizi";
 import ManualeOperativo from "../../../components/ManualeOperativo";
-// Import del nuovo modulo operativo
 import TorreDiControllo from "../../../components/TorreDiControllo";
 
 export default function DashboardGestore({ params }: { params: { sala: string } }) {
@@ -26,15 +25,8 @@ export default function DashboardGestore({ params }: { params: { sala: string } 
 
   useEffect(() => {
     const fetchNomeSala = async () => {
-      const { data, error } = await supabase
-        .from("sale")
-        .select("name")
-        .eq("id", params.sala)
-        .single();
-
-      if (data && !error) {
-        setNomeSala(data.name);
-      }
+      const { data } = await supabase.from("sale").select("name").eq("id", params.sala).single();
+      if (data) setNomeSala(data.name);
     };
     if (params.sala) fetchNomeSala();
   }, [params.sala]);
@@ -69,10 +61,8 @@ export default function DashboardGestore({ params }: { params: { sala: string } 
            ← Torna all'Hub
         </button>
 
-        {/* Nuova Sezione Torre di Controllo */}
-        {sezioneAttiva === "torre" && <TorreDiControllo salaId={params.sala} />}
-        
-        {/* Altre sezioni */}
+        {/* Mappatura sezioni - onBack ritorna sempre all'hub */}
+        {sezioneAttiva === "torre" && <TorreDiControllo salaId={params.sala} setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "plancia" && <Plancia salaId={params.sala} userRole="gestore" setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "bacheca" && <BachecaGestore salaId={params.sala} setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "soci" && <Soci salaId={params.sala} setActiveView={setSezioneAttiva} />}
@@ -82,9 +72,11 @@ export default function DashboardGestore({ params }: { params: { sala: string } 
         {sezioneAttiva === "tornei" && <Tornei salaId={params.sala} setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "staff" && <Staff salaId={params.sala} setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "impostazioni" && <Impostazioni salaId={params.sala} setActiveView={setSezioneAttiva} />}
-        {sezioneAttiva === "servizi" && <Servizi salaId={params.sala} setActiveView={setSezioneAttiva} />}
+        
+        {/* CORREZIONE CHIAVE PER SERVIZI */}
+        {sezioneAttiva === "servizi" && <Servizi salaId={params.sala} onBack={() => setSezioneAttiva("hub")} />}
+        
         {sezioneAttiva === "manuale" && <ManualeOperativo salaId={params.sala} setActiveView={setSezioneAttiva} />}
-
       </div>
     </div>
   );
