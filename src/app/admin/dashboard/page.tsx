@@ -1,51 +1,98 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { supabase } from "../../lib/supabase";
+import { useEffect, useState } from "react";
+import { supabase } from "@/app/lib/supabase";
 
-export default function DashboardAdmin() {
-  const [prenotazioni, setPrenotazioni] = useState<any[]>([]);
+export default function TorreDiControlloAdmin() {
+  const [sale, setSale] = useState<any[]>([]);
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      
-      const { data: sala } = await supabase.from('sale').select('id').eq('manager_email', user.email).single();
-      if (sala) {
-        const { data } = await supabase.from('prenotazioni').select('*').eq('sala_id', sala.id);
-        if (data) setPrenotazioni(data);
-      }
-    }
-    load();
-  }, []);
+  useEffect(() => { caricaSale(); }, []);
 
-  async function eseguiEliminazione(id: string) {
-    // Disabilitiamo il blocco dell'interfaccia eliminando le transizioni
-    const { error } = await supabase.from('prenotazioni').delete().eq('id', id);
-    if (!error) {
-      setPrenotazioni(prev => prev.filter(p => p.id !== id));
+  const caricaSale = async () => {
+    const { data } = await supabase.from('sale').select('*');
+    if (data) setSale(data);
+  };
+
+  const creaSala = async () => {
+    setLoading(true);
+    const { error } = await supabase.rpc('crea_nuova_sala', {
+      p_nome_sala: nome,
+      p_manager_email: email,
+      p_manager_password: "PasswordTemporanea123!"
+    });
+
+    if (error) {
+      alert("Errore nel varo: " + error.message);
     } else {
-      alert("Errore DB: " + error.message);
+      alert("Sala varata con successo!");
+      setNome(""); setEmail("");
+      caricaSale();
     }
-  }
+    setLoading(false);
+  };
+
+  const toggleStatoSala = async (id: string, statoAttuale: boolean) => {
+    await supabase.from('sale').update({ is_active: !statoAttuale }).eq('id', id);
+    await supabase.from('admin_logs').insert({
+      admin_email: 'donatorzz1946@gmail.com',
+      azione: !statoAttuale ? 'ATTIVAZIONE_SALA' : 'SOSPENSIONE_SALA',
+      sala_id: id,
+      dettagli: `Stato cambiato in: ${!statoAttuale ? 'ATTIVA' : 'SOSPESA'}`
+    });
+    caricaSale();
+  };
 
   return (
-    <div className="p-10 bg-[#0B0D14] min-h-screen text-white">
-      <h1 className="text-2xl font-bold mb-6">Torre di Controllo</h1>
-      <div className="space-y-4">
-        {prenotazioni.map((p) => (
-          <div key={p.id} className="flex justify-between items-center p-4 bg-[#1A1D24] rounded-lg">
-            <span>{p.nome_cliente}</span>
-            {/* Elemento cliccabile senza classi di transizione CSS */}
-            <div 
-              onClick={() => eseguiEliminazione(p.id)}
-              style={{ cursor: 'pointer', padding: '10px', backgroundColor: '#dc2626', borderRadius: '4px' }}
-            >
-              ELIMINA
-            </div>
-          </div>
-        ))}
+    <div className="min-h-screen bg-[#050505] p-10 text-white">
+      <h1 className="text-4xl font-black mb-10 text-cyan-500 italic">TORRE DI CONTROLLO AMMINISTRATIVA</h1>
+
+      {/* FORM DI VARO */}
+      <div className="bg-[#11131a] p-8 rounded-3xl border border-gray-800 mb-10 max-w-2xl">
+        <h2 className="text-xl font-black mb-6 uppercase tracking-widest">Varo Nuova Sala</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <input placeholder="Nome Sala" className="bg-black p-4 rounded-xl border border-gray-800" onChange={e => setNome(e.target.value)} value={nome} />
+          <input placeholder="Email Manager" className="bg-black p-4 rounded-xl border border-gray-800" onChange={e => setEmail(e.target.value)} value={email} />
+        </div>
+        <button onClick={creaSala} disabled={loading} className="w-full mt-4 bg-cyan-600 p-4 rounded-xl font-black uppercase tracking-widest">
+          {loading ? "Varo in corso..." : "Esegui Onboarding Automatico"}
+        </button>
+      </div>
+
+      {/* TABELLA DI CONTROLLO */}
+      <div className="bg-[#11131a] rounded-3xl border border-gray-800 p-8">
+        <h2 className="text-xl font-black mb-6 uppercase tracking-widest">Sale Attive</h2>
+        <table className="w-full text-left">
+          <thead>
+            <tr className="text-gray-500 text-xs uppercase tracking-widest border-b border-gray-800">
+              <th className="pb-4">Nome Sala</th>
+              <th className="pb-4">Manager</th>
+              <th className="pb-4">Stato</th>
+              <th className="pb-4 text-right">Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sale.map((sala) => (
+              <tr key={sala.id} className="border-b border-gray-800/50 hover:bg-gray-900/30">
+                <td className="py-4 font-bold">{sala.name}</td>
+                <td className="py-4 text-gray-400">{sala.manager_email}</td>
+                <td className="py-4">
+                  <span className={`px-2 py-1 rounded text-xs font-black ${sala.is_active ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
+                    {sala.is_active ? 'ATTIVA' : 'SOSPESA'}
+                  </span>
+                </td>
+                <td className="py-4 flex gap-4 justify-end">
+                  <button onClick={() => toggleStatoSala(sala.id, sala.is_active)} className="text-xs font-bold uppercase text-cyan-400 hover:text-cyan-300">
+                    {sala.is_active ? 'Sospendi' : 'Attiva'}
+                  </button>
+                  <a href={`/dashboard/${sala.id}`} className="text-xs font-bold uppercase text-white hover:underline">Accedi</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
