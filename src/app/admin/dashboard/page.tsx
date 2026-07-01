@@ -8,8 +8,11 @@ export default function TorreDiControlloAdmin() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mostraAiuto, setMostraAiuto] = useState(false);
 
-  useEffect(() => { caricaSale(); }, []);
+  useEffect(() => { 
+    caricaSale(); 
+  }, []);
 
   const caricaSale = async () => {
     const { data } = await supabase.from('sale').select('*');
@@ -28,7 +31,8 @@ export default function TorreDiControlloAdmin() {
       alert("Errore nel varo: " + error.message);
     } else {
       alert("Sala varata con successo!");
-      setNome(""); setEmail("");
+      setNome(""); 
+      setEmail("");
       caricaSale();
     }
     setLoading(false);
@@ -47,7 +51,29 @@ export default function TorreDiControlloAdmin() {
 
   return (
     <div className="min-h-screen bg-[#050505] p-10 text-white">
-      <h1 className="text-4xl font-black mb-10 text-cyan-500 italic">TORRE DI CONTROLLO AMMINISTRATIVA</h1>
+      {/* HEADER CON TASTO AIUTO */}
+      <div className="flex justify-between items-center mb-10">
+        <h1 className="text-4xl font-black text-cyan-500 italic">TORRE DI CONTROLLO AMMINISTRATIVA</h1>
+        <button 
+          onClick={() => setMostraAiuto(!mostraAiuto)}
+          className="bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-xl font-bold uppercase tracking-widest text-sm"
+        >
+          {mostraAiuto ? "Chiudi Aiuto" : "ℹ️ Manuale Operativo"}
+        </button>
+      </div>
+
+      {/* PANNELLO AIUTO */}
+      {mostraAiuto && (
+        <div className="bg-[#1A1D24] p-8 rounded-3xl border-2 border-cyan-500 mb-10 animate-in fade-in slide-in-from-top-4">
+          <h3 className="text-cyan-400 font-black mb-4 uppercase text-lg">Manuale del Super Admin</h3>
+          <ul className="space-y-3 text-sm text-gray-300">
+            <li><strong>1. Varo Nuova Sala:</strong> Inserisci nome e email. Il sistema crea automaticamente utente, database e log di sicurezza.</li>
+            <li><strong>2. Sospensione (Kill Switch):</strong> Se una sala scade, usa il tasto 'Sospendi'. L'accesso al gestore verrà revocato immediatamente.</li>
+            <li><strong>3. Monitoraggio:</strong> La "Scatola Nera" registra ogni tua azione. In caso di dubbi, consulta `admin_logs` nel database.</li>
+            <li><strong>4. Supporto:</strong> Se un gestore riscontra problemi, verifica prima lo stato 'is_active' nella tabella sale.</li>
+          </ul>
+        </div>
+      )}
 
       {/* FORM DI VARO */}
       <div className="bg-[#11131a] p-8 rounded-3xl border border-gray-800 mb-10 max-w-2xl">
