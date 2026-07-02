@@ -125,7 +125,8 @@ export default function Soci({ salaId, setActiveView }: { salaId: string, setAct
       return;
     }
 
-    const urlPubblico = `${window.location.origin}/prenota/${salaId}`;
+    // UPDATE: URL corretto puntato al nuovo Hub del Socio
+    const urlPubblico = `${window.location.origin}/club/${salaId}`;
     const messaggio = encodeURIComponent(`Ciao ${socio.nome}, ecco il link per accedere all'App del nostro club. Da qui potrai gestire le tue attività in autonomia:\n\n${urlPubblico}`);
     const telefonoPulito = socio.telefono.replace(/[^0-9]/g, '');
 
@@ -142,7 +143,8 @@ export default function Soci({ salaId, setActiveView }: { salaId: string, setAct
 
   function copiaLinkPubblico() {
     if (typeof window !== "undefined") {
-      const urlPubblico = `${window.location.origin}/prenota/${salaId}`;
+      // UPDATE: URL corretto puntato al nuovo Hub del Socio
+      const urlPubblico = `${window.location.origin}/club/${salaId}`;
       navigator.clipboard.writeText(urlPubblico);
       setLinkCopiato(true);
       setTimeout(() => setLinkCopiato(false), 3000);
