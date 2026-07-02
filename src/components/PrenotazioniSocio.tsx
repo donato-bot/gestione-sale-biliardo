@@ -76,9 +76,12 @@ export default function PrenotazioniSocio({ salaId }: { salaId: string }) {
     // Costruisce l'oggetto Date completo unendo il giorno e l'orario scelti
     const dataOraCompleta = new Date(`${dataPrenotazione}T${nuovoOrario}:00`);
     
-    // CONTROLLO SICUREZZA: Impedisce prenotazioni nel passato
-    if (dataOraCompleta < new Date()) {
-      alert("Attenzione: Non è possibile effettuare una prenotazione per un orario già trascorso.");
+    // CONTROLLO SICUREZZA CORRETTO: Impedisce solo prenotazioni per GIORNI passati
+    const oggiMezzanotte = new Date();
+    oggiMezzanotte.setHours(0, 0, 0, 0); // Azzera ore e minuti
+    
+    if (dataOraCompleta < oggiMezzanotte) {
+      alert("Attenzione: Non è possibile prenotare per date passate.");
       setIsSubmitting(false);
       return;
     }
