@@ -1,18 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation"; // Hook ufficiale per estrarre l'ID dall'URL in modo sicuro
 import BachecaSocio from "@/components/BachecaSocio"; 
 import TorneiSocio from "@/components/TorneiSocio";
 import PrenotazioniSocio from "@/components/PrenotazioniSocio";
 
-export default function AppSoci({ params }: { params: { salaId?: string } }) {
-  const salaId = params?.salaId;
+export default function AppSoci() {
+  const params = useParams();
+  const salaId = params?.salaId as string; // Estrazione sicura lato client
+
   const [view, setView] = useState("bacheca");
 
   if (!salaId) {
     return (
       <div className="min-h-screen bg-[#050505] text-[#00E5FF] flex items-center justify-center font-black uppercase tracking-widest text-sm animate-pulse">
-        Caricamento Sala...
+        Sincronizzazione Stanza in corso...
       </div>
     );
   }
