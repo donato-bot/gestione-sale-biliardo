@@ -10,7 +10,7 @@ export default async function IspezionePage() {
   const { data: sale, error } = await supabaseAdmin.from('sale').select('*');
 
   return (
-    <div className="p-10 min-h-screen bg-black text-white font-sans">
+    <div className="p-10 min-h-screen bg-black text-white font- Varo Nuova Sala: Crea automaticamente utente, database e log di sicurezza.sans">
       <h1 className="text-3xl font-bold text-purple-500 mb-6 flex items-center gap-3">
         📡 RADAR INTERNO: ISPEZIONE DATABASE
       </h1>
