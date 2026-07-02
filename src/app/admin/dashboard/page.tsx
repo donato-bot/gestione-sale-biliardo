@@ -75,29 +75,29 @@ export default function TorreDiControlloAdmin() {
         </h1>
         <button 
           onClick={() => setMostraAiuto(!mostraAiuto)}
-          className="bg-[#1A1D24] hover:bg-[#2A2E39] border border-[#2A2E39] px-6 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-colors shadow-lg"
+          className="bg-[#1A1D24] hover:bg-[#2A2E39] border border-gray-600 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-colors shadow-[0_0_15px_rgba(0,0,0,0.5)]"
         >
           {mostraAiuto ? "Chiudi Aiuto" : "ℹ️ Manuale Operativo"}
         </button>
       </div>
 
       {mostraAiuto && (
-        <div className="bg-[#0B0D14] p-8 rounded-3xl border-2 border-[#00ADC6] shadow-[0_0_30px_rgba(0,173,198,0.15)] mb-10 animate-in fade-in slide-in-from-top-4 space-y-6">
-          <h3 className="text-[#00ADC6] font-black uppercase text-xl tracking-widest border-b border-[#1E222B] pb-4">
+        <div className="bg-[#0B0D14] p-8 rounded-3xl border-2 border-[#00ADC6] shadow-[0_0_30px_rgba(0,173,198,0.2)] mb-10 animate-in fade-in slide-in-from-top-4 space-y-6">
+          <h3 className="text-[#00ADC6] font-black uppercase text-xl tracking-widest border-b border-gray-700 pb-4">
             Manuale Operativo
           </h3>
           
           <div className="space-y-6 text-sm text-gray-300">
             <div>
               <h4 className="text-white font-black uppercase tracking-widest mb-2 text-base">1. Varo Nuova Sala (Onboarding Automatico)</h4>
-              <p className="leading-relaxed pl-4 border-l-2 border-gray-700">
+              <p className="leading-relaxed pl-4 border-l-2 border-gray-600">
                 Questa sezione permette di inizializzare un nuovo club nel sistema. Inserendo il "Nome Sala" e l'"Email Manager", il sistema crea simultaneamente l'utente (tramite Auth), genera la sala nel database e predispone l'ambiente isolato. Il processo è completamente automatizzato e invia le credenziali di accesso al nuovo manager in totale autonomia.
               </p>
             </div>
 
             <div>
               <h4 className="text-white font-black uppercase tracking-widest mb-2 text-base">2. Gestione Sale Attive (Kill Switch e Monitoraggio)</h4>
-              <p className="leading-relaxed pl-4 border-l-2 border-gray-700 mb-2">
+              <p className="leading-relaxed pl-4 border-l-2 border-gray-600 mb-2">
                 La tabella offre una panoramica di tutte le sale registrate sulla piattaforma.
               </p>
               <ul className="pl-8 space-y-2 list-disc text-gray-400">
@@ -116,23 +116,39 @@ export default function TorreDiControlloAdmin() {
         </div>
       )}
 
-      <div className="bg-[#0B0D14] p-8 rounded-3xl border border-[#1E222B] mb-10 max-w-3xl shadow-xl">
+      {/* BOX 1: Varo Nuova Sala - Bordi schiariti e resi più visibili */}
+      <div className="bg-[#0B0D14] p-8 rounded-3xl border border-gray-700 mb-10 max-w-3xl shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
         <h2 className="text-xl font-black mb-6 uppercase tracking-widest text-white">Varo Nuova Sala</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input placeholder="Nome Sala" className="bg-[#1A1D24] p-4 rounded-xl border border-[#2A2E39] focus:outline-none focus:border-[#00ADC6] transition-colors" onChange={e => setNome(e.target.value)} value={nome} />
-          <input placeholder="Email Manager" className="bg-[#1A1D24] p-4 rounded-xl border border-[#2A2E39] focus:outline-none focus:border-[#00ADC6] transition-colors" onChange={e => setEmail(e.target.value)} value={email} />
+          <input 
+            placeholder="Nome Sala" 
+            className="bg-[#1A1D24] p-4 rounded-xl border border-gray-600 focus:outline-none focus:border-[#00ADC6] transition-colors shadow-inner" 
+            onChange={e => setNome(e.target.value)} 
+            value={nome} 
+          />
+          <input 
+            placeholder="Email Manager" 
+            className="bg-[#1A1D24] p-4 rounded-xl border border-gray-600 focus:outline-none focus:border-[#00ADC6] transition-colors shadow-inner" 
+            onChange={e => setEmail(e.target.value)} 
+            value={email} 
+          />
         </div>
-        <button onClick={creaSala} disabled={loading} className="w-full mt-6 bg-[#00ADC6] hover:bg-[#008A9E] p-4 rounded-xl font-black uppercase tracking-widest transition-colors shadow-lg disabled:opacity-50 text-black">
+        <button 
+          onClick={creaSala} 
+          disabled={loading} 
+          className="w-full mt-6 bg-[#00ADC6] hover:bg-[#008A9E] p-4 rounded-xl font-black uppercase tracking-widest transition-colors shadow-lg disabled:opacity-50 text-black"
+        >
           {loading ? "Varo in corso..." : "Esegui Onboarding Automatico"}
         </button>
       </div>
 
-      <div className="bg-[#0B0D14] rounded-3xl border border-[#1E222B] p-8 shadow-xl">
+      {/* BOX 2: Sale Attive - Bordi schiariti e resi più visibili */}
+      <div className="bg-[#0B0D14] rounded-3xl border border-gray-700 p-8 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
         <h2 className="text-xl font-black mb-6 uppercase tracking-widest text-white">Sale Attive</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="text-gray-500 text-[10px] uppercase tracking-widest border-b border-[#2A2E39]">
+              <tr className="text-gray-400 text-[10px] uppercase tracking-widest border-b border-gray-700">
                 <th className="pb-4 px-2">Nome Sala</th>
                 <th className="pb-4 px-2">Manager</th>
                 <th className="pb-4 px-2 text-center">Stato</th>
@@ -141,7 +157,7 @@ export default function TorreDiControlloAdmin() {
             </thead>
             <tbody>
               {sale.map((sala) => (
-                <tr key={sala.id} className="border-b border-[#1E222B] hover:bg-[#11141A] transition-colors">
+                <tr key={sala.id} className="border-b border-gray-800 hover:bg-[#11141A] transition-colors">
                   <td className="py-5 px-2 font-black text-white uppercase tracking-wider">{sala.nome}</td>
                   <td className="py-5 px-2 text-gray-400 text-sm font-bold">{sala.manager_email}</td>
                   <td className="py-5 px-2 text-center">
