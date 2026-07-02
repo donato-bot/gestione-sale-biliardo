@@ -20,10 +20,18 @@ export default function TorreDiControlloAdmin() {
   };
 
   const creaSala = async () => {
+    // 1. BLOCCO VALIDAZIONE: Impedisce l'invio di dati vuoti
+    if (!nome.trim() || !email.trim()) {
+      alert("Attenzione: Inserisci sia il Nome della Sala che l'Email del Manager prima di procedere con l'onboarding.");
+      return; // Interrompe l'esecuzione qui
+    }
+
     setLoading(true);
+    
+    // 2. Chiamata a Supabase solo se i campi sono pieni
     const { error } = await supabase.rpc('crea_nuova_sala', {
-      p_nome_sala: nome,
-      p_manager_email: email,
+      p_nome_sala: nome.trim(),
+      p_manager_email: email.trim(),
       p_manager_password: "PasswordTemporanea123!"
     });
 
@@ -116,7 +124,7 @@ export default function TorreDiControlloAdmin() {
         </div>
       )}
 
-      {/* BOX 1: Varo Nuova Sala - Bordi schiariti e resi più visibili */}
+      {/* BOX 1: Varo Nuova Sala */}
       <div className="bg-[#0B0D14] p-8 rounded-3xl border border-gray-700 mb-10 max-w-3xl shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
         <h2 className="text-xl font-black mb-6 uppercase tracking-widest text-white">Varo Nuova Sala</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -142,7 +150,7 @@ export default function TorreDiControlloAdmin() {
         </button>
       </div>
 
-      {/* BOX 2: Sale Attive - Bordi schiariti e resi più visibili */}
+      {/* BOX 2: Sale Attive */}
       <div className="bg-[#0B0D14] rounded-3xl border border-gray-700 p-8 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
         <h2 className="text-xl font-black mb-6 uppercase tracking-widest text-white">Sale Attive</h2>
         <div className="overflow-x-auto">
