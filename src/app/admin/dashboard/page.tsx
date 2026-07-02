@@ -49,9 +49,26 @@ export default function TorreDiControlloAdmin() {
     caricaSale();
   };
 
+  const aprireAuditContabile = (sala: any) => {
+    const oggi = new Date();
+    const dataCreazione = new Date(sala.created_at);
+    const finePeriodoGratuito = new Date(dataCreazione);
+    finePeriodoGratuito.setMonth(finePeriodoGratuito.getMonth() + 1);
+
+    const statoPagamenti = oggi > finePeriodoGratuito ? "DA FATTURARE (Periodo gratuito terminato)" : "IN PROVA GRATUITA";
+
+    alert(`
+      --- SCHEDA AMMINISTRATIVA: ${sala.name} ---
+      Manager: ${sala.manager_email}
+      Data Creazione: ${dataCreazione.toLocaleDateString()}
+      Fine Mese Gratuito: ${finePeriodoGratuito.toLocaleDateString()}
+      Stato Pagamenti: ${statoPagamenti}
+      Stato Servizio: ${sala.is_active ? "ATTIVO" : "SOSPESO"}
+    `);
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] p-10 text-white">
-      {/* HEADER CON TASTO AIUTO */}
       <div className="flex justify-between items-center mb-10">
         <h1 className="text-4xl font-black text-cyan-500 italic">TORRE DI CONTROLLO AMMINISTRATIVA</h1>
         <button 
@@ -62,20 +79,17 @@ export default function TorreDiControlloAdmin() {
         </button>
       </div>
 
-      {/* PANNELLO AIUTO */}
       {mostraAiuto && (
         <div className="bg-[#1A1D24] p-8 rounded-3xl border-2 border-cyan-500 mb-10 animate-in fade-in slide-in-from-top-4">
           <h3 className="text-cyan-400 font-black mb-4 uppercase text-lg">Manuale del Super Admin</h3>
           <ul className="space-y-3 text-sm text-gray-300">
-            <li><strong>1. Varo Nuova Sala:</strong> Inserisci nome e email. Il sistema crea automaticamente utente, database e log di sicurezza.</li>
-            <li><strong>2. Sospensione (Kill Switch):</strong> Se una sala scade, usa il tasto 'Sospendi'. L'accesso al gestore verrà revocato immediatamente.</li>
-            <li><strong>3. Monitoraggio:</strong> La "Scatola Nera" registra ogni tua azione. In caso di dubbi, consulta `admin_logs` nel database.</li>
-            <li><strong>4. Supporto:</strong> Se un gestore riscontra problemi, verifica prima lo stato 'is_active' nella tabella sale.</li>
+            <li><strong>1. Varo Nuova Sala:</strong> Crea automaticamente utente, database e log di sicurezza.</li>
+            <li><strong>2. Sospensione:</strong> Usa il tasto 'Sospendi' per revocare l'accesso immediato alla sala.</li>
+            <li><strong>3. Audit Contabile:</strong> Monitora la scadenza del mese gratuito e la posizione del gestore.</li>
           </ul>
         </div>
       )}
 
-      {/* FORM DI VARO */}
       <div className="bg-[#11131a] p-8 rounded-3xl border border-gray-800 mb-10 max-w-2xl">
         <h2 className="text-xl font-black mb-6 uppercase tracking-widest">Varo Nuova Sala</h2>
         <div className="grid grid-cols-2 gap-4">
@@ -87,7 +101,6 @@ export default function TorreDiControlloAdmin() {
         </button>
       </div>
 
-      {/* TABELLA DI CONTROLLO */}
       <div className="bg-[#11131a] rounded-3xl border border-gray-800 p-8">
         <h2 className="text-xl font-black mb-6 uppercase tracking-widest">Sale Attive</h2>
         <table className="w-full text-left">
@@ -113,7 +126,9 @@ export default function TorreDiControlloAdmin() {
                   <button onClick={() => toggleStatoSala(sala.id, sala.is_active)} className="text-xs font-bold uppercase text-cyan-400 hover:text-cyan-300">
                     {sala.is_active ? 'Sospendi' : 'Attiva'}
                   </button>
-                  <a href={`/dashboard/${sala.id}`} className="text-xs font-bold uppercase text-white hover:underline">Accedi</a>
+                  <button onClick={() => aprireAuditContabile(sala)} className="text-xs font-bold uppercase text-yellow-500 hover:text-yellow-300">
+                    Audit Contabile
+                  </button>
                 </td>
               </tr>
             ))}
