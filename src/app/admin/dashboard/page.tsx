@@ -1,199 +1,185 @@
+// components/PrenotazioniSocio.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 
-export default function TorreDiControlloAdmin() {
-  const [sale, setSale] = useState<any[]>([]);
-  const [nome, setNome] = useState("");
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [mostraAiuto, setMostraAiuto] = useState(false);
+export default function PrenotazioniSocio({ salaId }: { salaId: string }) {
+  const [prenotazioni, setPrenotazioni] = useState<any[]>([]);
+  const [soci, setSoci] = useState<any[]>([]);
+  const [nuovoNome, setNuovoNome] = useState("");
+  const [dataPrenotazione, setDataPrenotazione] = useState("");
+  const [nuovoOrario, setNuovoOrario] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => { 
-    caricaSale(); 
-  }, []);
+  // Calcola la data di oggi in formato testuale per i limiti dell'input
+  const oggiString = new Date().toISOString().split('T')[0];
 
-  const caricaSale = async () => {
-    const { data } = await supabase.from('sale').select('*');
-    if (data) setSale(data);
-  };
-
-  const creaSala = async () => {
-    // 1. BLOCCO VALIDAZIONE: Impedisce l'invio di dati vuoti
-    if (!nome.trim() || !email.trim()) {
-      alert("Attenzione: Inserisci sia il Nome della Sala che l'Email del Manager prima di procedere con l'onboarding.");
-      return; // Interrompe l'esecuzione qui
-    }
-
-    setLoading(true);
-    
-    // 2. Chiamata a Supabase solo se i campi sono pieni
-    const { error } = await supabase.rpc('crea_nuova_sala', {
-      p_nome_sala: nome.trim(),
-      p_manager_email: email.trim(),
-      p_manager_password: "PasswordTemporanea123!"
-    });
-
-    if (error) {
-      alert("Errore nel varo: " + error.message);
-    } else {
-      alert("Sala varata con successo!");
-      setNome(""); 
-      setEmail("");
-      caricaSale();
-    }
-    setLoading(false);
-  };
-
-  const toggleStatoSala = async (id: string, statoAttuale: boolean) => {
-    await supabase.from('sale').update({ is_active: !statoAttuale }).eq('id', id);
-    await supabase.from('admin_logs').insert({
-      admin_email: 'donatorzz1946@gmail.com',
-      azione: !statoAttuale ? 'ATTIVAZIONE_SALA' : 'SOSPENSIONE_SALA',
-      sala_id: id,
-      dettagli: `Stato cambiato in: ${!statoAttuale ? 'ATTIVA' : 'SOSPESA'}`
-    });
-    caricaSale();
-  };
-
-  const aprireAuditContabile = (sala: any) => {
+  const fetchData = async () => {
+    // 1. Recupero Prenotazioni (Da oggi in poi)
     const oggi = new Date();
-    const dataCreazione = new Date(sala.created_at);
-    const finePeriodoGratuito = new Date(dataCreazione);
-    finePeriodoGratuito.setMonth(finePeriodoGratuito.getMonth() + 1);
+    oggi.setHours(0, 0, 0, 0);
 
-    const statoPagamenti = oggi > finePeriodoGratuito ? "DA FATTURARE (Periodo gratuito terminato)" : "IN PROVA GRATUITA";
+    const { data: dataPren } = await supabase
+      .from('prenotazioni')
+      .select('*')
+      .eq('sala_id', salaId)
+      .gte('data_ora', oggi.toISOString())
+      .order('data_ora', { ascending: true });
 
-    alert(`
-      --- SCHEDA AMMINISTRATIVA: ${sala.nome} ---
-      Manager: ${sala.manager_email}
-      Data Creazione: ${dataCreazione.toLocaleDateString()}
-      Fine Mese Gratuito: ${finePeriodoGratuito.toLocaleDateString()}
-      Stato Pagamenti: ${statoPagamenti}
-      Stato Servizio: ${sala.is_active ? "ATTIVO" : "SOSPESO"}
-    `);
+    if (dataPren) setPrenotazioni(dataPren);
+
+    // 2. Recupero Registro Soci per Autocompletamento
+    const { data: dataSoci } = await supabase
+      .from('soci')
+      .select('*')
+      .eq('sala_id', salaId);
+    
+    if (dataSoci) setSoci(dataSoci);
+  };
+
+  useEffect(() => {
+    fetchData();
+    
+    // Auto-compilazione: Imposta la data e l'ora al momento attuale
+    const now = new Date();
+    setDataPrenotazione(now.toISOString().split('T')[0]);
+    
+    // Estrae l'orario nel formato HH:MM
+    const timeString = now.toTimeString().slice(0, 5);
+    setNuovoOrario(timeString);
+  }, [salaId]);
+
+  const handlePrenota = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuovoNome || !nuovoOrario || !dataPrenotazione) return;
+    
+    setIsSubmitting(true);
+
+    // Costruisce l'oggetto Date completo unendo il giorno e l'orario scelti
+    const dataOraCompleta = new Date(`${dataPrenotazione}T${nuovoOrario}:00`);
+    
+    // CONTROLLO SICUREZZA: Impedisce prenotazioni nel passato
+    if (dataOraCompleta < new Date()) {
+      alert("Attenzione: Non è possibile effettuare una prenotazione per un orario già trascorso.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('prenotazioni')
+        .insert([
+          { 
+            sala_id: salaId, 
+            nome_cliente: nuovoNome, 
+            data_ora: dataOraCompleta.toISOString(), 
+            note: '[APP SOCI]' // Tag automatico letto dal tabellone del gestore
+          }
+        ]);
+
+      if (!error) {
+        setNuovoNome(""); 
+        // Ripristina l'orario corrente dopo l'invio
+        setNuovoOrario(new Date().toTimeString().slice(0, 5)); 
+        fetchData(); 
+      } else {
+        console.error("Errore durante la prenotazione:", error);
+        alert("Errore durante la prenotazione: " + error.message);
+      }
+    } catch (err) {
+      console.error("Errore di formattazione data", err);
+    }
+    
+    setIsSubmitting(false);
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] p-10 text-white font-sans">
-      <div className="flex justify-between items-center mb-10">
-        <h1 className="text-4xl font-black text-[#00ADC6] italic uppercase tracking-tight drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
-          TORRE DI CONTROLLO AMMINISTRATIVA
-        </h1>
-        <button 
-          onClick={() => setMostraAiuto(!mostraAiuto)}
-          className="bg-[#1A1D24] hover:bg-[#2A2E39] border border-gray-600 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-colors shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-        >
-          {mostraAiuto ? "Chiudi Aiuto" : "ℹ️ Manuale Operativo"}
-        </button>
-      </div>
-
-      {mostraAiuto && (
-        <div className="bg-[#0B0D14] p-8 rounded-3xl border-2 border-[#00ADC6] shadow-[0_0_30px_rgba(0,173,198,0.2)] mb-10 animate-in fade-in slide-in-from-top-4 space-y-6">
-          <h3 className="text-[#00ADC6] font-black uppercase text-xl tracking-widest border-b border-gray-700 pb-4">
-            Manuale Operativo
-          </h3>
+    <div className="text-white space-y-8 animate-in fade-in duration-300">
+      
+      {/* BOX NUOVA PRENOTAZIONE */}
+      <div className="bg-[#1A1D24] p-6 rounded-lg border border-[#2A2E39] shadow-lg">
+        <h2 className="text-2xl font-black uppercase tracking-wider mb-6 text-[#FFCC00]">Nuova Prenotazione</h2>
+        <form onSubmit={handlePrenota} className="flex flex-col md:flex-row gap-4 items-end">
           
-          <div className="space-y-6 text-sm text-gray-300">
-            <div>
-              <h4 className="text-white font-black uppercase tracking-widest mb-2 text-base">1. Varo Nuova Sala (Onboarding Automatico)</h4>
-              <p className="leading-relaxed pl-4 border-l-2 border-gray-600">
-                Questa sezione permette di inizializzare un nuovo club nel sistema. Inserendo il "Nome Sala" e l'"Email Manager", il sistema crea simultaneamente l'utente (tramite Auth), genera la sala nel database e predispone l'ambiente isolato. Il processo è completamente automatizzato e invia le credenziali di accesso al nuovo manager in totale autonomia.
-              </p>
-            </div>
-
-            <div>
-              <h4 className="text-white font-black uppercase tracking-widest mb-2 text-base">2. Gestione Sale Attive (Kill Switch e Monitoraggio)</h4>
-              <p className="leading-relaxed pl-4 border-l-2 border-gray-600 mb-2">
-                La tabella offre una panoramica di tutte le sale registrate sulla piattaforma.
-              </p>
-              <ul className="pl-8 space-y-2 list-disc text-gray-400">
-                <li><strong className="text-gray-200">Stato Sala:</strong> Tramite i tasti rapidi (SOSPENDI / ATTIVA), l'amministratore può revocare o ripristinare istantaneamente l'accesso di un manager alla propria applicazione.</li>
-                <li><strong className="text-gray-200">Audit Contabile:</strong> Questa funzione permette all'amministratore di verificare lo stato dei contributi e delle scadenze amministrative della singola sala, senza entrare nel merito della loro contabilità interna.</li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="text-[#FFCC00] font-black uppercase tracking-widest mb-2 text-base">3. Protocollo di Isolamento Assoluto</h4>
-              <p className="leading-relaxed pl-4 border-l-2 border-[#FFCC00]/50 text-gray-300">
-                Nel pieno rispetto della privacy e dell'architettura multi-tenant, questa Torre di Controllo è limitata alla gestione delle utenze. L'amministratore di sistema non ha i permessi per visualizzare, alterare o gestire i dati interni delle singole sale (es. prenotazioni soci, incassi bar, tabelloni tornei). I dati di ogni club sono inaccessibili dall'esterno.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* BOX 1: Varo Nuova Sala */}
-      <div className="bg-[#0B0D14] p-8 rounded-3xl border border-gray-700 mb-10 max-w-3xl shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-        <h2 className="text-xl font-black mb-6 uppercase tracking-widest text-white">Varo Nuova Sala</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input 
-            placeholder="Nome Sala" 
-            className="bg-[#1A1D24] p-4 rounded-xl border border-gray-600 focus:outline-none focus:border-[#00ADC6] transition-colors shadow-inner" 
-            onChange={e => setNome(e.target.value)} 
-            value={nome} 
-          />
-          <input 
-            placeholder="Email Manager" 
-            className="bg-[#1A1D24] p-4 rounded-xl border border-gray-600 focus:outline-none focus:border-[#00ADC6] transition-colors shadow-inner" 
-            onChange={e => setEmail(e.target.value)} 
-            value={email} 
-          />
-        </div>
-        <button 
-          onClick={creaSala} 
-          disabled={loading} 
-          className="w-full mt-6 bg-[#00ADC6] hover:bg-[#008A9E] p-4 rounded-xl font-black uppercase tracking-widest transition-colors shadow-lg disabled:opacity-50 text-black"
-        >
-          {loading ? "Varo in corso..." : "Esegui Onboarding Automatico"}
-        </button>
-      </div>
-
-      {/* BOX 2: Sale Attive */}
-      <div className="bg-[#0B0D14] rounded-3xl border border-gray-700 p-8 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-        <h2 className="text-xl font-black mb-6 uppercase tracking-widest text-white">Sale Attive</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="text-gray-400 text-[10px] uppercase tracking-widest border-b border-gray-700">
-                <th className="pb-4 px-2">Nome Sala</th>
-                <th className="pb-4 px-2">Manager</th>
-                <th className="pb-4 px-2 text-center">Stato</th>
-                <th className="pb-4 px-2 text-right">Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sale.map((sala) => (
-                <tr key={sala.id} className="border-b border-gray-800 hover:bg-[#11141A] transition-colors">
-                  <td className="py-5 px-2 font-black text-white uppercase tracking-wider">{sala.nome}</td>
-                  <td className="py-5 px-2 text-gray-400 text-sm font-bold">{sala.manager_email}</td>
-                  <td className="py-5 px-2 text-center">
-                    <span className={`px-3 py-1.5 rounded-md text-[10px] font-black tracking-widest uppercase ${sala.is_active ? 'bg-[#10b981]/10 text-[#10b981] border border-[#10b981]/30' : 'bg-[#FF3B30]/10 text-[#FF3B30] border border-[#FF3B30]/30'}`}>
-                      {sala.is_active ? 'ATTIVA' : 'SOSPESA'}
-                    </span>
-                  </td>
-                  <td className="py-5 px-2 flex gap-4 justify-end items-center">
-                    <button onClick={() => toggleStatoSala(sala.id, sala.is_active)} className="text-[10px] font-black uppercase tracking-widest text-[#00ADC6] hover:text-white transition-colors">
-                      {sala.is_active ? 'Sospendi' : 'Attiva'}
-                    </button>
-                    <button onClick={() => aprireAuditContabile(sala)} className="text-[10px] font-black uppercase tracking-widest text-[#FFCC00] hover:text-white transition-colors">
-                      Audit Contabile
-                    </button>
-                  </td>
-                </tr>
+          {/* Input Autocompletante da Tabella Soci */}
+          <div className="flex-1 w-full relative">
+            <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1.5 block">Nome Socio</label>
+            <input
+              type="text"
+              list="lista-soci"
+              placeholder="Inizia a digitare il tuo nome..."
+              value={nuovoNome}
+              onChange={(e) => setNuovoNome(e.target.value)}
+              className="w-full bg-[#0B0D14] border border-[#2A2E39] rounded p-3 text-white font-bold focus:outline-none focus:border-[#FFCC00] transition-colors shadow-inner"
+              required
+            />
+            <datalist id="lista-soci">
+              {soci.map((socio, index) => (
+                <option key={index} value={`${socio.nome} ${socio.cognome || ''}`.trim()} />
               ))}
-              {sale.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-10 text-center text-gray-500 font-bold text-sm uppercase tracking-widest">
-                    Nessuna sala attiva
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </datalist>
+          </div>
+
+          <div className="w-full md:w-auto">
+            <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1.5 block">Data</label>
+            <input
+              type="date"
+              min={oggiString}
+              value={dataPrenotazione}
+              onChange={(e) => setDataPrenotazione(e.target.value)}
+              className="w-full bg-[#0B0D14] border border-[#2A2E39] rounded p-3 text-white focus:outline-none focus:border-[#FFCC00] transition-colors [color-scheme:dark] shadow-inner"
+              required
+            />
+          </div>
+
+          <div className="w-full md:w-auto">
+            <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1.5 block">Ora</label>
+            <input
+              type="time"
+              value={nuovoOrario}
+              onChange={(e) => setNuovoOrario(e.target.value)}
+              className="w-full bg-[#0B0D14] border border-[#2A2E39] rounded p-3 text-[#00E5FF] font-black focus:outline-none focus:border-[#FFCC00] transition-colors [color-scheme:dark] shadow-inner"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full md:w-auto bg-[#FFCC00] text-black font-black uppercase tracking-widest px-8 py-3.5 rounded hover:bg-[#E6B800] transition-colors disabled:opacity-50 shadow-[0_0_15px_rgba(255,204,0,0.3)]"
+          >
+            {isSubmitting ? "..." : "Prenota"}
+          </button>
+        </form>
       </div>
+
+      {/* BOX LISTA PRENOTAZIONI */}
+      <div className="bg-[#1A1D24] p-6 rounded-lg border border-[#2A2E39] shadow-lg">
+        <h2 className="text-xl font-bold mb-4">Prenotazioni in coda (Da Oggi)</h2>
+        {prenotazioni.length === 0 ? (
+          <p className="text-gray-500">Nessuna prenotazione trovata. Sii il primo a prenotare!</p>
+        ) : (
+          <ul className="space-y-3">
+            {prenotazioni.map((p) => {
+              const dataObj = new Date(p.data_ora);
+              const orario = dataObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+              const dataGiorno = dataObj.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+
+              return (
+                <li key={p.id} className="bg-[#0B0D14] p-4 rounded border border-[#2A2E39] flex justify-between items-center shadow-md">
+                  <div className="flex gap-4 items-center">
+                    <span className="text-[#00E5FF] font-black text-lg">{orario}</span>
+                    <span className="text-gray-400 text-xs font-bold">{dataGiorno}</span>
+                  </div>
+                  <span className="text-gray-300 font-black uppercase tracking-wider">{p.nome_cliente || "Socio"}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+      
     </div>
   );
 }
