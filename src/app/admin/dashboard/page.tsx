@@ -48,6 +48,12 @@ export default function PrenotazioniSocio({ salaId }: { salaId: string }) {
     // Estrae l'orario nel formato HH:MM
     const timeString = now.toTimeString().slice(0, 5);
     setNuovoOrario(timeString);
+
+    // MEMORIA AUTOMATICA: Recupera il nome del socio salvato sul suo dispositivo
+    const nomeSalvato = localStorage.getItem(`nomeSocio_${salaId}`);
+    if (nomeSalvato) {
+      setNuovoNome(nomeSalvato);
+    }
   }, [salaId]);
 
   const handlePrenota = async (e: React.FormEvent) => {
@@ -72,15 +78,17 @@ export default function PrenotazioniSocio({ salaId }: { salaId: string }) {
         .insert([
           { 
             sala_id: salaId, 
-            nome_cliente: nuovoNome, 
+            nome_cliente: nuovoNome.trim(), 
             data_ora: dataOraCompleta.toISOString(), 
             note: '[APP SOCI]' // Tag automatico letto dal tabellone del gestore
           }
         ]);
 
       if (!error) {
-        setNuovoNome(""); 
-        // Ripristina l'orario corrente dopo l'invio
+        // SALVATAGGIO IN MEMORIA: Salva il nome nel browser del telefono/PC per la prossima volta
+        localStorage.setItem(`nomeSocio_${salaId}`, nuovoNome.trim());
+
+        // Ripristina l'orario corrente dopo l'invio, ma LASCIA IL NOME COMPILATO
         setNuovoOrario(new Date().toTimeString().slice(0, 5)); 
         fetchData(); 
       } else {
@@ -102,7 +110,7 @@ export default function PrenotazioniSocio({ salaId }: { salaId: string }) {
         <h2 className="text-2xl font-black uppercase tracking-wider mb-6 text-[#FFCC00]">Nuova Prenotazione</h2>
         <form onSubmit={handlePrenota} className="flex flex-col md:flex-row gap-4 items-end">
           
-          {/* Input Autocompletante da Tabella Soci */}
+          {/* Input Autocompletante da Tabella Soci con Memoria */}
           <div className="flex-1 w-full relative">
             <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1.5 block">Nome Socio</label>
             <input
