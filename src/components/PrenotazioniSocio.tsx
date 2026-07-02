@@ -11,13 +11,16 @@ export default function PrenotazioniSocio({ salaId }: { salaId: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchPrenotazioni = async () => {
+    // Usa la data di oggi a mezzanotte come filtro per mostrare solo i turni futuri/odierni
+    const oggi = new Date();
+    oggi.setHours(0, 0, 0, 0);
+
     const { data, error } = await supabase
       .from('prenotazioni')
       .select('*')
       .eq('sala_id', salaId)
-      // Mostra solo le prenotazioni da oggi in poi (opzionale, ma consigliato)
-      .gte('data', new Date().toISOString().split('T')[0])
-      .order('orario', { ascending: true });
+      .gte('data_ora', oggi.toISOString())
+      .order('data_ora', { ascending: true });
 
     if (data) setPrenotazioni(data);
   };
@@ -32,28 +35,32 @@ export default function PrenotazioniSocio({ salaId }: { salaId: string }) {
     
     setIsSubmitting(true);
 
-    // Prende la data di oggi nel formato YYYY-MM-DD
-    const oggi = new Date().toISOString().split('T')[0];
+    try {
+      // Prende la data di oggi e la combina con l'orario scelto dal socio per creare il formato corretto per il DB
+      const dataOggi = new Date().toISOString().split('T')[0];
+      const dataOraCompleta = new Date(`${dataOggi}T${nuovoOrario}:00`).toISOString();
 
-    const { error } = await supabase
-      .from('prenotazioni')
-      .insert([
-        { 
-          sala_id: salaId, 
-          nome: nuovoNome,        // Assicurati che corrisponda al nome della colonna nel tuo DB
-          orario: nuovoOrario, 
-          data: oggi,             // Aggiunta la data per la dashboard
-          canale: 'APP SOCI',     // Tag automatico per il tabellone del gestore
-          stato: 'in_attesa'      // Opzionale: stato iniziale
-        }
-      ]);
+      const { error } = await supabase
+        .from('prenotazioni')
+        .insert([
+          { 
+            sala_id: salaId, 
+            nome_cliente: nuovoNome, 
+            data_ora: dataOraCompleta, 
+            note: '[APP SOCI]' // Tag automatico letto dal tabellone del gestore
+          }
+        ]);
 
-    if (!error) {
-      setNuovoNome(""); 
-      setNuovoOrario(""); 
-      fetchPrenotazioni(); 
-    } else {
-      console.error("Errore durante la prenotazione:", error);
+      if (!error) {
+        setNuovoNome(""); 
+        setNuovoOrario(""); 
+        fetchPrenotazioni(); 
+      } else {
+        console.error("Errore durante la prenotazione:", error);
+        alert("Errore durante la prenotazione: " + error.message);
+      }
+    } catch (err) {
+      console.error("Errore di formattazione data", err);
     }
     
     setIsSubmitting(false);
@@ -91,20 +98,27 @@ export default function PrenotazioniSocio({ salaId }: { salaId: string }) {
       </div>
 
       <div className="bg-[#1A1D24] p-6 rounded-lg border border-[#2A2E39] shadow-lg">
-        <h2 className="text-xl font-bold mb-4">Prenotazioni in coda</h2>
+        <h2 className="text-xl font-bold mb-4">Prenotazioni in coda (Da Oggi)</h2>
         {prenotazioni.length === 0 ? (
           <p className="text-gray-500">Nessuna prenotazione trovata. Sii il primo a prenotare!</p>
         ) : (
           <ul className="space-y-3">
-            {prenotazioni.map((p, index) => (
-              <li key={index} className="bg-[#0B0D14] p-4 rounded border border-[#2A2E39] flex justify-between items-center">
-                <div className="flex gap-4 items-center">
-                   <span className="text-[#00E5FF] font-black text-lg">{p.orario}</span>
-                   <span className="text-gray-400 text-xs">{p.data}</span>
-                </div>
-                <span className="text-gray-300 font-medium uppercase tracking-wider">{p.nome || "Socio"}</span>
-              </li>
-            ))}
+            {prenotazioni.map((p) => {
+              // Estrapola l'orario e la data dal formato data_ora
+              const dataObj = new Date(p.data_ora);
+              const orario = dataObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+              const dataGiorno = dataObj.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+
+              return (
+                <li key={p.id} className="bg-[#0B0D14] p-4 rounded border border-[#2A2E39] flex justify-between items-center">
+                  <div className="flex gap-4 items-center">
+                    <span className="text-[#00E5FF] font-black text-lg">{orario}</span>
+                    <span className="text-gray-400 text-xs">{dataGiorno}</span>
+                  </div>
+                  <span className="text-gray-300 font-medium uppercase tracking-wider">{p.nome_cliente || "Socio"}</span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
