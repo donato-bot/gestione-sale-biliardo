@@ -8,14 +8,20 @@ export default function TorreDiControlloAdmin() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mostraAiuto, setMostraAiuto] = useState(false);
 
-  useEffect(() => { caricaSale(); }, []);
+  useEffect(() => { 
+    caricaSale(); 
+  }, []);
 
   const caricaSale = async () => {
-    // Il Super Admin vede solo l'anagrafica delle sale, non i dati operativi
-    const { data } = await supabase.from('sale').select('id, name, manager_email, is_active, created_at');
-    if (data) setSale(data);
+    // Ripristinato il select('*') per evitare errori su colonne inesistenti
+    const { data, error } = await supabase.from('sale').select('*');
+    
+    if (error) {
+      console.error("Errore nel caricamento delle sale:", error);
+    } else if (data) {
+      setSale(data);
+    }
   };
 
   const creaSala = async () => {
@@ -25,25 +31,43 @@ export default function TorreDiControlloAdmin() {
       p_manager_email: email,
       p_manager_password: "PasswordTemporanea123!"
     });
-    if (error) { alert("Errore nel varo: " + error.message); } 
-    else { alert("Sala varata!"); setNome(""); setEmail(""); caricaSale(); }
+    
+    if (error) { 
+      alert("Errore nel varo: " + error.message); 
+    } else { 
+      alert("Sala varata!"); 
+      setNome(""); 
+      setEmail(""); 
+      caricaSale(); 
+    }
     setLoading(false);
   };
 
   const toggleStatoSala = async (id: string, statoAttuale: boolean) => {
-    await supabase.from('sale').update({ is_active: !statoAttuale }).eq('id', id);
-    caricaSale();
+    const { error } = await supabase.from('sale').update({ is_active: !statoAttuale }).eq('id', id);
+    if (!error) {
+      caricaSale();
+    } else {
+      alert("Errore nell'aggiornamento dello stato.");
+    }
   };
 
   const aprireAuditContabile = (sala: any) => {
-    const oggi = new Date();
-    const dataCreazione = new Date(sala.created_at);
-    const finePeriodoGratuito = new Date(dataCreazione);
-    finePeriodoGratuito.setMonth(finePeriodoGratuito.getMonth() + 1);
+    // Utilizziamo il campo corretto 'scadenza_contributo' per il controllo
+    let statoPagamenti = "Dato non disponibile";
+    let scadenza = "Non definita";
 
-    const statoPagamenti = oggi > finePeriodoGratuito ? "DA FATTURARE" : "IN PROVA GRATUITA";
+    if (sala.scadenza_contributo) {
+      const oggi = new Date();
+      const dataScadenza = new Date(sala.scadenza_contributo);
+      scadenza = dataScadenza.toLocaleDateString();
+      statoPagamenti = oggi > dataScadenza ? "DA FATTURARE (Scaduto)" : "REGOLARE";
+    } else {
+      // Se il campo scadenza è vuoto, assumiamo che sia in prova gratuita
+       statoPagamenti = "IN PROVA GRATUITA";
+    }
 
-    alert(`--- SCHEDA AMMINISTRATIVA ---\nSala: ${sala.name}\nManager: ${sala.manager_email}\nStato Pagamenti: ${statoPagamenti}\nStato Servizio: ${sala.is_active ? "ATTIVO" : "SOSPESO"}`);
+    alert(`--- SCHEDA AMMINISTRATIVA ---\nSala: ${sala.name}\nManager: ${sala.manager_email}\nScadenza: ${scadenza}\nStato Pagamenti: ${statoPagamenti}\nStato Servizio: ${sala.is_active ? "ATTIVO" : "SOSPESO"}`);
   };
 
   return (
@@ -84,15 +108,20 @@ export default function TorreDiControlloAdmin() {
                   </span>
                 </td>
                 <td className="py-4 flex gap-4 justify-end">
-                  <button onClick={() => toggleStatoSala(sala.id, sala.is_active)} className="text-cyan-400 uppercase font-bold text-xs">
+                  <button onClick={() => toggleStatoSala(sala.id, sala.is_active)} className="text-cyan-400 uppercase font-bold text-xs hover:text-cyan-300">
                     {sala.is_active ? 'Sospendi' : 'Attiva'}
                   </button>
-                  <button onClick={() => aprireAuditContabile(sala)} className="text-yellow-500 uppercase font-bold text-xs">
+                  <button onClick={() => aprireAuditContabile(sala)} className="text-yellow-500 uppercase font-bold text-xs hover:text-yellow-300">
                     Audit
                   </button>
                 </td>
               </tr>
             ))}
+            {sale.length === 0 && (
+               <tr>
+                 <td colSpan={4} className="py-8 text-center text-gray-500 font-bold tracking-widest text-sm uppercase">Nessuna sala rilevata</td>
+               </tr>
+            )}
           </tbody>
         </table>
       </div>
