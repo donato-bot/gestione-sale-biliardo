@@ -9,22 +9,21 @@ export default function TorreDiControlloAdmin() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Validazione: il tasto è disabilitato se i campi sono vuoti o se è in corso un caricamento
+  const isFormInvalid = !nome.trim() || !email.trim() || loading;
+
   useEffect(() => { 
     caricaSale(); 
   }, []);
 
   const caricaSale = async () => {
-    // Ripristinato il select('*') per evitare errori su colonne inesistenti
     const { data, error } = await supabase.from('sale').select('*');
-    
-    if (error) {
-      console.error("Errore nel caricamento delle sale:", error);
-    } else if (data) {
-      setSale(data);
-    }
+    if (data) setSale(data);
   };
 
   const creaSala = async () => {
+    if (isFormInvalid) return; // Doppia sicurezza lato codice
+
     setLoading(true);
     const { error } = await supabase.rpc('crea_nuova_sala', {
       p_nome_sala: nome,
@@ -45,48 +44,35 @@ export default function TorreDiControlloAdmin() {
 
   const toggleStatoSala = async (id: string, statoAttuale: boolean) => {
     const { error } = await supabase.from('sale').update({ is_active: !statoAttuale }).eq('id', id);
-    if (!error) {
-      caricaSale();
-    } else {
-      alert("Errore nell'aggiornamento dello stato.");
-    }
+    if (!error) caricaSale();
   };
 
   const aprireAuditContabile = (sala: any) => {
-    // Utilizziamo il campo corretto 'scadenza_contributo' per il controllo
-    let statoPagamenti = "Dato non disponibile";
-    let scadenza = "Non definita";
-
-    if (sala.scadenza_contributo) {
-      const oggi = new Date();
-      const dataScadenza = new Date(sala.scadenza_contributo);
-      scadenza = dataScadenza.toLocaleDateString();
-      statoPagamenti = oggi > dataScadenza ? "DA FATTURARE (Scaduto)" : "REGOLARE";
-    } else {
-      // Se il campo scadenza è vuoto, assumiamo che sia in prova gratuita
-       statoPagamenti = "IN PROVA GRATUITA";
-    }
-
-    alert(`--- SCHEDA AMMINISTRATIVA ---\nSala: ${sala.name}\nManager: ${sala.manager_email}\nScadenza: ${scadenza}\nStato Pagamenti: ${statoPagamenti}\nStato Servizio: ${sala.is_active ? "ATTIVO" : "SOSPESO"}`);
+    let statoPagamenti = sala.scadenza_contributo ? 
+        (new Date() > new Date(sala.scadenza_contributo) ? "DA FATTURARE" : "REGOLARE") : "IN PROVA GRATUITA";
+    
+    alert(`--- SCHEDA AMMINISTRATIVA ---\nSala: ${sala.name}\nManager: ${sala.manager_email}\nStato Pagamenti: ${statoPagamenti}\nStato Servizio: ${sala.is_active ? "ATTIVO" : "SOSPESA"}`);
   };
 
   return (
     <div className="min-h-screen bg-[#050505] p-10 text-white">
       <h1 className="text-4xl font-black text-cyan-500 mb-10 italic">TORRE DI CONTROLLO AMMINISTRATIVA</h1>
 
-      {/* Sezione Varo - Gestione Contratti */}
       <div className="bg-[#11131a] p-8 rounded-3xl border border-gray-800 mb-10 max-w-2xl">
         <h2 className="text-xl font-black mb-6 uppercase tracking-widest">Registrazione Nuova Sala</h2>
         <div className="grid grid-cols-2 gap-4">
           <input placeholder="Nome Sala" className="bg-black p-4 rounded-xl border border-gray-800" onChange={e => setNome(e.target.value)} value={nome} />
           <input placeholder="Email Manager" className="bg-black p-4 rounded-xl border border-gray-800" onChange={e => setEmail(e.target.value)} value={email} />
         </div>
-        <button onClick={creaSala} disabled={loading} className="w-full mt-4 bg-cyan-600 p-4 rounded-xl font-black uppercase">
+        <button 
+          onClick={creaSala} 
+          disabled={isFormInvalid} 
+          className={`w-full mt-4 p-4 rounded-xl font-black uppercase ${isFormInvalid ? 'bg-gray-700 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500'}`}
+        >
           {loading ? "Varo in corso..." : "Esegui Onboarding"}
         </button>
       </div>
 
-      {/* Tabella di Controllo - Monitoraggio Contrattuale */}
       <div className="bg-[#11131a] rounded-3xl border border-gray-800 p-8">
         <table className="w-full text-left">
           <thead>
@@ -117,11 +103,6 @@ export default function TorreDiControlloAdmin() {
                 </td>
               </tr>
             ))}
-            {sale.length === 0 && (
-               <tr>
-                 <td colSpan={4} className="py-8 text-center text-gray-500 font-bold tracking-widest text-sm uppercase">Nessuna sala rilevata</td>
-               </tr>
-            )}
           </tbody>
         </table>
       </div>
