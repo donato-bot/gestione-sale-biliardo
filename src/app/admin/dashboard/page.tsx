@@ -48,15 +48,46 @@ export default function TorreDiControlloAdmin() {
       <div className="flex justify-between items-center mb-10">
         <h1 className="text-4xl font-black text-cyan-500 italic">TORRE DI CONTROLLO</h1>
         <div className="flex gap-4">
-          <button onClick={() => setMostraAiuto(!mostraAiuto)} className="bg-gray-800 px-6 py-3 rounded-xl font-bold uppercase text-xs hover:bg-gray-700">ℹ️ Manuale</button>
+          <button onClick={() => setMostraAiuto(!mostraAiuto)} className="bg-gray-800 px-6 py-3 rounded-xl font-bold uppercase text-xs hover:bg-gray-700">
+            {mostraAiuto ? "Chiudi Manuale" : "ℹ️ Manuale"}
+          </button>
           <button onClick={logout} className="bg-red-900/50 px-6 py-3 rounded-xl font-bold uppercase text-xs hover:bg-red-800">Esci</button>
         </div>
       </div>
 
       {mostraAiuto && (
-        <div className="bg-[#1A1D24] p-8 rounded-3xl border-2 border-cyan-500 mb-10">
-          <h3 className="text-cyan-400 font-black mb-4 uppercase">Manuale Operativo</h3>
-          <p className="text-sm text-gray-300">Gestisci le sale, monitora i contratti tramite la funzione 'Audit' e usa le note per ogni aggiornamento necessario.</p>
+        <div className="bg-[#1A1D24] p-8 rounded-3xl border-2 border-cyan-500 mb-10 max-h-[500px] overflow-y-auto animate-in fade-in slide-in-from-top-4">
+          <h2 className="text-2xl text-cyan-400 font-black mb-6 uppercase border-b border-cyan-900 pb-4">
+            📘 Manuale Operativo e Strategico: "Il Campione"
+          </h2>
+          
+          <div className="space-y-6 text-sm text-gray-300">
+            <section>
+              <h3 className="text-lg font-bold text-white mb-2 uppercase">Parte I: L'Ecosistema Attuale</h3>
+              <ul className="list-disc pl-5 space-y-2">
+                <li><strong>Torre di Controllo (Super Admin):</strong> Centro direzionale per il varo automatizzato, audit contabile e gestione sospensioni (Kill Switch). Nessun accesso ai dati sensibili operativi dei clienti per rispettare il protocollo di isolamento.</li>
+                <li><strong>Hub Operativo (Manager):</strong> Spazio isolato della singola sala per la gestione di tavoli, bar, contabilità e anagrafica.</li>
+                <li><strong>Scatola Nera:</strong> Sistema di log per tracciare ogni azione amministrativa a garanzia di sicurezza.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3 className="text-lg font-bold text-white mb-2 uppercase">Parte II: Pianificazione della Distribuzione</h3>
+              <ul className="list-disc pl-5 space-y-2">
+                <li><strong>Modello Commerciale:</strong> Fase di trial gratuita iniziale, seguita da transizione ad abbonamento a regime. Gestione inadempienze tramite sospensione tempestiva.</li>
+                <li><strong>Automazione (Onboarding 2.0):</strong> Sviluppo futuro di una Landing Page pubblica per consentire ai gestori di richiedere l'iscrizione in autonomia, con approvazione a un click dalla Torre.</li>
+                <li><strong>Supporto e Comunicazione:</strong> Inserimento di una bacheca notifiche nell'Hub Gestore per inviare comunicazioni amministrative e avvisi di scadenza.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3 className="text-lg font-bold text-white mb-2 uppercase">Parte III: Linee Guida dello Sviluppo</h3>
+              <ul className="list-disc pl-5 space-y-2">
+                <li><strong>Integrità Modulare:</strong> Le future funzioni saranno sviluppate come moduli attivabili su richiesta.</li>
+                <li><strong>Rispetto del Protocollo:</strong> La certezza tecnica dell'inaccessibilità ai dati dei tenant da parte di terzi rimane il pilastro fiduciario e strutturale del sistema.</li>
+              </ul>
+            </section>
+          </div>
         </div>
       )}
 
@@ -66,7 +97,7 @@ export default function TorreDiControlloAdmin() {
           <input placeholder="Nome" className="bg-black p-4 rounded-xl border border-gray-800" onChange={e => setNome(e.target.value)} value={nome} />
           <input placeholder="Email" className="bg-black p-4 rounded-xl border border-gray-800" onChange={e => setEmail(e.target.value)} value={email} />
         </div>
-        <button onClick={creaSala} disabled={isFormInvalid} className={`w-full mt-4 p-4 rounded-xl font-black uppercase ${isFormInvalid ? 'bg-gray-700' : 'bg-cyan-600'}`}>Esegui Onboarding</button>
+        <button onClick={creaSala} disabled={isFormInvalid} className={`w-full mt-4 p-4 rounded-xl font-black uppercase ${isFormInvalid ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500'}`}>Esegui Onboarding</button>
       </div>
 
       <div className="bg-[#11131a] rounded-3xl border border-gray-800 p-8">
@@ -81,12 +112,12 @@ export default function TorreDiControlloAdmin() {
           </thead>
           <tbody>
             {sale.map((sala) => (
-              <tr key={sala.id} className="border-b border-gray-800/50">
+              <tr key={sala.id} className="border-b border-gray-800/50 hover:bg-gray-900/30">
                 <td className="py-4 font-bold">{sala.name}</td>
                 <td className="py-4 text-gray-400">{sala.manager_email}</td>
-                <td className="py-4 text-xs text-yellow-400 italic">{sala.note_amministrative || "Nessuna nota"}</td>
+                <td className="py-4 text-xs text-yellow-400 italic max-w-[200px] truncate">{sala.note_amministrative || "Nessuna nota"}</td>
                 <td className="py-4 flex gap-4 justify-end">
-                  <button onClick={() => aprireAuditContabile(sala)} className="text-yellow-500 uppercase font-bold text-xs">Audit/Note</button>
+                  <button onClick={() => aprireAuditContabile(sala)} className="text-yellow-500 uppercase font-bold text-xs hover:text-yellow-300">Audit/Note</button>
                 </td>
               </tr>
             ))}
