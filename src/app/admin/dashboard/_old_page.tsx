@@ -1,128 +1,120 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/app/lib/supabase";
+// ==========================================
+// FILE: app/dashboard/page.tsx
+// OBIETTIVO: Interfaccia Snellita per il Gestore (Gestione Tavoli)
+// ==========================================
 
-export default function TorreDiControlloAdmin() {
-  const [sale, setSale] = useState<any[]>([]);
-  const [nome, setNome] = useState("");
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [mostraAiuto, setMostraAiuto] = useState(false);
+import { useState } from 'react';
 
-  const isFormInvalid = !nome.trim() || !email.trim() || loading;
+// Struttura dati per lo stato dei tavoli
+interface Tavolo {
+  id: number;
+  numero: number;
+  stato: 'libero' | 'occupato';
+  oraInizio: Date | null;
+}
 
-  useEffect(() => { caricaSale(); }, []);
+export default function DashboardGestore() {
+  // Generiamo 6 tavoli da biliardo per il collaudo visivo
+  const [tavoli, setTavoli] = useState<Tavolo[]>([
+    { id: 1, numero: 1, stato: 'libero', oraInizio: null },
+    { id: 2, numero: 2, stato: 'libero', oraInizio: null },
+    { id: 3, numero: 3, stato: 'libero', oraInizio: null },
+    { id: 4, numero: 4, stato: 'libero', oraInizio: null },
+    { id: 5, numero: 5, stato: 'libero', oraInizio: null },
+    { id: 6, numero: 6, stato: 'libero', oraInizio: null },
+  ]);
 
-  const caricaSale = async () => {
-    const { data } = await supabase.from('sale').select('*');
-    if (data) setSale(data.filter(s => s.name));
+  // Tariffa oraria di test (es. 10€ all'ora)
+  const TARIFFA_ORARIA = 10;
+
+  // AZIONE 1: Assegnazione rapida del tavolo
+  const apriTavolo = (idTavolo: number) => {
+    setTavoli(tavoli.map(tavolo => 
+      tavolo.id === idTavolo 
+        ? { ...tavolo, stato: 'occupato', oraInizio: new Date() } 
+        : tavolo
+    ));
   };
 
-  const creaSala = async () => {
-    if (isFormInvalid) return;
-    setLoading(true);
-    await supabase.rpc('crea_nuova_sala', { p_nome_sala: nome, p_manager_email: email, p_manager_password: "PasswordTemporanea123!" });
-    alert("Sala varata!"); setNome(""); setEmail(""); setLoading(false); caricaSale();
+  // AZIONE 2 & 3: Calcolo tariffa e chiusura sessione
+  const chiudiTavolo = (idTavolo: number, oraInizio: Date) => {
+    const oraFine = new Date();
+    // Calcolo dei minuti trascorsi
+    const minutiTrascorsi = Math.floor((oraFine.getTime() - oraInizio.getTime()) / 60000);
+    // Calcolo costo: (tariffa oraria / 60) * minuti
+    const costo = ((TARIFFA_ORARIA / 60) * minutiTrascorsi).toFixed(2);
+
+    // In un ambiente reale qui salveremmo l'incasso nel database.
+    alert(`Sessione Chiusa!\nTempo: ${minutiTrascorsi} minuti\nTotale da incassare: €${costo}`);
+
+    // Ripristino il tavolo allo stato libero
+    setTavoli(tavoli.map(tavolo => 
+      tavolo.id === idTavolo 
+        ? { ...tavolo, stato: 'libero', oraInizio: null } 
+        : tavolo
+    ));
   };
 
-  const aggiornaNoteSala = async (id: string, note: string) => {
-    await supabase.from('sale').update({ note_amministrative: note }).eq('id', id);
-    caricaSale();
-  };
-
-  const aprireAuditContabile = (sala: any) => {
-    const noteAttuali = sala.note_amministrative || "";
-    const nuoveNote = prompt(`--- SCHEDA AMMINISTRATIVA: ${sala.name} ---\nStato: ${sala.is_active ? "ATTIVO" : "SOSPESO"}\n\nAnnota contrattazione o stato attuale:`, noteAttuali);
-    
-    if (nuoveNote !== null) aggiornaNoteSala(sala.id, nuoveNote);
-  };
-
-  const logout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
+  // Funzione di utilità per formattare l'orario a schermo (es. 14:30)
+  const formattaOra = (data: Date) => {
+    return data.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] p-10 text-white">
-      <div className="flex justify-between items-center mb-10">
-        <h1 className="text-4xl font-black text-cyan-500 italic">TORRE DI CONTROLLO</h1>
-        <div className="flex gap-4">
-          <button onClick={() => setMostraAiuto(!mostraAiuto)} className="bg-gray-800 px-6 py-3 rounded-xl font-bold uppercase text-xs hover:bg-gray-700">
-            {mostraAiuto ? "Chiudi Manuale" : "ℹ️ Manuale"}
-          </button>
-          <button onClick={logout} className="bg-red-900/50 px-6 py-3 rounded-xl font-bold uppercase text-xs hover:bg-red-800">Esci</button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-50 p-6">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-800">Sala Operativa</h1>
+        <p className="text-slate-500">Gestione flussi e tariffe</p>
+      </header>
 
-      {mostraAiuto && (
-        <div className="bg-[#1A1D24] p-8 rounded-3xl border-2 border-cyan-500 mb-10 max-h-[500px] overflow-y-auto animate-in fade-in slide-in-from-top-4">
-          <h2 className="text-2xl text-cyan-400 font-black mb-6 uppercase border-b border-cyan-900 pb-4">
-            📘 Manuale Operativo e Strategico: "Il Campione"
-          </h2>
-          
-          <div className="space-y-6 text-sm text-gray-300">
-            <section>
-              <h3 className="text-lg font-bold text-white mb-2 uppercase">Parte I: L'Ecosistema Attuale</h3>
-              <ul className="list-disc pl-5 space-y-2">
-                <li><strong>Torre di Controllo (Super Admin):</strong> Centro direzionale per il varo automatizzato, audit contabile e gestione sospensioni (Kill Switch). Nessun accesso ai dati sensibili operativi dei clienti per rispettare il protocollo di isolamento.</li>
-                <li><strong>Hub Operativo (Manager):</strong> Spazio isolato della singola sala per la gestione di tavoli, bar, contabilità e anagrafica.</li>
-                <li><strong>Scatola Nera:</strong> Sistema di log per tracciare ogni azione amministrativa a garanzia di sicurezza.</li>
-              </ul>
-            </section>
+      {/* Griglia Tavoli: Design ad alto contrasto per la massima visibilità */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {tavoli.map((tavolo) => (
+          <div 
+            key={tavolo.id} 
+            className={`p-6 rounded-xl shadow-md border-t-4 flex flex-col justify-between h-48 transition-all ${
+              tavolo.stato === 'libero' 
+                ? 'bg-white border-green-500' 
+                : 'bg-slate-800 border-red-500'
+            }`}
+          >
+            <div className="flex justify-between items-start">
+              <span className={`text-2xl font-black ${tavolo.stato === 'libero' ? 'text-slate-700' : 'text-white'}`}>
+                Tavolo {tavolo.numero}
+              </span>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                tavolo.stato === 'libero' ? 'bg-green-100 text-green-700' : 'bg-red-500 text-white'
+              }`}>
+                {tavolo.stato}
+              </span>
+            </div>
 
-            <section>
-              <h3 className="text-lg font-bold text-white mb-2 uppercase">Parte II: Pianificazione della Distribuzione</h3>
-              <ul className="list-disc pl-5 space-y-2">
-                <li><strong>Modello Commerciale:</strong> Fase di trial gratuita iniziale, seguita da transizione ad abbonamento a regime. Gestione inadempienze tramite sospensione tempestiva.</li>
-                <li><strong>Automazione (Onboarding 2.0):</strong> Sviluppo futuro di una Landing Page pubblica per consentire ai gestori di richiedere l'iscrizione in autonomia, con approvazione a un click dalla Torre.</li>
-                <li><strong>Supporto e Comunicazione:</strong> Inserimento di una bacheca notifiche nell'Hub Gestore per inviare comunicazioni amministrative e avvisi di scadenza.</li>
-              </ul>
-            </section>
-
-            <section>
-              <h3 className="text-lg font-bold text-white mb-2 uppercase">Parte III: Linee Guida dello Sviluppo</h3>
-              <ul className="list-disc pl-5 space-y-2">
-                <li><strong>Integrità Modulare:</strong> Le future funzioni saranno sviluppate come moduli attivabili su richiesta.</li>
-                <li><strong>Rispetto del Protocollo:</strong> La certezza tecnica dell'inaccessibilità ai dati dei tenant da parte di terzi rimane il pilastro fiduciario e strutturale del sistema.</li>
-              </ul>
-            </section>
+            <div className="mt-4">
+              {tavolo.stato === 'libero' ? (
+                <button 
+                  onClick={() => apriTavolo(tavolo.id)}
+                  className="w-full bg-slate-200 hover:bg-green-500 hover:text-white text-slate-700 font-bold py-3 px-4 rounded transition-colors"
+                >
+                  ▶ APRI TAVOLO
+                </button>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <span className="text-slate-300 text-sm">
+                    Inizio: {tavolo.oraInizio ? formattaOra(tavolo.oraInizio) : ''}
+                  </span>
+                  <button 
+                    onClick={() => chiudiTavolo(tavolo.id, tavolo.oraInizio!)}
+                    className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-4 rounded transition-colors shadow-lg"
+                  >
+                    ⏹ CHIUDI E CALCOLA
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-
-      <div className="bg-[#11131a] p-8 rounded-3xl border border-gray-800 mb-10 max-w-2xl">
-        <h2 className="text-xl font-black mb-6 uppercase tracking-widest">Registrazione Sala</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <input placeholder="Nome" className="bg-black p-4 rounded-xl border border-gray-800" onChange={e => setNome(e.target.value)} value={nome} />
-          <input placeholder="Email" className="bg-black p-4 rounded-xl border border-gray-800" onChange={e => setEmail(e.target.value)} value={email} />
-        </div>
-        <button onClick={creaSala} disabled={isFormInvalid} className={`w-full mt-4 p-4 rounded-xl font-black uppercase ${isFormInvalid ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500'}`}>Esegui Onboarding</button>
-      </div>
-
-      <div className="bg-[#11131a] rounded-3xl border border-gray-800 p-8">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="text-gray-500 text-xs uppercase border-b border-gray-800">
-              <th className="pb-4">Nome</th>
-              <th className="pb-4">Manager</th>
-              <th className="pb-4">Note Amministrative</th>
-              <th className="pb-4 text-right">Azioni</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sale.map((sala) => (
-              <tr key={sala.id} className="border-b border-gray-800/50 hover:bg-gray-900/30">
-                <td className="py-4 font-bold">{sala.name}</td>
-                <td className="py-4 text-gray-400">{sala.manager_email}</td>
-                <td className="py-4 text-xs text-yellow-400 italic max-w-[200px] truncate">{sala.note_amministrative || "Nessuna nota"}</td>
-                <td className="py-4 flex gap-4 justify-end">
-                  <button onClick={() => aprireAuditContabile(sala)} className="text-yellow-500 uppercase font-bold text-xs hover:text-yellow-300">Audit/Note</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        ))}
       </div>
     </div>
   );
