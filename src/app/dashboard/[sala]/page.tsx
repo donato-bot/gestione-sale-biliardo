@@ -2,12 +2,12 @@
 
 // ==========================================
 // FILE: src/app/dashboard/[sala]/page.tsx
-// OBIETTIVO: Plancia Operativa del Manager (Ora con pulsante Libro Mastro)
+// OBIETTIVO: Plancia Operativa del Manager (Aggiunto tasto Anagrafica Soci)
 // ==========================================
 
 import { useState, useEffect } from 'react';
 import { supabase } from "@/app/lib/supabase";
-import { useParams, useRouter } from 'next/navigation'; 
+import { useParams, useRouter } from 'next/navigation';
 
 interface Tavolo {
   id: number;
@@ -21,8 +21,9 @@ export default function SalaGestore() {
   const [tavoli, setTavoli] = useState<Tavolo[]>([]);
   const [inCaricamento, setInCaricamento] = useState(true);
   
-  const [orologioLive, setOrologioLive] = useState(new Date());
+  const [tariffaOraria, setTariffaOraria] = useState<number>(10);
   
+  const [orologioLive, setOrologioLive] = useState(new Date());
   const [tavoloInChiusura, setTavoloInChiusura] = useState<Tavolo | null>(null);
   const [nomeSocio, setNomeSocio] = useState("");
 
@@ -30,10 +31,8 @@ export default function SalaGestore() {
   const router = useRouter(); 
   const salaId = params.sala as string;
 
-  const TARIFFA_ORARIA = 10; 
-
   useEffect(() => {
-    caricaTavoli();
+    inizializzaPlancia();
   }, [salaId]); 
 
   useEffect(() => {
@@ -42,6 +41,34 @@ export default function SalaGestore() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const inizializzaPlancia = async () => {
+    setInCaricamento(true);
+    await caricaTariffa();
+    await caricaTavoli();
+    setInCaricamento(false);
+  };
+
+  const caricaTariffa = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tariffe')
+        .select('*')
+        .eq('sala_id', salaId)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data && data.tariffa_oraria) {
+        setTariffaOraria(Number(data.tariffa_oraria));
+      } else if (data && data.importo) {
+        setTariffaOraria(Number(data.importo));
+      }
+    } catch (error) {
+      console.error('Errore nel caricamento della tariffa:', error);
+      setTariffaOraria(10); 
+    }
+  };
 
   const caricaTavoli = async () => {
     try {
@@ -54,9 +81,7 @@ export default function SalaGestore() {
       if (error) throw error;
       if (data) setTavoli(data);
     } catch (error) {
-      console.error('Errore nel caricamento:', error);
-    } finally {
-      setInCaricamento(false);
+      console.error('Errore nel caricamento dei tavoli:', error);
     }
   };
 
@@ -87,11 +112,11 @@ export default function SalaGestore() {
     let minutiTrascorsi = Math.floor((oraFine.getTime() - oraInizio.getTime()) / 60000);
     if (minutiTrascorsi === 0) minutiTrascorsi = 1; 
 
-    const costo = ((TARIFFA_ORARIA / 60) * minutiTrascorsi).toFixed(2);
+    const costo = ((tariffaOraria / 60) * minutiTrascorsi).toFixed(2);
 
     if (metodo === 'sospeso') {
       if (nomeSocio.trim() === '') {
-        alert("ATTENZIONE: Inserisci il nome del socio a cui assegnare il debito.");
+        alert("ATTENZIONE: Inserisci il nome del socio.");
         return;
       }
 
@@ -107,7 +132,7 @@ export default function SalaGestore() {
 
       if (inserimentoErrore) {
         console.error("Errore durante la registrazione:", inserimentoErrore);
-        alert("Errore: controlla se il database ha restrizioni (RLS).");
+        alert("Errore di connessione col database.");
         return; 
       }
 
@@ -141,7 +166,7 @@ export default function SalaGestore() {
   const calcolaCostoLive = (oraInizioIso: string) => {
     const minuti = Math.floor((orologioLive.getTime() - new Date(oraInizioIso).getTime()) / 60000);
     const m = minuti > 0 ? minuti : 0;
-    return ((TARIFFA_ORARIA / 60) * m).toFixed(2);
+    return ((tariffaOraria / 60) * m).toFixed(2);
   };
 
   if (inCaricamento) {
@@ -163,18 +188,26 @@ export default function SalaGestore() {
           </p>
         </div>
         
-        {/* BLOCCO DESTRA: TASTO LIBRO MASTRO E TARIFFA */}
-        <div className="flex items-center gap-6">
+        {/* BLOCCO DESTRA: TASTI NAVIGAZIONE E TARIFFA */}
+        <div className="flex items-center gap-4">
+          
+          <button 
+            onClick={() => router.push(`/dashboard/${salaId}/soci`)}
+            className="bg-emerald-600/20 text-emerald-500 hover:bg-emerald-500 hover:text-white border border-emerald-500/50 font-black px-4 py-3 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-lg"
+          >
+            <span>👥</span> Soci
+          </button>
+
           <button 
             onClick={() => router.push(`/dashboard/${salaId}/contabilita`)}
-            className="bg-yellow-600/20 text-yellow-500 hover:bg-yellow-500 hover:text-black border border-yellow-500/50 font-black px-6 py-3 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-lg"
+            className="bg-yellow-600/20 text-yellow-500 hover:bg-yellow-500 hover:text-black border border-yellow-500/50 font-black px-4 py-3 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-lg"
           >
             <span>📖</span> Libro Mastro
           </button>
 
-          <div className="text-right border-l border-gray-800 pl-6">
+          <div className="text-right border-l border-gray-800 pl-4 ml-2">
             <p className="text-gray-500 text-sm font-bold uppercase">Tariffa</p>
-            <p className="text-xl font-black text-cyan-500">€{TARIFFA_ORARIA.toFixed(2)}/h</p>
+            <p className="text-xl font-black text-cyan-500">€{tariffaOraria.toFixed(2)}/h</p>
           </div>
         </div>
       </header>
