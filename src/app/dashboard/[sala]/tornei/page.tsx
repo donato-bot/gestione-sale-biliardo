@@ -2,7 +2,7 @@
 
 // ==========================================
 // FILE: src/app/dashboard/[sala]/tornei/page.tsx
-// OBIETTIVO: Creazione e Gestione Tornei
+// OBIETTIVO: Creazione, Gestione Tornei ed Esportazione PDF per Bacheca
 // ==========================================
 
 import { useState, useEffect } from 'react';
@@ -25,7 +25,7 @@ export default function GestioneTornei() {
   const [tornei, setTornei] = useState<Torneo[]>([]);
   const [inCaricamento, setInCaricamento] = useState(true);
 
-  // Stati per il modulo di creazione (Allineati ai rombi neri)
+  // Stati per il modulo di creazione
   const [nome, setNome] = useState("");
   const [disciplina, setDisciplina] = useState("");
   const [maxIscritti, setMaxIscritti] = useState("");
@@ -42,7 +42,6 @@ export default function GestioneTornei() {
     caricaTornei();
   }, [salaId]);
 
-  // 1. LETTURA: Prende tutti i tornei della sala
   const caricaTornei = async () => {
     try {
       const { data, error } = await supabase
@@ -60,10 +59,8 @@ export default function GestioneTornei() {
     }
   };
 
-  // 2. SCRITTURA: Aggiunge un nuovo torneo
   const creaTorneo = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     setInInvia(true);
 
     try {
@@ -76,7 +73,7 @@ export default function GestioneTornei() {
           max_iscritti: parseInt(maxIscritti, 10),
           quota: parseFloat(quota.replace(',', '.')),
           formula: formula.trim(),
-          stato: 'Iscrizioni Aperte', // Stato di default alla creazione
+          stato: 'Iscrizioni Aperte',
           data_inizio: dataInizio === "" ? null : dataInizio
         }])
         .select();
@@ -86,7 +83,6 @@ export default function GestioneTornei() {
       if (data) {
         setTornei([data[0], ...tornei]);
         
-        // Reset dei campi
         setNome("");
         setDisciplina("");
         setMaxIscritti("");
@@ -97,10 +93,15 @@ export default function GestioneTornei() {
       }
     } catch (error) {
       console.error(error);
-      alert('Errore di connessione: impossibile creare il torneo. Controlla i campi numerici.');
+      alert('Errore di comunicazione col database.');
     } finally {
       setInInvia(false);
     }
+  };
+
+  // Funzione di attivazione PDF / Stampa bacheca
+  const avviaStampaPdf = () => {
+    window.print();
   };
 
   const formattaData = (dataString: string | null) => {
@@ -118,36 +119,45 @@ export default function GestioneTornei() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] p-6 relative">
-      <header className="mb-8 border-b border-gray-800 pb-4 flex justify-between items-end">
+    <div className="min-h-screen bg-[#050505] p-6 print:bg-white print:p-0 relative">
+      <header className="mb-8 border-b border-gray-800 print:border-black pb-4 flex justify-between items-end">
         <div>
           <button 
             onClick={() => router.push(`/dashboard/${salaId}`)}
-            className="text-gray-500 hover:text-white uppercase text-xs font-bold mb-4 flex items-center gap-2 transition-colors"
+            className="text-gray-500 hover:text-white uppercase text-xs font-bold mb-4 flex items-center gap-2 transition-colors print:hidden"
           >
             ← Torna alla Plancia Operativa
           </button>
-          <h1 className="text-3xl font-black text-white uppercase tracking-widest flex items-center gap-3">
-            <span className="text-purple-500">🏆</span> Tabellone Tornei
+          <h1 className="text-3xl font-black text-white print:text-black uppercase tracking-widest flex items-center gap-3">
+            <span className="text-purple-500 print:hidden">🏆</span> Tabellone Tornei
           </h1>
-          <p className="text-gray-400 font-bold mt-2">Pianificazione Gare e Iscrizioni</p>
+          <p className="text-gray-400 print:text-gray-600 font-bold mt-2">Pianificazione Gare e Iscrizioni</p>
         </div>
         
-        <div className="text-right bg-gray-900/50 p-4 rounded-xl border border-gray-800">
-          <p className="text-gray-500 text-xs font-bold uppercase mb-1">Eventi a Sistema</p>
-          <p className="text-3xl font-black text-purple-500">{tornei.length}</p>
+        {/* SEZIONE DESTRA: TOTALI E TASTO PDF */}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={avviaStampaPdf}
+            className="bg-gray-800 text-white hover:bg-gray-700 border border-gray-700 font-black px-4 py-3 rounded-xl transition-all uppercase tracking-wider text-xs flex items-center gap-2 shadow-lg print:hidden"
+          >
+            📄 Salva / Stampa PDF
+          </button>
+
+          <div className="text-right bg-gray-900/50 print:bg-transparent p-4 rounded-xl border border-gray-800 print:border-none">
+            <p className="text-gray-500 print:text-gray-600 text-xs font-bold uppercase mb-1">Eventi a Sistema</p>
+            <p className="text-3xl font-black text-purple-500 print:text-black">{tornei.length}</p>
+          </div>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl print:block">
         
-        {/* COLONNA CREAZIONE NUOVO TORNEO */}
-        <div className="bg-[#11131a] p-6 rounded-3xl border border-gray-800 h-fit shadow-xl">
+        {/* COLONNA CREAZIONE (Scompare in stampa) */}
+        <div className="bg-[#11131a] p-6 rounded-3xl border border-gray-800 h-fit shadow-xl print:hidden">
           <h2 className="text-xl font-black text-white uppercase mb-4 pb-2 border-b border-gray-800">
             Lancia Nuovo Torneo
           </h2>
           <form onSubmit={creaTorneo} className="space-y-4">
-            
             <div>
               <label className="block text-gray-400 text-xs font-bold uppercase mb-1">Nome Evento *</label>
               <input 
@@ -220,40 +230,40 @@ export default function GestioneTornei() {
         </div>
 
         {/* COLONNA ELENCO TORNEI */}
-        <div className="lg:col-span-2 bg-[#11131a] rounded-3xl border border-gray-800 overflow-hidden shadow-2xl">
+        <div className="lg:col-span-2 bg-[#11131a] print:bg-white rounded-3xl border border-gray-800 print:border-black overflow-hidden shadow-2xl print:shadow-none">
           {tornei.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-gray-500 font-bold text-lg uppercase tracking-widest">Nessun Torneo Attivo</p>
-              <p className="text-gray-600 mt-2">Utilizza il modulo a sinistra per lanciare la tua prima competizione.</p>
+            <div className="p-12 text-center print:border-black">
+              <p className="text-gray-500 print:text-black font-bold text-lg uppercase tracking-widest">Nessun Torneo Attivo</p>
+              <p className="text-gray-600 print:text-gray-800 mt-2">Utilizza il modulo a sinistra per lanciare la tua prima competizione.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 p-6">
+            <div className="grid grid-cols-1 gap-4 p-6 print:p-0">
               {tornei.map((torneo) => (
-                <div key={torneo.id} className="bg-black border border-gray-800 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-4 hover:border-purple-500/50 transition-colors">
+                <div key={torneo.id} className="bg-black print:bg-white border border-gray-800 print:border-black rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-4 hover:border-purple-500/50 transition-colors print:break-inside-avoid">
                   
                   <div className="flex-grow w-full">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="bg-green-900/50 text-green-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest">
+                      <span className="bg-green-900/50 text-green-400 print:border print:border-black print:bg-transparent print:text-black px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest">
                         {torneo.stato}
                       </span>
-                      <span className="text-gray-500 text-sm font-bold flex items-center gap-1">
+                      <span className="text-gray-500 print:text-black text-sm font-bold flex items-center gap-1">
                         📅 {formattaData(torneo.data_inizio)}
                       </span>
                     </div>
-                    <h3 className="text-2xl font-black text-white uppercase tracking-wide">{torneo.nome}</h3>
-                    <p className="text-gray-400 font-bold mt-1 uppercase text-sm">
+                    <h3 className="text-2xl font-black text-white print:text-black uppercase tracking-wide">{torneo.nome}</h3>
+                    <p className="text-gray-400 print:text-gray-700 font-bold mt-1 uppercase text-sm">
                       {torneo.disciplina} • {torneo.formula}
                     </p>
                   </div>
 
                   <div className="flex gap-4 w-full md:w-auto text-center md:text-right">
-                    <div className="bg-gray-900 p-3 rounded-xl border border-gray-800 min-w-[100px]">
-                      <p className="text-gray-500 text-[10px] font-black uppercase">Quota</p>
-                      <p className="text-yellow-500 font-black text-xl">€{Number(torneo.quota).toFixed(2)}</p>
+                    <div className="bg-gray-900 print:bg-gray-100 p-3 rounded-xl border border-gray-800 print:border-black min-w-[100px]">
+                      <p className="text-gray-500 print:text-black text-[10px] font-black uppercase">Quota</p>
+                      <p className="text-yellow-500 print:text-black font-black text-xl">€{Number(torneo.quota).toFixed(2)}</p>
                     </div>
-                    <div className="bg-gray-900 p-3 rounded-xl border border-gray-800 min-w-[100px]">
-                      <p className="text-gray-500 text-[10px] font-black uppercase">Max Iscritti</p>
-                      <p className="text-white font-black text-xl">{torneo.max_iscritti}</p>
+                    <div className="bg-gray-900 print:bg-gray-100 p-3 rounded-xl border border-gray-800 print:border-black min-w-[100px]">
+                      <p className="text-gray-500 print:text-black text-[10px] font-black uppercase">Max Iscritti</p>
+                      <p className="text-white print:text-black font-black text-xl">{torneo.max_iscritti}</p>
                     </div>
                   </div>
 
