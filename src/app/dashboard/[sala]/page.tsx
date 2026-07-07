@@ -2,12 +2,12 @@
 
 // ==========================================
 // FILE: src/app/dashboard/[sala]/page.tsx
-// OBIETTIVO: Plancia Operativa del Manager con Timer Live, Colori e Cassa Sospesi
+// OBIETTIVO: Plancia Operativa del Manager (Ora con pulsante Libro Mastro)
 // ==========================================
 
 import { useState, useEffect } from 'react';
 import { supabase } from "@/app/lib/supabase";
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation'; 
 
 interface Tavolo {
   id: number;
@@ -21,24 +21,21 @@ export default function SalaGestore() {
   const [tavoli, setTavoli] = useState<Tavolo[]>([]);
   const [inCaricamento, setInCaricamento] = useState(true);
   
-  // Stato per far scorrere il tempo visivamente ogni secondo
   const [orologioLive, setOrologioLive] = useState(new Date());
   
-  // Stati per la gestione del Modale di Cassa e Sospesi
   const [tavoloInChiusura, setTavoloInChiusura] = useState<Tavolo | null>(null);
   const [nomeSocio, setNomeSocio] = useState("");
 
   const params = useParams();
+  const router = useRouter(); 
   const salaId = params.sala as string;
 
-  const TARIFFA_ORARIA = 10; // €/ora
+  const TARIFFA_ORARIA = 10; 
 
-  // Effetto per il caricamento iniziale dei dati
   useEffect(() => {
     caricaTavoli();
   }, [salaId]); 
 
-  // Effetto per il "motore" dell'orologio live
   useEffect(() => {
     const timer = setInterval(() => {
       setOrologioLive(new Date());
@@ -76,53 +73,61 @@ export default function SalaGestore() {
       .eq('sala_id', salaId);
   };
 
-  // Funzione che apre la finestra di cassa invece di chiudere brutalmente
   const avviaChiusura = (tavolo: Tavolo) => {
     setTavoloInChiusura(tavolo);
-    setNomeSocio(""); // Reset campo socio
+    setNomeSocio(""); 
   };
 
-  // Funzione definitiva che esegue la registrazione (Incasso o Sospeso)
   const confermaRegistrazione = async (metodo: 'pagato' | 'sospeso') => {
     if (!tavoloInChiusura || !tavoloInChiusura.ora_inizio) return;
 
     const oraInizio = new Date(tavoloInChiusura.ora_inizio);
     const oraFine = new Date();
     
-    // Assicuriamoci che venga calcolato almeno 1 minuto se chiudono subito
     let minutiTrascorsi = Math.floor((oraFine.getTime() - oraInizio.getTime()) / 60000);
     if (minutiTrascorsi === 0) minutiTrascorsi = 1; 
 
     const costo = ((TARIFFA_ORARIA / 60) * minutiTrascorsi).toFixed(2);
 
-    if (metodo === 'sospeso' && nomeSocio.trim() === '') {
-      alert("ATTENZIONE: Inserisci il nome del socio a cui assegnare il debito.");
-      return;
-    }
-
-    // Qui in futuro si aggancerà il codice per scrivere nella tabella 'debiti_clienti' o 'movimenti_contabili'
     if (metodo === 'sospeso') {
+      if (nomeSocio.trim() === '') {
+        alert("ATTENZIONE: Inserisci il nome del socio a cui assegnare il debito.");
+        return;
+      }
+
+      const { error: inserimentoErrore } = await supabase
+        .from('debiti_clienti')
+        .insert([{
+          sala_id: salaId,
+          nominativo: nomeSocio.trim(),
+          importo: parseFloat(costo),
+          descrizione: `Biliardo ${tavoloInChiusura.numero} - ${minutiTrascorsi} min.`,
+          stato: 'aperto'
+        }]);
+
+      if (inserimentoErrore) {
+        console.error("Errore durante la registrazione:", inserimentoErrore);
+        alert("Errore: controlla se il database ha restrizioni (RLS).");
+        return; 
+      }
+
       alert(`[REGISTRAZIONE AVVENUTA]\nCosto: €${costo}\nAssegnato al conto sospeso di: ${nomeSocio.toUpperCase()}`);
     } else {
-      alert(`[INCASSO REGISTRATO]\nCosto: €${costo}\nPagamento immediato ricevuto alla cassa.`);
+      alert(`[INCASSO REGISTRATO]\nCosto: €${costo}\nPagamento immediato in cassa.`);
     }
 
-    // Resettiamo il tavolo a 'libero' sull'interfaccia
     setTavoli(tavoli.map(t => 
       t.id === tavoloInChiusura.id ? { ...t, stato: 'libero', ora_inizio: null } : t
     ));
 
-    // Scriviamo l'aggiornamento sul Database
     await supabase.from('tavoli')
       .update({ stato: 'libero', ora_inizio: null })
       .eq('id', tavoloInChiusura.id)
       .eq('sala_id', salaId);
 
-    // Chiudiamo il modale
     setTavoloInChiusura(null);
   };
 
-  // Motore di calcolo per il cronometro visivo (HH:MM:SS)
   const calcolaTimerLive = (oraInizioIso: string) => {
     const diff = orologioLive.getTime() - new Date(oraInizioIso).getTime();
     if (diff < 0) return "00:00:00";
@@ -157,21 +162,31 @@ export default function SalaGestore() {
             Sala Attiva
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-gray-500 text-sm font-bold uppercase">Tariffa Impostata</p>
-          <p className="text-xl font-black text-cyan-500">€{TARIFFA_ORARIA.toFixed(2)} / h</p>
+        
+        {/* BLOCCO DESTRA: TASTO LIBRO MASTRO E TARIFFA */}
+        <div className="flex items-center gap-6">
+          <button 
+            onClick={() => router.push(`/dashboard/${salaId}/contabilita`)}
+            className="bg-yellow-600/20 text-yellow-500 hover:bg-yellow-500 hover:text-black border border-yellow-500/50 font-black px-6 py-3 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-lg"
+          >
+            <span>📖</span> Libro Mastro
+          </button>
+
+          <div className="text-right border-l border-gray-800 pl-6">
+            <p className="text-gray-500 text-sm font-bold uppercase">Tariffa</p>
+            <p className="text-xl font-black text-cyan-500">€{TARIFFA_ORARIA.toFixed(2)}/h</p>
+          </div>
         </div>
       </header>
 
-      {/* GRIGLIA BILIARDI */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 max-w-5xl">
         {tavoli.map((tavolo) => (
           <div 
             key={tavolo.id} 
             className={`p-6 rounded-3xl border flex flex-col justify-between h-56 transition-all duration-300 ${
               tavolo.stato === 'libero' 
-                ? 'bg-[#0f4d22] border-green-400/50 hover:border-green-300 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]' // Panno verde chiaro
-                : 'bg-[#0a3317] border-red-600 shadow-[0_0_25px_rgba(220,38,38,0.3)]' // Panno verde scuro
+                ? 'bg-[#0f4d22] border-green-400/50 hover:border-green-300 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]' 
+                : 'bg-[#0a3317] border-red-600 shadow-[0_0_25px_rgba(220,38,38,0.3)]' 
             }`}
           >
             <div className="flex justify-between items-start">
@@ -218,7 +233,6 @@ export default function SalaGestore() {
         ))}
       </div>
 
-      {/* MODALE DI CASSA (Appare in sovraimpressione) */}
       {tavoloInChiusura && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">
           <div className="bg-[#11131a] border-2 border-cyan-500 rounded-3xl p-8 max-w-md w-full shadow-2xl">
@@ -252,7 +266,7 @@ export default function SalaGestore() {
                 <label className="block text-gray-400 text-xs font-bold uppercase mb-2">Assegna conto in sospeso a:</label>
                 <input 
                   type="text" 
-                  placeholder="Es. Mario Rossi / Socio 124" 
+                  placeholder="Es. Mario Rossi" 
                   value={nomeSocio}
                   onChange={(e) => setNomeSocio(e.target.value)}
                   className="w-full bg-black text-yellow-500 font-bold p-3 rounded-lg border border-gray-700 focus:border-yellow-500 focus:outline-none mb-3"
