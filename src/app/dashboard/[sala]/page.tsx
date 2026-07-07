@@ -2,7 +2,7 @@
 
 // ==========================================
 // FILE: src/app/dashboard/[sala]/page.tsx
-// OBIETTIVO: Plancia Operativa del Manager (Aggiunto tasto Anagrafica Soci)
+// OBIETTIVO: Plancia Operativa (Aggiunto tasto Magazzino)
 // ==========================================
 
 import { useState, useEffect } from 'react';
@@ -191,6 +191,13 @@ export default function SalaGestore() {
         {/* BLOCCO DESTRA: TASTI NAVIGAZIONE E TARIFFA */}
         <div className="flex items-center gap-4">
           
+          <button 
+            onClick={() => router.push(`/dashboard/${salaId}/magazzino`)}
+            className="bg-blue-600/20 text-blue-500 hover:bg-blue-500 hover:text-white border border-blue-500/50 font-black px-4 py-3 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-lg"
+          >
+            <span>📦</span> Magazzino
+          </button>
+
           <button 
             onClick={() => router.push(`/dashboard/${salaId}/soci`)}
             className="bg-emerald-600/20 text-emerald-500 hover:bg-emerald-500 hover:text-white border border-emerald-500/50 font-black px-4 py-3 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-lg"
