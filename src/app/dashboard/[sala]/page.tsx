@@ -2,7 +2,7 @@
 
 // ==========================================
 // FILE: src/app/dashboard/[sala]/page.tsx
-// OBIETTIVO: Plancia Operativa (Aggiunto tasto Magazzino)
+// OBIETTIVO: Plancia Operativa (Aggiunto tasto Tornei)
 // ==========================================
 
 import { useState, useEffect } from 'react';
@@ -179,7 +179,7 @@ export default function SalaGestore() {
 
   return (
     <div className="min-h-screen bg-[#050505] p-6 relative">
-      <header className="mb-8 border-b border-gray-800 pb-4 flex justify-between items-end">
+      <header className="mb-8 border-b border-gray-800 pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
           <h1 className="text-3xl font-black text-white uppercase tracking-widest">Plancia Operativa</h1>
           <p className="text-gray-400 font-bold mt-2 flex items-center gap-2">
@@ -188,9 +188,16 @@ export default function SalaGestore() {
           </p>
         </div>
         
-        {/* BLOCCO DESTRA: TASTI NAVIGAZIONE E TARIFFA */}
-        <div className="flex items-center gap-4">
+        {/* BLOCCO DESTRA: TASTI NAVIGAZIONE E TARIFFA CON FLEX-WRAP PER MOBILE */}
+        <div className="flex flex-wrap items-center gap-4">
           
+          <button 
+            onClick={() => router.push(`/dashboard/${salaId}/tornei`)}
+            className="bg-purple-600/20 text-purple-400 hover:bg-purple-500 hover:text-white border border-purple-500/50 font-black px-4 py-3 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-lg"
+          >
+            <span>🏆</span> Tornei
+          </button>
+
           <button 
             onClick={() => router.push(`/dashboard/${salaId}/magazzino`)}
             className="bg-blue-600/20 text-blue-500 hover:bg-blue-500 hover:text-white border border-blue-500/50 font-black px-4 py-3 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-lg"
