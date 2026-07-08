@@ -75,6 +75,28 @@ export default function TorreDiControlloAdmin() {
     }
   };
 
+  const handleToggleKillSwitch = async (id: string, statoAttuale: boolean) => {
+    const nuovoStato = !statoAttuale;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch("/api/admin/onboarding", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ id, is_active: nuovoStato }),
+      });
+
+      const resData = await response.json();
+      if (!response.ok) throw new Error(resData.error || "Errore switch");
+
+      caricaSale();
+    } catch (err: any) {
+      alert("Errore modifica stato: " + err.message);
+    }
+  };
+
   const handleEliminaSala = async (id: string, managerEmail: string) => {
     if (!window.confirm(`⚠️ ATTENZIONE:\nStai per eliminare definitivamente la sala e il rispettivo utente manager (${managerEmail}).\nQuesta azione rimuoverà tutti i dati collegati. Procedere?`)) {
       return;
@@ -155,12 +177,12 @@ export default function TorreDiControlloAdmin() {
 
         {/* GRIGLIA SALE */}
         <div className="bg-[#11131a] border border-gray-800 rounded-3xl p-6 shadow-xl overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[900px]">
+          <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="border-b border-gray-800 text-[10px] text-gray-500 font-black uppercase tracking-widest">
                 <th className="pb-4 pl-4">Nome</th>
                 <th className="pb-4">Manager</th>
-                <th className="pb-4">Note Amministrative</th>
+                <th className="pb-4 text-center">Stato (Kill Switch)</th>
                 <th className="pb-4 text-right pr-4">Azioni</th>
               </tr>
             </thead>
@@ -169,9 +191,20 @@ export default function TorreDiControlloAdmin() {
                 <tr key={sala.id} className="hover:bg-black/20 transition-colors">
                   <td className="py-4 pl-4 text-white font-black tracking-wide">{sala.name}</td>
                   <td className="py-4 text-gray-400 font-mono text-xs normal-case">{sala.manager_email}</td>
-                  <td className="py-4 text-yellow-600/80 italic text-xs">Nessuna nota</td>
+                  <td className="py-4 text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleKillSwitch(sala.id, sala.is_active !== false)}
+                      className={`px-4 py-1.5 rounded-full text-[10px] font-black border transition-all ${
+                        sala.is_active !== false 
+                          ? "bg-emerald-950/60 text-emerald-400 border-emerald-500/40 hover:bg-emerald-900" 
+                          : "bg-red-950/60 text-red-400 border-red-500/40 hover:bg-red-900"
+                      }`}
+                    >
+                      {sala.is_active !== false ? "🟢 ATTIVA" : "🔴 SOSPESA"}
+                    </button>
+                  </td>
                   <td className="py-4 text-right pr-4 space-x-3 flex items-center justify-end gap-2">
-                    {/* Link di emergenza protetta per SuperAdmin */}
                     <a 
                       href={`/dashboard/${sala.id}`}
                       className="text-xs font-bold uppercase text-gray-500 hover:text-white transition-colors mr-2"

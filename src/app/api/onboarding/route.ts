@@ -104,7 +104,43 @@ export async function POST(request: Request) {
   }
 }
 
-// 2. GESTIONE ELIMINAZIONE (DELETE)
+// 2. GESTIONE TOGGLE KILL SWITCH (PATCH)
+export async function PATCH(request: Request) {
+  try {
+    const adminAutenticato = await verificaSuperAdmin(request);
+    if (!adminAutenticato) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
+    }
+
+    const { id, is_active } = await request.json();
+    if (id === undefined || is_active === undefined) {
+      return NextResponse.json({ error: "Parametri id o is_active mancanti" }, { status: 400 });
+    }
+
+    // Aggiorna lo stato nel database
+    const { error: dbError } = await supabaseAdmin
+      .from("sale")
+      .update({ is_active: is_active })
+      .eq("id", id);
+
+    if (dbError) throw dbError;
+
+    // Registrazione dell'azione nella Scatola Nera
+    const statoTesto = is_active ? "RIATTIVAZIONE" : "SOSPENSIONE";
+    await supabaseAdmin.from("admin_logs").insert([
+      { 
+        azione: statoTesto, 
+        dettagli: `Modificato stato is_active a ${is_active} per la sala con ID ${id}` 
+      },
+    ]);
+
+    return NextResponse.json({ success: true, message: `Stato sala aggiornato a: ${statoTesto}` });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// 3. GESTIONE ELIMINAZIONE (DELETE)
 export async function DELETE(request: Request) {
   try {
     const adminAutenticato = await verificaSuperAdmin(request);
@@ -117,11 +153,9 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "ID sala o email manager mancanti" }, { status: 400 });
     }
 
-    // A. Elimina la sala dal database
     const { error: dbError } = await supabaseAdmin.from("sale").delete().eq("id", id);
     if (dbError) throw dbError;
 
-    // B. Cerca ed elimina l'utente dalle credenziali di Auth
     const { data: usersData, error: userError } = await supabaseAdmin.auth.admin.listUsers();
     if (!userError && usersData?.users) {
       const targetUser = usersData.users.find(u => u.email?.toLowerCase() === manager_email.toLowerCase());
@@ -130,7 +164,6 @@ export async function DELETE(request: Request) {
       }
     }
 
-    // C. Registra l'eliminazione nella Scatola Nera
     await supabaseAdmin.from("admin_logs").insert([
       { azione: "ELIMINAZIONE CLUB", dettagli: `Rimossa definitivamente la sala con ID ${id} (${manager_email})` },
     ]);
