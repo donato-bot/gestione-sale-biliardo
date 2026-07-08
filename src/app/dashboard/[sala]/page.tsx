@@ -2,13 +2,15 @@
 
 // ==========================================
 // FILE: src/app/dashboard/[sala]/page.tsx
-// OBIETTIVO: Plancia Operativa Sala (Protetta da Kill Switch Amministrativo)
+// OBIETTIVO: Plancia Operativa Sala (Protetta da Kill Switch con Tasti di Gestione)
 // ==========================================
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
-import Plancia from "@/components/Plancia"; // Assicurati che il percorso del tuo componente sia corretto
+import Plancia from "@/components/Plancia";
+
+const SUPER_ADMIN = "donatorzz1946@gmail.com";
 
 export default function DashboardSalaPage() {
   const params = useParams();
@@ -18,14 +20,26 @@ export default function DashboardSalaPage() {
   const [loading, setLoading] = useState(true);
   const [salaAttiva, setSalaAttiva] = useState<boolean>(true);
   const [nomeSala, setNomeSala] = useState("");
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
   useEffect(() => {
     if (salaId) {
-      verificaStatoAbbonamento();
+      recuperaSessioneEVerifica();
     }
   }, [salaId]);
 
+  async function recuperaSessioneEVerifica() {
+    // Recupera l'email dell'utente loggato per il controllo SuperAdmin
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      setUserEmail(session.user.email || null);
+    }
+    await verificaStatoAbbonamento();
+  }
+
   async function verificaStatoAbbonamento() {
+    setIsCheckingStatus(true);
     try {
       const { data, error } = await supabase
         .from("sale")
@@ -36,12 +50,12 @@ export default function DashboardSalaPage() {
       if (error || !data) {
         console.error("Impossibile recuperare lo stato della sala");
         setLoading(false);
+        setIsCheckingStatus(false);
         return;
       }
 
       setNomeSala(data.name || "CLUB");
       
-      // Se is_active è esplicitamente impostato a false, scatta il Kill Switch
       if (data.is_active === false) {
         setSalaAttiva(false);
       } else {
@@ -51,6 +65,7 @@ export default function DashboardSalaPage() {
       console.error("Errore di rete durante la verifica:", err);
     } finally {
       setLoading(false);
+      setIsCheckingStatus(false);
     }
   }
 
@@ -82,13 +97,39 @@ export default function DashboardSalaPage() {
           <p className="text-xs text-zinc-600 font-bold uppercase mb-2">Per sbloccare il terminale, contatta l'amministratore:</p>
           <p className="text-cyan-400 font-mono text-xs mb-8">donatorzz1946@gmail.com</p>
 
-          <button 
-            type="button"
-            onClick={() => supabase.auth.signOut().then(() => router.push("/login"))}
-            className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-black py-4 rounded-xl uppercase tracking-widest text-xs border border-zinc-700 transition-colors"
-          >
-            ← Disconnetti Account
-          </button>
+          {/* PULSANTI DI GESTIONE E CONTROLLO */}
+          <div className="space-y-3">
+            <button 
+              type="button"
+              onClick={verificaStatoAbbonamento}
+              disabled={isCheckingStatus}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 text-black font-black py-4 rounded-xl uppercase tracking-widest text-xs transition-colors shadow-lg"
+            >
+              {isCheckingStatus ? "Verifica in corso..." : "🔄 Ricarica e Verifica Stato"}
+            </button>
+
+            <button 
+              type="button"
+              onClick={() => supabase.auth.signOut().then(() => router.push("/login"))}
+              className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-black py-4 rounded-xl uppercase tracking-widest text-xs border border-zinc-800 transition-colors"
+            >
+              ← Disconnetti Account
+            </button>
+
+            {/* TASTO SEGRETO ESCLUSIVO SUPER ADMIN */}
+            {userEmail === SUPER_ADMIN && (
+              <div className="pt-4 border-t border-zinc-800/80 mt-4">
+                <button 
+                  type="button"
+                  onClick={() => router.push("/admin")}
+                  className="w-full bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 text-cyan-400 font-black py-3 rounded-xl uppercase tracking-widest text-[11px] transition-all"
+                >
+                  🛡️ Bypass: Torre di Controllo
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     );
