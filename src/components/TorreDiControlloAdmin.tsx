@@ -47,7 +47,7 @@ export default function TorreDiControlloAdmin() {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch("/api/admin/onboarding", {
+      const response = await fetch("/api/onboarding", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -79,7 +79,7 @@ export default function TorreDiControlloAdmin() {
     const nuovoStato = !statoAttuale;
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch("/api/admin/onboarding", {
+      const response = await fetch("/api/onboarding", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -104,7 +104,7 @@ export default function TorreDiControlloAdmin() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch("/api/admin/onboarding", {
+      const response = await fetch("/api/onboarding", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
