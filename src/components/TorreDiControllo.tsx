@@ -1,7 +1,16 @@
 "use client";
 
+// ==========================================
+// FILE: src/components/TorreDiControllo.tsx
+// OBIETTIVO: Pannello Amministrativo (Blindato per Super Admin)
+// ==========================================
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/app/lib/supabase";
+import { useRouter } from "next/navigation";
+
+// CHIAVE DI SICUREZZA ASSOLUTA PROTOCOLLARE
+const SUPER_ADMIN = "donatorzz1946@gmail.com";
 
 export default function TorreDiControllo({ 
   salaId, 
@@ -12,12 +21,41 @@ export default function TorreDiControllo({
 }) {
   const [logs, setLogs] = useState<any[]>([]);
   const [salaInfo, setSalaInfo] = useState<any>(null);
+  
+  // STATI DI VERIFICA IDENTITÀ
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(true);
+
+  const router = useRouter();
 
   useEffect(() => {
-    if (salaId) {
+    verificaIdentitaAdmin();
+  }, []);
+
+  useEffect(() => {
+    // Il database viene interrogato SOLO se l'email coincide con il Super Admin
+    if (salaId && userEmail === SUPER_ADMIN) {
       fetchAdminData();
     }
-  }, [salaId]);
+  }, [salaId, userEmail]);
+
+  // Guardia Giurata: Controlla la sessione attiva su Supabase Auth
+  const verificaIdentitaAdmin = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error || !session) {
+        router.push("/login"); // Se non c'è sessione attiva, reindirizza al login
+        return;
+      }
+
+      setUserEmail(session.user.email || null);
+    } catch (err) {
+      console.error("Errore durante la verifica sessione:", err);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const fetchAdminData = async () => {
     // 1. Recupero info della sala corrente
@@ -40,6 +78,40 @@ export default function TorreDiControllo({
     if (logsData) setLogs(logsData);
   };
 
+  // 1. SCHERMATA DI TRANSIZIONE (Durante il controllo documenti)
+  if (isVerifying) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <p className="text-xl font-bold text-cyan-500 animate-pulse uppercase tracking-widest">
+          Verifica Credenziali Amministratore...
+        </p>
+      </div>
+    );
+  }
+
+  // 2. IL MURO DI GOMMA (Se l'email non corrisponde al profilo di Donato Rizzo)
+  if (userEmail !== SUPER_ADMIN) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4">
+        <div className="bg-black border-2 border-red-900 rounded-[2.5rem] p-10 max-w-md w-full text-center shadow-[0_0_50px_rgba(220,38,38,0.3)]">
+          <div className="text-red-600 text-6xl mb-6">🛑</div>
+          <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-4">Accesso Negato</h2>
+          <p className="text-gray-500 font-bold mb-8">
+            L'account corrente (<span className="text-red-400 font-mono text-xs">{userEmail || "Anonimo"}</span>) non possiede i privilegi di Super Amministratore richiesti per la Torre di Controllo.
+          </p>
+          <button 
+            type="button"
+            onClick={() => router.push(`/dashboard/${salaId}`)} 
+            className="w-full bg-red-950 hover:bg-red-900 border border-red-500/30 text-white font-black py-4 rounded-xl uppercase tracking-widest transition-all text-xs"
+          >
+            Torna alla Plancia di Sala
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. IL PANNELLO AUTORIZZATO (Visibile solo se l'email è donatorzz1946@gmail.com)
   return (
     <div className="min-h-screen bg-emerald-50 p-4 sm:p-8 md:p-12 flex flex-col items-center transition-colors duration-500">
       
@@ -48,11 +120,15 @@ export default function TorreDiControllo({
         {/* HEADER CON PULSANTE OPERATIVO */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-gray-800 pb-8 mb-10 gap-4">
           <div>
-            <p className="text-[10px] text-cyan-500 font-black uppercase tracking-widest mb-1">Pannello Multi-Tenant (Isolamento Attivo)</p>
+            <p className="text-[10px] text-cyan-500 font-black uppercase tracking-widest mb-1 flex items-center gap-2">
+              <span className="w-1.5 h-2 rounded-full bg-cyan-500 animate-pulse"></span>
+              Pannello Multi-Tenant (Isolamento Super Admin Attivo)
+            </p>
             <h2 className="text-4xl font-black text-white uppercase italic tracking-tight">TORRE DI CONTROLLO</h2>
           </div>
           
           <button 
+            type="button"
             onClick={() => {
               if (setActiveView) {
                 setActiveView('hub');
@@ -99,7 +175,7 @@ export default function TorreDiControllo({
               <span className="text-xs text-red-500 font-black tracking-widest animate-pulse">● REC</span>
             </div>
             
-            <div className="space-y-3 overflow-y-auto max-h-[300px] pr-2">
+            <div className="space-y-3 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
               {logs.length > 0 ? logs.map((log, index) => (
                 <div key={index} className="bg-black p-4 rounded-xl border border-gray-800 flex flex-col gap-2">
                   <div className="flex justify-between items-center">

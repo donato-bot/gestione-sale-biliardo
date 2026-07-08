@@ -198,6 +198,14 @@ export default function SalaGestore() {
             <span>🏆</span> Tornei
           </button>
 
+         {/* NUOVO TASTO PRENOTAZIONI */}
+          <button 
+            onClick={() => router.push(`/dashboard/${salaId}/prenotazioni`)}
+            className="bg-cyan-600/20 text-cyan-500 hover:bg-cyan-500 hover:text-white border border-cyan-500/50 font-black px-4 py-3 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-lg"
+          >
+            <span>📅</span> Agenda
+          </button>
+
           <button 
             onClick={() => router.push(`/dashboard/${salaId}/magazzino`)}
             className="bg-blue-600/20 text-blue-500 hover:bg-blue-500 hover:text-white border border-blue-500/50 font-black px-4 py-3 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-lg"
