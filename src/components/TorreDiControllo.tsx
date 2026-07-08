@@ -96,12 +96,12 @@ export default function TorreDiControllo({
 
       alert(`🚀 Club varato con successo!\nUtente creato e credenziali inviate a ${emailNuovoManager}`);
       
-      // Resetta i campi
+      // Resetta i campi della form
       setNomeNuovaSala("");
       setEmailNuovoManager("");
       setPwdNuovoManager("");
       
-      // Ricarica la scatola nera
+      // Ricarica la scatola nera dei log per mostrare l'operazione avvenuta
       fetchAdminData();
     } catch (err: any) {
       alert("❌ Fallimento Onboarding: " + err.message);
@@ -167,7 +167,7 @@ export default function TorreDiControllo({
         {/* GRIGLIA FUNZIONALE */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           
-          {/* COLONNA 1 & 2: FABBRICA DELLE SALE (ONBOARDING AUTOMATICO) */}
+          {/* COLONNA 1 & 2: FABBRICA DELLE SALE (FORM ONBOARDING AUTOMATICO) */}
           <div className="lg:col-span-2 bg-[#0B0D14] border border-[#2A2E39] rounded-2xl p-8 shadow-2xl flex flex-col gap-6">
             <h3 className="text-xl text-white font-black uppercase tracking-widest border-b border-gray-700 pb-4 text-cyan-400">
               Varo Automatico Nuovi Club

@@ -1,207 +1,141 @@
-// components/PrenotazioniSocio.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+// ==========================================
+// FILE: src/components/PrenotazioniSocio.tsx
+// OBIETTIVO: Modulo di Prenotazione Tavoli Lato Socio (Smartphone)
+// ==========================================
+
+import React, { useState, useEffect } from 'react';
 import { supabase } from "@/app/lib/supabase";
 
 export default function PrenotazioniSocio({ salaId }: { salaId: string }) {
   const [prenotazioni, setPrenotazioni] = useState<any[]>([]);
-  const [soci, setSoci] = useState<any[]>([]);
-  const [nuovoNome, setNuovoNome] = useState("");
-  const [dataPrenotazione, setDataPrenotazione] = useState("");
-  const [nuovoOrario, setNuovoOrario] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Calcola la data di oggi in formato testuale per i limiti dell'input
-  const oggiString = new Date().toISOString().split('T')[0];
-
-  const fetchData = async () => {
-    if (!salaId) return;
-
-    // 1. Recupero Prenotazioni (Da oggi in poi)
-    const oggi = new Date();
-    oggi.setHours(0, 0, 0, 0);
-
-    const { data: dataPren } = await supabase
-      .from('prenotazioni')
-      .select('*')
-      .eq('sala_id', salaId)
-      .gte('data_ora', oggi.toISOString())
-      .order('data_ora', { ascending: true });
-
-    if (dataPren) setPrenotazioni(dataPren);
-
-    // 2. Recupero Registro Soci per Autocompletamento
-    const { data: dataSoci } = await supabase
-      .from('soci')
-      .select('*')
-      .eq('sala_id', salaId);
-    
-    if (dataSoci) setSoci(dataSoci);
-  };
+  const [nomeCliente, setNomeCliente] = useState('');
+  const [tavoloNumero, setTavoloNumero] = useState('');
+  const [dataOra, setDataOra] = useState('');
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [successo, setSuccesso] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchData();
-    
-    // Auto-compilazione: Imposta la data e l'ora al momento attuale
-    const now = new Date();
-    setDataPrenotazione(now.toISOString().split('T')[0]);
-    
-    // Estrae l'orario nel formato HH:MM
-    const timeString = now.toTimeString().slice(0, 5);
-    setNuovoOrario(timeString);
-
-    // MEMORIA AUTOMATICA: Recupera il nome del socio salvato sul suo dispositivo
     if (salaId) {
+      caricaPrenotazioniPubbliche();
       const nomeSalvato = localStorage.getItem(`nomeSocio_${salaId}`);
-      if (nomeSalvato) {
-        setNuovoNome(nomeSalvato);
-      }
+      if (nomeSalvato) setNomeCliente(nomeSalvato);
     }
   }, [salaId]);
 
-  const handlePrenota = async (e: React.FormEvent) => {
+  async function caricaPrenotazioniPubbliche() {
+    try {
+      const { data, error } = await supabase
+        .from('prenotazioni')
+        .select('*')
+        .eq('sala_id', salaId)
+        .gte('data_ora', new Date().toISOString()) // Mostra solo le prenotazioni future
+        .order('data_ora', { ascending: true });
+        
+      if (!error && data) setPrenotazioni(data);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function gestisciPrenotazioneSocio(e: React.FormEvent) {
     e.preventDefault();
-    
-    // BLOCCO DI SICUREZZA ASSOLUTO: Se manca la sala, blocca tutto.
-    if (!salaId) {
-      alert("Errore di connessione alla Sala. Per favore ricarica la pagina.");
+    if (!nomeCliente.trim() || !dataOra) {
+      alert("Compila tutti i campi obbligatori.");
       return;
     }
-
-    if (!nuovoNome || !nuovoOrario || !dataPrenotazione) return;
     
-    setIsSubmitting(true);
-
-    // Costruisce l'oggetto Date completo unendo il giorno e l'orario scelti
-    const dataOraCompleta = new Date(`${dataPrenotazione}T${nuovoOrario}:00`);
-    
-    // CONTROLLO SICUREZZA CORRETTO: Impedisce solo prenotazioni per GIORNI passati
-    const oggiMezzanotte = new Date();
-    oggiMezzanotte.setHours(0, 0, 0, 0); // Azzera ore e minuti
-    
-    if (dataOraCompleta < oggiMezzanotte) {
-      alert("Attenzione: Non è possibile prenotare per date passate.");
-      setIsSubmitting(false);
-      return;
-    }
+    setLoading(true);
+    const notaFormattata = `[APP SOCI] ${note}`.trim();
 
     try {
-      const { error } = await supabase
-        .from('prenotazioni')
-        .insert([
-          { 
-            sala_id: salaId, 
-            nome_cliente: nuovoNome.trim(), 
-            data_ora: dataOraCompleta.toISOString(), 
-            note: '[APP SOCI]' // Tag automatico letto dal tabellone del gestore
-          }
-        ]);
+      const { error } = await supabase.from('prenotazioni').insert([{
+        sala_id: salaId,
+        nome_cliente: nomeCliente.trim().toUpperCase(),
+        tavolo_numero: tavoloNumero ? tavoloNumero.trim() : null,
+        data_ora: new Date(dataOra).toISOString(), 
+        note: notaFormattata
+      }]);
 
-      if (!error) {
-        // SALVATAGGIO IN MEMORIA: Salva il nome nel browser del telefono/PC per la prossima volta
-        localStorage.setItem(`nomeSocio_${salaId}`, nuovoNome.trim());
-
-        // Ripristina l'orario corrente dopo l'invio, ma LASCIA IL NOME COMPILATO
-        setNuovoOrario(new Date().toTimeString().slice(0, 5)); 
-        fetchData(); 
+      if (error) {
+        alert("Errore: " + error.message);
       } else {
-        console.error("Errore durante la prenotazione:", error);
-        alert("Errore durante la prenotazione: " + error.message);
+        setSuccesso("🎉 PRENOTAZIONE INVIATA CON SUCCESSO!");
+        localStorage.setItem(`nomeSocio_${salaId}`, nomeCliente.trim());
+        
+        setTavoloNumero(''); 
+        setDataOra(''); 
+        setNote('');
+        
+        setTimeout(() => setSuccesso(null), 4000);
+        caricaPrenotazioniPubbliche();
       }
-    } catch (err) {
-      console.error("Errore di formattazione data", err);
+    } catch (err: any) {
+      alert("Errore di rete: " + err.message);
+    } finally {
+      setLoading(false);
     }
-    
-    setIsSubmitting(false);
-  };
+  }
 
   return (
-    <div className="text-white space-y-8 animate-in fade-in duration-300">
-      
-      {/* BOX NUOVA PRENOTAZIONE */}
-      <div className="bg-[#1A1D24] p-6 rounded-lg border border-[#2A2E39] shadow-lg">
-        <h2 className="text-2xl font-black uppercase tracking-wider mb-6 text-[#FFCC00]">Nuova Prenotazione</h2>
-        <form onSubmit={handlePrenota} className="flex flex-col md:flex-row gap-4 items-end">
-          
-          {/* Input Autocompletante da Tabella Soci con Memoria */}
-          <div className="flex-1 w-full relative">
-            <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1.5 block">Nome Socio</label>
-            <input
-              type="text"
-              list="lista-soci"
-              placeholder="Inizia a digitare il tuo nome..."
-              value={nuovoNome}
-              onChange={(e) => setNuovoNome(e.target.value)}
-              className="w-full bg-[#0B0D14] border border-[#2A2E39] rounded p-3 text-white font-bold focus:outline-none focus:border-[#FFCC00] transition-colors shadow-inner"
-              required
-            />
-            <datalist id="lista-soci">
-              {soci.map((socio, index) => (
-                <option key={index} value={`${socio.nome} ${socio.cognome || ''}`.trim()} />
-              ))}
-            </datalist>
-          </div>
+    <div className="bg-[#11131a] border border-gray-800 p-6 rounded-3xl shadow-xl max-w-md mx-auto">
+      <h3 className="text-sm font-black uppercase tracking-widest text-[#00E5FF] mb-4 pb-2 border-b border-gray-800/60">
+        Reserve un Tavolo
+      </h3>
 
-          <div className="w-full md:w-auto">
-            <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1.5 block">Data</label>
-            <input
-              type="date"
-              min={oggiString}
-              value={dataPrenotazione}
-              onChange={(e) => setDataPrenotazione(e.target.value)}
-              className="w-full bg-[#0B0D14] border border-[#2A2E39] rounded p-3 text-white focus:outline-none focus:border-[#FFCC00] transition-colors [color-scheme:dark] shadow-inner"
-              required
+      {successo && (
+        <div className="bg-green-950/40 border border-green-500/30 text-green-400 p-4 rounded-xl text-xs font-bold uppercase tracking-wider text-center mb-4">
+          {successo}
+        </div>
+      )}
+
+      <form onSubmit={gestisciPrenotazioneSocio} className="space-y-4">
+        <div>
+          <label className="block text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Tuo Nome e Cognome *</label>
+          <input 
+            type="text" required placeholder="Es. Mario Rossi" value={nomeCliente}
+            onChange={(e) => setNomeCliente(e.target.value)}
+            className="w-full bg-black border border-gray-800 p-3.5 rounded-xl text-white font-bold uppercase focus:outline-none focus:border-[#00E5FF]"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Biliardo Pref.</label>
+            <input 
+              type="text" placeholder="Es. Tavolo 2" value={tavoloNumero}
+              onChange={(e) => setTavoloNumero(e.target.value)}
+              className="w-full bg-black border border-gray-800 p-3.5 rounded-xl text-white font-bold focus:outline-none focus:border-[#00E5FF]"
             />
           </div>
-
-          <div className="w-full md:w-auto">
-            <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1.5 block">Ora</label>
-            <input
-              type="time"
-              value={nuovoOrario}
-              onChange={(e) => setNuovoOrario(e.target.value)}
-              className="w-full bg-[#0B0D14] border border-[#2A2E39] rounded p-3 text-[#00E5FF] font-black focus:outline-none focus:border-[#FFCC00] transition-colors [color-scheme:dark] shadow-inner"
-              required
+          <div>
+            <label className="block text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Data e Ora *</label>
+            <input 
+              type="datetime-local" required value={dataOra}
+              onChange={(e) => setDataOra(e.target.value)}
+              className="w-full bg-black border border-gray-800 p-3.5 rounded-xl text-cyan-400 font-bold focus:outline-none focus:border-[#00E5FF]"
             />
           </div>
+        </div>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full md:w-auto bg-[#FFCC00] text-black font-black uppercase tracking-widest px-8 py-3.5 rounded hover:bg-[#E6B800] transition-colors disabled:opacity-50 shadow-[0_0_15px_rgba(255,204,0,0.3)]"
-          >
-            {isSubmitting ? "..." : "Prenota"}
-          </button>
-        </form>
-      </div>
+        <div>
+          <label className="block text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Note per la Sala</label>
+          <textarea 
+            placeholder="Es. Stecca particolare, stecche da pool..." value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full bg-black border border-gray-800 p-3.5 rounded-xl text-gray-300 resize-none h-20 focus:outline-none focus:border-[#00E5FF]"
+          />
+        </div>
 
-      {/* BOX LISTA PRENOTAZIONI */}
-      <div className="bg-[#1A1D24] p-6 rounded-lg border border-[#2A2E39] shadow-lg">
-        <h2 className="text-xl font-bold mb-4">Prenotazioni in coda (Da Oggi)</h2>
-        {prenotazioni.length === 0 ? (
-          <p className="text-gray-500">Nessuna prenotazione trovata. Sii il primo a prenotare!</p>
-        ) : (
-          <ul className="space-y-3">
-            {prenotazioni.map((p) => {
-              const dataObj = new Date(p.data_ora);
-              const orario = dataObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-              const dataGiorno = dataObj.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
-
-              return (
-                <li key={p.id} className="bg-[#0B0D14] p-4 rounded border border-[#2A2E39] flex justify-between items-center shadow-md">
-                  <div className="flex gap-4 items-center">
-                    <span className="text-[#00E5FF] font-black text-lg">{orario}</span>
-                    <span className="text-gray-400 text-xs font-bold">{dataGiorno}</span>
-                  </div>
-                  <span className="text-gray-300 font-black uppercase tracking-wider">{p.nome_cliente || "Socio"}</span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-      
+        <button 
+          type="submit" disabled={loading}
+          className="w-full bg-[#00E5FF] hover:bg-cyan-500 text-black font-black uppercase tracking-widest py-4 rounded-xl transition-all shadow-lg text-xs"
+        >
+          {loading ? "Invio in corso..." : "🗓️ CONFERMA PRENOTAZIONE"}
+        </button>
+      </form>
     </div>
   );
 }
