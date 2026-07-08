@@ -1,85 +1,114 @@
-export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
+
+// Inizializziamo Supabase con la Service Role Key per poter creare utenti in Auth senza restrizioni
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+const SUPER_ADMIN = "donatorzz1946@gmail.com";
 
 export async function POST(request: Request) {
   try {
-    // 0A. INIZIALIZZAZIONE RESEND PROTETTA
-    const resendKey = process.env.RESEND_API_KEY || '';
-    if (!resendKey) {
-        return NextResponse.json({ error: 'Configurazione mail mancante' }, { status: 500 });
-    }
-    const resend = new Resend(resendKey);
-
-    // 0B. INIZIALIZZAZIONE SUPABASE PROTETTA
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!supabaseUrl || !supabaseKey) {
-        return NextResponse.json({ error: 'Configurazione database mancante' }, { status: 500 });
-    }
-    const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-
-    const body = await request.json();
-    const { email, password, nomeSala } = body;
-
-    if (!email || !password || !nomeSala) {
-      return NextResponse.json({ error: 'Dati mancanti' }, { status: 400 });
+    // 1. Verifica di sicurezza: controlliamo che chi chiama sia l'admin supremo
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    
+    // Recuperiamo la sessione corrente dall'header dell'utente che fa la richiesta
+    const authHeader = request.headers.get("Authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    
+    if (!token) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
-    // 1. CREAZIONE UTENTE IN AUTH
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: email,
-      password: password,
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user || user.email !== SUPER_ADMIN) {
+      return NextResponse.json({ error: "Accesso negato: Solo il Super Admin può varare nuovi club" }, { status: 403 });
+    }
+
+    // 2. Lettura dei dati della nuova sala
+    const { nomeSala, emailManager, passwordTemporanea } = await request.json();
+
+    if (!nomeSala || !emailManager || !passwordTemporanea) {
+      return NextResponse.json({ error: "Dati incompleti" }, { status: 400 });
+    }
+
+    // 3. Creazione Utente in Supabase Auth via Admin API
+    const { data: authUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
+      email: emailManager,
+      password: passwordTemporanea,
       email_confirm: true,
     });
 
-    if (authError) throw new Error(`Errore Auth: ${authError.message}`);
-
-    // 2. CREAZIONE SALA NEL DATABASE
-    const { error: dbError } = await supabaseAdmin.from('sale').insert([
-      {
-        name: nomeSala,
-        manager_email: email,
-        is_active: true,
-      }
-    ]);
-
-    if (dbError) throw new Error(`Errore DB: ${dbError.message}`);
-
-    // 3. SPEDIZIONE EMAIL CON RESEND
-    const { error: emailError } = await resend.emails.send({
-      from: 'onboarding@resend.dev',
-      to: [email],
-      subject: 'Benvenuto a bordo - Credenziali di Accesso',
-      html: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Benvenuto ne Il Campione!</h2>
-          <p>La tua sala <strong>${nomeSala}</strong> è stata configurata ed è pronta all'uso.</p>
-          <p>Ecco le tue credenziali di accesso provvisorie:</p>
-          <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px;">
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Password:</strong> ${password}</p>
-          </div>
-          <p>Ti consigliamo di cambiare la password al primo accesso.</p>
-          <p>Buon lavoro!</p>
-        </div>
-      `,
-    });
-
-    if (emailError) {
-      console.warn("Problema Resend:", emailError.message);
-      return NextResponse.json({ 
-        success: true, 
-        message: '✅ VARO COMPLETATO! (Sala e Utente creati. Email non inviata per limiti di test Resend)' 
-      });
+    if (createUserError) {
+      return NextResponse.json({ error: `Errore creazione Auth: ${createUserError.message}` }, { status: 400 });
     }
 
-    // Se tutto è andato bene e anche l'email è partita
-    return NextResponse.json({ success: true, message: '✅ VARO COMPLETATO! Sala creata ed email inviata.' });
+    // 4. Creazione della Sala nel Database (Isolamento Multi-Tenant)
+    // Calcoliamo una scadenza standard a 30 giorni per il contributo di attivazione
+    const scadenza = new Date();
+    scadenza.setDate(scadenza.getDate() + 30);
 
-  } catch (error: any) {
-    console.error('Errore durante l\'onboarding:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const { error: dbError } = await supabaseAdmin
+      .from("sale")
+      .insert([
+        {
+          name: nomeSala.toUpperCase(),
+          manager_email: emailManager.toLowerCase(),
+          scadenza_contributo: scadenza.toISOString(),
+          is_active: true,
+        },
+      ]);
+
+    if (dbError) {
+      // Rollback utente auth se il DB fallisce per consistenza d'isolamento
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      return NextResponse.json({ error: `Errore inserimento DB: ${dbError.message}` }, { status: 400 });
+    }
+
+    // 5. Registrazione nella Scatola Nera (admin_logs)
+    await supabaseAdmin.from("admin_logs").insert([
+      {
+        azione: "VARO CLUB",
+        dettagli: `Creata con successo la sala ${nomeSala.toUpperCase()} associata a ${emailManager}`,
+      },
+    ]);
+
+    // 6. Spedizione Credenziali Automatica tramite Resend
+    try {
+      await resend.emails.send({
+        from: "Il Campione <onboarding@ilcampione-biliardo.it>", // Sostituisci col tuo dominio verificato su Resend
+        to: emailManager,
+        subject: "Benvenuto su Il Campione - Credenziali della tua Plancia",
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; rounded: 12px;">
+            <h2 style="color: #06b6d4; text-transform: uppercase;">Il Campione</h2>
+            <p>Gentile Responsabile,</p>
+            <p>La tua sala <strong>${nomeSala.toUpperCase()}</strong> è stata registrata con successo sulla nostra piattaforma di gestione multi-tenant.</p>
+            <p>Di seguito trovi le credenziali operative per accedere alla tua plancia privata:</p>
+            <div style="background-color: #f4f4f5; padding: 15px; border-radius: 8px; font-family: monospace; margin: 20px 0;">
+              <strong>URL di Accesso:</strong> <a href="${process.env.NEXT_PUBLIC_SITE_URL}/login">${process.env.NEXT_PUBLIC_SITE_URL}/login</a><br/>
+              <strong>Email Login:</strong> ${emailManager}<br/>
+              <strong>Password Temporanea:</strong> ${passwordTemporanea}
+            </div>
+            <p style="color: #71717a; font-size: 12px;">Ti consigliamo di modificare la password al primo accesso per motivi di sicurezza.</p>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="font-size: 11px; color: #a1a1aa;">Sistema di Onboarding Automatico integrato - Il Campione.</p>
+          </div>
+        `,
+      });
+    } catch (mailErr) {
+      console.error("Invio email fallito, ma utente e sala sono stati creati:", mailErr);
+    }
+
+    return NextResponse.json({ success: true, message: "Onboarding completato con successo!" });
+  } catch (globalErr: any) {
+    return NextResponse.json({ error: globalErr.message }, { status: 500 });
   }
 }
