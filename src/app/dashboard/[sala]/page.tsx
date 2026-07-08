@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import PlanciaCassaManager from "@/components/PlanciaCassaManager";
@@ -10,38 +10,50 @@ interface PageProps {
 }
 
 export default function AreaRiservataSalaPage({ params }: PageProps) {
-  // Scompattiamo i parametri dinamici della rotta (l'ID della sala)
-  const resolvedParams = use(params);
-  const salaId = resolvedParams.id;
-
+  const [salaId, setSalaId] = useState<string | null>(null);
   const [nomeSala, setNomeSala] = useState("");
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     async function inizializzaPlancia() {
-      // 1. Controlliamo se il manager è loggato
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push("/login");
-        return;
-      }
+      try {
+        // Estrazione asincrona corretta richiesta dalle specifiche Next.js
+        const resolvedParams = await params;
+        const id = resolvedParams?.id;
+        
+        if (!id) {
+          setLoading(false);
+          return;
+        }
+        setSalaId(id);
 
-      // 2. Recuperiamo il nome della sala corrente per l'intestazione
-      const { data: salaData, error } = await supabase
-        .from("sale")
-        .select("name")
-        .eq("id", salaId)
-        .single();
+        // Controllo sessione manager
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          router.push("/login");
+          return;
+        }
 
-      if (!error && salaData) {
-        setNomeSala(salaData.name);
+        // Recupero informazioni della sala
+        const { data: salaData, error } = await supabase
+          .from("sale")
+          .select("name")
+          .eq("id", id)
+          .single();
+
+        if (!error && salaData) {
+          setNomeSala(salaData.name);
+        }
+      } catch (err) {
+        console.error("Errore durante l'inizializzazione:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
 
     inizializzaPlancia();
-  }, [salaId, router]);
+  }, [params, router]);
 
   if (loading) {
     return (
@@ -49,6 +61,14 @@ export default function AreaRiservataSalaPage({ params }: PageProps) {
         <p className="text-cyan-500 font-black animate-pulse tracking-widest uppercase text-xs">
           Caricamento Plancia...
         </p>
+      </div>
+    );
+  }
+
+  if (!salaId) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center text-white font-black uppercase text-xs tracking-widest">
+        🛑 ID Sala non valido
       </div>
     );
   }
@@ -82,7 +102,6 @@ export default function AreaRiservataSalaPage({ params }: PageProps) {
             📊 GESTIONE FLUSSI DI CASSA
           </h2>
           
-          {/* Richiamiamo il nostro componente passandogli l'id della sala */}
           <PlanciaCassaManager salaId={salaId} />
         </div>
 
