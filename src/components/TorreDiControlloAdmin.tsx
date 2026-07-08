@@ -209,11 +209,11 @@ export default function TorreDiControlloAdmin() {
                       href={`/dashboard/${sala.id}`}
                       className="text-xs font-bold uppercase text-gray-500 hover:text-white transition-colors mr-2"
                     >
-                      Accesso Direttore (SuperAdmin)
+                      Accesso Direttore
                     </a>
                     <span className="text-gray-800">|</span>
                     <button type="button" className="text-cyan-500 hover:text-cyan-400 text-xs font-black tracking-widest">
-                      AUDIT/NOTE
+                      AUDIT
                     </button>
                     <span className="text-gray-800">|</span>
                     <button type="button" onClick={() => handleEliminaSala(sala.id, sala.manager_email)} className="text-red-500 hover:text-red-400 text-xs font-black tracking-widest">
