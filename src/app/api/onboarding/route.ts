@@ -41,7 +41,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Dati incompleti" }, { status: 400 });
     }
 
-    // Creazione Utente Auth
     const { data: authUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
       email: emailManager,
       password: passwordTemporanea,
@@ -52,7 +51,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Errore creazione Auth: ${createUserError.message}` }, { status: 400 });
     }
 
-    // Inserimento Sala nel DB
     const scadenza = new Date();
     scadenza.setDate(scadenza.getDate() + 30);
 
@@ -72,12 +70,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Errore inserimento DB: ${dbError.message}` }, { status: 400 });
     }
 
-    // Scrittura Log
     await supabaseAdmin.from("admin_logs").insert([
       { azione: "VARO CLUB", dettagli: `Creata la sala ${nomeSala.toUpperCase()} (${emailManager})` },
     ]);
 
-    // Spedizione Email
     try {
       if (process.env.RESEND_API_KEY) {
         await resend.emails.send({
@@ -88,9 +84,7 @@ export async function POST(request: Request) {
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
               <h2 style="color: #06b6d4; text-transform: uppercase;">Il Campione</h2>
               <p>La tua sala <strong>${nomeSala.toUpperCase()}</strong> è attiva.</p>
-              <p>Credenziali di accesso:</p>
               <div style="background-color: #f4f4f5; padding: 15px; border-radius: 8px; font-family: monospace; margin: 20px 0;">
-                <strong>URL:</strong> <a href="${process.env.NEXT_PUBLIC_SITE_URL}/login">${process.env.NEXT_PUBLIC_SITE_URL}/login</a><br/>
                 <strong>Email:</strong> ${emailManager}<br/>
                 <strong>Password Temporanea:</strong> ${passwordTemporanea}
               </div>
