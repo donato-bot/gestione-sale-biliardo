@@ -1,27 +1,24 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import PlanciaCassaManager from "@/components/PlanciaCassaManager";
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
-
-export default function AreaRiservataSalaPage({ params }: PageProps) {
-  // Estrazione immediata e sicura tramite l'hook standard 'use' di React
-  const resolvedParams = use(params);
-  const salaId = resolvedParams?.id;
+export default function AreaRiservataSalaPage() {
+  const router = useRouter();
+  const urlParams = useParams();
+  
+  // Cattura l'ID dall'URL in modo dinamico e flessibile
+  // Cerca 'id', se non lo trova cerca il primo parametro disponibile nell'oggetto
+  const salaId = (urlParams?.id || Object.values(urlParams)[0]) as string | undefined;
 
   const [nomeSala, setNomeSala] = useState("");
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
     async function inizializzaPlancia() {
       if (!salaId) {
-        setLoading(false);
         return;
       }
 
@@ -33,7 +30,7 @@ export default function AreaRiservataSalaPage({ params }: PageProps) {
           return;
         }
 
-        // Recupero informazioni della sala
+        // Recupero informazioni della sala dal Database
         const { data: salaData, error } = await supabase
           .from("sale")
           .select("name")
@@ -56,7 +53,7 @@ export default function AreaRiservataSalaPage({ params }: PageProps) {
   if (!salaId) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center text-white font-black uppercase text-xs tracking-widest">
-        🛑 ID Sala non ricevuto
+        🛑 ID Sala non rilevato dall'indirizzo URL
       </div>
     );
   }
