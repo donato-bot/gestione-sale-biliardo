@@ -14,8 +14,10 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
 
+    const cleanEmail = email.trim().toLowerCase();
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
+      email: cleanEmail,
       password,
     });
 
@@ -25,12 +27,31 @@ export default function LoginPage() {
       return;
     }
 
-    // AUTOMATISMO CORRETTO: Se sei tu, vai dritto a /admin
-    if (email.trim().toLowerCase() === "donatorzz1946@gmail.com") {
+    // AUTOMATISMO STRUTTURATO DI REINDIRIZZAMENTO
+    if (cleanEmail === "donatorzz1946@gmail.com") {
+      // Il Super Admin va alla Torre di Controllo
       router.push("/admin");
     } else {
-      // Altrimenti il manager normale va alla sua dashboard fittizia o specifica
-      router.push("/dashboard");
+      try {
+        // Cerca la sala associata a questo specifico gestore
+        const { data: salaData, error: salaError } = await supabase
+          .from("sale")
+          .select("id")
+          .eq("manager_email", cleanEmail)
+          .single();
+
+        if (salaError || !salaData) {
+          alert("Nessuna sala biliardo associata a questa email. Contatta l'amministratore.");
+          setLoading(false);
+          return;
+        }
+
+        // Reindirizzamento automatico alla plancia specifica usando l'ID corretto
+        router.push(`/dashboard/${salaData.id}`);
+      } catch (err) {
+        console.error("Errore durante il recupero della sala:", err);
+        alert("Errore di sistema nel recupero dei dati della sala.");
+      }
     }
     setLoading(false);
   };
