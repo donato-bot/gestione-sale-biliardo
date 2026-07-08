@@ -27,7 +27,7 @@ async function verificaSuperAdmin(request: Request) {
   return user;
 }
 
-// 1. GESTIONE CREAZIONE (POST)
+// 1. GESTIONE CREAZIONE SALA E UTENTE (POST)
 export async function POST(request: Request) {
   try {
     const adminAutenticato = await verificaSuperAdmin(request);
@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Dati incompleti" }, { status: 400 });
     }
 
+    // Creazione Utente in Auth
     const { data: authUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
       email: emailManager,
       password: passwordTemporanea,
@@ -51,9 +52,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Errore creazione Auth: ${createUserError.message}` }, { status: 400 });
     }
 
+    // Calcolo scadenza contributo (30 giorni)
     const scadenza = new Date();
     scadenza.setDate(scadenza.getDate() + 30);
 
+    // Inserimento nella tabella 'sale'
     const { error: dbError } = await supabaseAdmin
       .from("sale")
       .insert([
@@ -66,14 +69,17 @@ export async function POST(request: Request) {
       ]);
 
     if (dbError) {
+      // Se il DB fallisce, eliminiamo l'utente appena creato in Auth per non lasciare sporco
       await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
       return NextResponse.json({ error: `Errore inserimento DB: ${dbError.message}` }, { status: 400 });
     }
 
+    // Registrazione dell'azione nei Log
     await supabaseAdmin.from("admin_logs").insert([
       { azione: "VARO CLUB", dettagli: `Creata la sala ${nomeSala.toUpperCase()} (${emailManager})` },
     ]);
 
+    // Invio Email con Resend
     try {
       if (process.env.RESEND_API_KEY) {
         await resend.emails.send({
@@ -100,7 +106,7 @@ export async function POST(request: Request) {
   }
 }
 
-// 2. GESTIONE TOGGLE KILL SWITCH (PATCH)
+// 2. GESTIONE INTERRUTTORE KILL SWITCH (PATCH)
 export async function PATCH(request: Request) {
   try {
     const adminAutenticato = await verificaSuperAdmin(request);
@@ -110,7 +116,7 @@ export async function PATCH(request: Request) {
 
     const { id, is_active } = await request.json();
     if (id === undefined || is_active === undefined) {
-      return NextResponse.json({ error: "Parametri id o is_active mancanti" }, { status: 400 });
+      return NextResponse.json({ error: "Parametri mancanti" }, { status: 400 });
     }
 
     const { error: dbError } = await supabaseAdmin
@@ -125,13 +131,13 @@ export async function PATCH(request: Request) {
       { azione: statoTesto, dettagli: `Modificato stato is_active a ${is_active} per la sala con ID ${id}` },
     ]);
 
-    return NextResponse.json({ success: true, message: `Stato sala aggiornato a: ${statoTesto}` });
+    return NextResponse.json({ success: true, message: `Stato sala aggiornato` });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-// 3. GESTIONE ELIMINAZIONE (DELETE)
+// 3. GESTIONE CANCELLAZIONE TOTALE (DELETE)
 export async function DELETE(request: Request) {
   try {
     const adminAutenticato = await verificaSuperAdmin(request);
@@ -141,12 +147,14 @@ export async function DELETE(request: Request) {
 
     const { id, manager_email } = await request.json();
     if (!id || !manager_email) {
-      return NextResponse.json({ error: "ID sala o email manager mancanti" }, { status: 400 });
+      return NextResponse.json({ error: "Dati mancanti per l'eliminazione" }, { status: 400 });
     }
 
+    // Elimina riga dal Database
     const { error: dbError } = await supabaseAdmin.from("sale").delete().eq("id", id);
     if (dbError) throw dbError;
 
+    // Cerca ed elimina l'utente da Supabase Auth
     const { data: usersData, error: userError } = await supabaseAdmin.auth.admin.listUsers();
     if (!userError && usersData?.users) {
       const targetUser = usersData.users.find(u => u.email?.toLowerCase() === manager_email.toLowerCase());
