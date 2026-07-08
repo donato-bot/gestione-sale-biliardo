@@ -3,31 +3,36 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter, useParams } from "next/navigation";
-import PlanciaCassaManager from "@/components/PlanciaCassaManager";
+import PlanciaCassaManager from "../../../components/PlanciaCassaManager";
+import TabelloneTavoliManager from "../../../components/TabelloneTavoliManager";
 
 export default function AreaRiservataSalaPage() {
   const router = useRouter();
   const urlParams = useParams();
   
-  // Estrazione sicura al 100% dall'URL: nessuna dipendenza da firme asincrone esterne
-  const salaId = (urlParams?.id || Object.values(urlParams)[0]) as string | undefined;
+  // Estrazione dinamica del parametro a prescindere dal nome assegnato alla cartella ([sala])
+  const salaId = (urlParams?.sala || urlParams?.id || Object.values(urlParams)[0]) as string | undefined;
 
   const [nomeSala, setNomeSala] = useState("");
   const [loading, setLoading] = useState(true);
+  const [chiaveRinfrescoCassa, setChiaveRinfrescoCassa] = useState(0);
+
+  // Forza il rinfresco automatico della cassa quando un tavolo viene spento
+  const forzaRinfrescoCassa = () => {
+    setChiaveRinfrescoCassa(prev => prev + 1);
+  };
 
   useEffect(() => {
     async function inizializzaPlancia() {
       if (!salaId) return;
 
       try {
-        // Controllo sessione manager attiva
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           router.push("/login");
           return;
         }
 
-        // Recupero nome della sala dal database
         const { data: salaData, error } = await supabase
           .from("sale")
           .select("name")
@@ -59,7 +64,7 @@ export default function AreaRiservataSalaPage() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <p className="text-cyan-500 font-black animate-pulse tracking-widest uppercase text-xs">
-          Caricamento Plancia...
+          Sincronizzazione Plancia...
         </p>
       </div>
     );
@@ -67,13 +72,13 @@ export default function AreaRiservataSalaPage() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 md:p-12 font-sans">
-      <div className="w-full max-w-[1400px] mx-auto space-y-10">
+      <div className="w-full max-w-[1400px] mx-auto space-y-12">
         
-        {/* INTESTAZIONE DELLA PLANCIA */}
+        {/* INTESTAZIONE */}
         <div className="flex justify-between items-center border-b border-gray-800 pb-6">
           <div>
             <span className="text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-500/20 px-3 py-1 rounded-full font-black uppercase tracking-wider">
-              Area Gestore
+              Plancia Automatismi
             </span>
             <h1 className="text-4xl font-black uppercase tracking-tight text-white italic mt-2">
               {nomeSala || "PLANCIA DI COMANDO"}
@@ -88,13 +93,20 @@ export default function AreaRiservataSalaPage() {
           </button>
         </div>
 
-        {/* IL LIBRO MASTRO E LA CHIUSURA DI CASSA */}
-        <div className="border-t border-gray-900 pt-4">
-          <h2 className="text-lg font-black uppercase tracking-widest mb-6 text-gray-400">
-            📊 GESTIONE FLUSSI DI CASSA
+        {/* SEZIONE PRIMARIA: TABELLONE AUTOMATICO DEI TAVOLI */}
+        <div className="space-y-4">
+          <h2 className="text-xs font-black uppercase tracking-widest text-gray-500">
+            🎱 CONTROLLO UTENZE E TAVOLI DA GIOCO
           </h2>
-          
-          <PlanciaCassaManager salaId={salaId} />
+          <TabelloneTavoliManager salaId={salaId} onMovimentoRegistrato={forzaRinfrescoCassa} />
+        </div>
+
+        {/* SEZIONE SECONDARIA: LIBRO MASTRO E BILANCIO DI CASSA */}
+        <div className="border-t border-gray-900 pt-8 space-y-4">
+          <h2 className="text-xs font-black uppercase tracking-widest text-gray-500">
+            📊 RENDICONTAZIONE E LIBRO MASTRO
+          </h2>
+          <PlanciaCassaManager key={chiaveRinfrescoCassa} salaId={salaId} />
         </div>
 
       </div>
