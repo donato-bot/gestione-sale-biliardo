@@ -169,7 +169,7 @@ export default function TorneiSocio({ salaId }: { salaId: string }) {
               </div>
               <div>
                 <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-0.5">Quota d'Ingresso</p>
-                <p className="text-lg font-black text-yellow-500}>€{Number(torneoAttivo.quota).toFixed(2)}</p>
+                <p className="text-lg font-black text-yellow-500">€{Number(torneoAttivo.quota).toFixed(2)}</p>
               </div>
             </div>
 
