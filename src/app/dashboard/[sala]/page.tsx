@@ -9,8 +9,7 @@ export default function AreaRiservataSalaPage() {
   const router = useRouter();
   const urlParams = useParams();
   
-  // Cattura l'ID dall'URL in modo dinamico e flessibile
-  // Cerca 'id', se non lo trova cerca il primo parametro disponibile nell'oggetto
+  // Estrazione sicura al 100% dall'URL: nessuna dipendenza da firme asincrone esterne
   const salaId = (urlParams?.id || Object.values(urlParams)[0]) as string | undefined;
 
   const [nomeSala, setNomeSala] = useState("");
@@ -18,19 +17,17 @@ export default function AreaRiservataSalaPage() {
 
   useEffect(() => {
     async function inizializzaPlancia() {
-      if (!salaId) {
-        return;
-      }
+      if (!salaId) return;
 
       try {
-        // Controllo sessione manager
+        // Controllo sessione manager attiva
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           router.push("/login");
           return;
         }
 
-        // Recupero informazioni della sala dal Database
+        // Recupero nome della sala dal database
         const { data: salaData, error } = await supabase
           .from("sale")
           .select("name")
@@ -41,7 +38,7 @@ export default function AreaRiservataSalaPage() {
           setNomeSala(salaData.name);
         }
       } catch (err) {
-        console.error("Errore durante l'inizializzazione:", err);
+        console.error("Errore inizializzazione plancia:", err);
       } finally {
         setLoading(false);
       }
@@ -53,7 +50,7 @@ export default function AreaRiservataSalaPage() {
   if (!salaId) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center text-white font-black uppercase text-xs tracking-widest">
-        🛑 ID Sala non rilevato dall'indirizzo URL
+        🛑 ID Sala non intercettato dall'indirizzo URL
       </div>
     );
   }
@@ -72,7 +69,7 @@ export default function AreaRiservataSalaPage() {
     <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 md:p-12 font-sans">
       <div className="w-full max-w-[1400px] mx-auto space-y-10">
         
-        {/* INTESTAZIONE DELLA SALA */}
+        {/* INTESTAZIONE DELLA PLANCIA */}
         <div className="flex justify-between items-center border-b border-gray-800 pb-6">
           <div>
             <span className="text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-500/20 px-3 py-1 rounded-full font-black uppercase tracking-wider">
