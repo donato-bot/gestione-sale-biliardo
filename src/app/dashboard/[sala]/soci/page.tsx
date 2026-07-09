@@ -26,6 +26,9 @@ export default function SociPage() {
   const [mostraForm, setMostraForm] = useState(false);
   const [salvataggio, setSalvataggio] = useState(false);
   
+  // Tracciamento del socio in modifica (null = nuovo socio)
+  const [socioInModificaId, setSocioInModificaId] = useState<string | null>(null);
+  
   // Campi Form
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
@@ -56,6 +59,25 @@ export default function SociPage() {
     caricaSoci();
   }, [caricaSoci]);
 
+  // Apre il form per un NUOVO socio
+  const apriNuovoSocio = () => {
+    setSocioInModificaId(null);
+    setNome(""); setCognome(""); setTelefono(""); setEmail(""); setCodiceFiscale(""); setScadenzaTessera("");
+    setMostraForm(true);
+  };
+
+  // Apre il form precompilato per MODIFICARE un socio
+  const apriModificaSocio = (socio: Socio) => {
+    setSocioInModificaId(socio.id);
+    setNome(socio.nome);
+    setCognome(socio.cognome);
+    setTelefono(socio.telefono || "");
+    setEmail(socio.email || "");
+    setCodiceFiscale(socio.codice_fiscale || "");
+    setScadenzaTessera(socio.scadenza_tessera || "");
+    setMostraForm(true);
+  };
+
   const salvaSocio = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nome.trim() || !cognome.trim()) {
@@ -68,7 +90,7 @@ export default function SociPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       const userEmail = sessionData.session?.user?.email;
 
-      const { error } = await supabase.from("soci").insert([{
+      const datiSocio = {
         sala_id: salaId,
         manager_email: userEmail,
         nome: nome.toUpperCase(),
@@ -77,11 +99,20 @@ export default function SociPage() {
         email,
         codice_fiscale: codiceFiscale.toUpperCase(),
         scadenza_tessera: scadenzaTessera || null
-      }]);
+      };
 
-      if (error) throw error;
+      if (socioInModificaId) {
+        // MODIFICA (Update)
+        const { error } = await supabase.from("soci").update(datiSocio).eq("id", socioInModificaId);
+        if (error) throw error;
+      } else {
+        // NUOVO (Insert)
+        const { error } = await supabase.from("soci").insert([datiSocio]);
+        if (error) throw error;
+      }
 
-      // Reset form
+      // Reset e chiusura
+      setSocioInModificaId(null);
       setNome(""); setCognome(""); setTelefono(""); setEmail(""); setCodiceFiscale(""); setScadenzaTessera("");
       setMostraForm(false);
       await caricaSoci();
@@ -121,7 +152,7 @@ export default function SociPage() {
           </div>
           
           <button 
-            onClick={() => setMostraForm(true)}
+            onClick={apriNuovoSocio}
             className="bg-cyan-600 hover:bg-cyan-500 text-black px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)]"
           >
             + Aggiungi Nuovo Socio
@@ -137,7 +168,7 @@ export default function SociPage() {
                 <th className="p-4 w-[20%]">Contatti</th>
                 <th className="p-4 w-[20%]">Codice Fiscale</th>
                 <th className="p-4 w-[20%]">Scadenza Tessera</th>
-                <th className="p-4 w-[15%] text-right">Stato</th>
+                <th className="p-4 w-[15%] text-right">Stato / Azioni</th>
               </tr>
             </thead>
             <tbody className="text-sm font-bold text-white divide-y divide-gray-800/40">
@@ -165,14 +196,21 @@ export default function SociPage() {
                           ? new Date(socio.scadenza_tessera).toLocaleDateString("it-IT") 
                           : "Non impostata"}
                       </td>
-                      <td className="p-4 text-right">
-                        <span className={`text-[8px] px-2.5 py-1 rounded border font-black uppercase tracking-widest
+                      <td className="p-4 text-right flex flex-col items-end justify-center gap-2">
+                        <span className={`text-[8px] px-2.5 py-1 rounded border font-black uppercase tracking-widest inline-block
                           ${scaduta 
                             ? "bg-red-950/30 text-red-500 border-red-500/20" 
                             : "bg-emerald-950/30 text-emerald-500 border-emerald-500/20"}`}
                         >
                           {scaduta ? "🔴 Scaduta" : "🟢 Attiva"}
                         </span>
+                        
+                        <button 
+                          onClick={() => apriModificaSocio(socio)} 
+                          className="text-[9px] text-cyan-600 hover:text-cyan-400 uppercase font-black tracking-widest transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          ✏️ Modifica
+                        </button>
                       </td>
                     </tr>
                   );
@@ -187,13 +225,15 @@ export default function SociPage() {
         </div>
       </div>
 
-      {/* POPUP MODAL: NUOVO SOCIO */}
+      {/* POPUP MODAL: NUOVO SOCIO / MODIFICA SOCIO */}
       {mostraForm && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#0a0b0f] border border-gray-800 rounded-2xl w-full max-w-2xl shadow-2xl relative">
             <button onClick={() => setMostraForm(false)} className="absolute top-6 right-6 text-gray-500 hover:text-red-500 font-black text-xl z-10">✖</button>
             <div className="p-8">
-               <h2 className="text-xl font-black italic text-cyan-400 uppercase mb-6">Registrazione Nuovo Socio</h2>
+               <h2 className="text-xl font-black italic text-cyan-400 uppercase mb-6">
+                 {socioInModificaId ? "Modifica Dati Socio" : "Registrazione Nuovo Socio"}
+               </h2>
                
                <form onSubmit={salvaSocio} className="space-y-4">
                  <div className="grid grid-cols-2 gap-4">
@@ -229,7 +269,7 @@ export default function SociPage() {
                  </div>
 
                  <button type="submit" disabled={salvataggio} className="w-full bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-800 text-black font-black uppercase tracking-widest py-4 rounded-xl text-[10px] transition-all mt-6">
-                   {salvataggio ? "SALVATAGGIO IN CORSO..." : "SALVA SCHEDA SOCIO"}
+                   {salvataggio ? "SALVATAGGIO IN CORSO..." : (socioInModificaId ? "AGGIORNA DATI SOCIO" : "SALVA SCHEDA SOCIO")}
                  </button>
                </form>
 
