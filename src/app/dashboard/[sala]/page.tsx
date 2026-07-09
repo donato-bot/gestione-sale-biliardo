@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter, useParams } from "next/navigation";
-import PlanciaCassaManager from "../../../components/PlanciaCassaManager";
+import Link from "next/link";
 import TabelloneTavoliManager from "../../../components/TabelloneTavoliManager";
 
 export default function DashboardPage() {
@@ -15,10 +15,11 @@ export default function DashboardPage() {
   const [nomeSala, setNomeSala] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [loading, setLoading] = useState(true);
-  const [chiaveRinfrescoCassa, setChiaveRinfrescoCassa] = useState(0);
 
-  const forzaRinfrescoCassa = () => {
-    setChiaveRinfrescoCassa(prev => prev + 1);
+  // Manteniamo la funzione per non rompere il componente dei tavoli, 
+  // anche se la cassa ora vivrà in una pagina separata e dedicata.
+  const handleMovimento = () => {
+    console.log("Incasso automatico registrato nel database.");
   };
 
   useEffect(() => {
@@ -61,7 +62,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <p className="text-cyan-500 font-black animate-pulse tracking-widest uppercase text-xs">
-          Sincronizzazione Plancia...
+          Allineamento Plancia...
         </p>
       </div>
     );
@@ -76,6 +77,16 @@ export default function DashboardPage() {
   }
 
   const isSuperAdmin = userEmail === "donatorzz1946@gmail.com";
+
+  // MAPPATURA DEI SERVIZI DEL CLUB
+  const servizi = [
+    { nome: "Contabilità & Cassa", icona: "💶", path: `/dashboard/${salaId}/contabilita`, desc: "Libro mastro e bilanci" },
+    { nome: "Gestione Soci", icona: "👥", path: `/dashboard/${salaId}/soci`, desc: "Anagrafica e tessere VIP" },
+    { nome: "Prenotazioni", icona: "📅", path: `/dashboard/${salaId}/prenotazioni`, desc: "Planning tavoli e orari" },
+    { nome: "Magazzino Bar", icona: "📦", path: `/dashboard/${salaId}/magazzino`, desc: "Scorte e fornitori" },
+    { nome: "Gestione Tornei", icona: "🏆", path: `/dashboard/${salaId}/tornei`, desc: "Gironi e tabelloni" },
+    { nome: "Manuale Operativo", icona: "📖", path: `/dashboard/${salaId}/manuale`, desc: "Procedure di sala" }
+  ];
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 md:p-12 font-sans">
@@ -97,7 +108,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => router.push("/admin")}
-                className="bg-cyan-600 hover:bg-cyan-500 text-black font-black px-6 py-2.5 rounded-xl uppercase tracking-widest text-xs transition-all"
+                className="bg-cyan-600 hover:bg-cyan-500 text-black font-black px-6 py-2.5 rounded-xl uppercase tracking-widest text-xs transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)]"
               >
                 🚀 Torre di Controllo
               </button>
@@ -113,20 +124,40 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* TABELLONE TAVOLI */}
+        {/* SEZIONE PRIMARIA: TABELLONE AUTOMATICO DEI TAVOLI */}
         <div className="space-y-4">
           <h2 className="text-xs font-black uppercase tracking-widest text-gray-500">
             🎱 CONTROLLO UTENZE E TAVOLI DA GIOCO
           </h2>
-          <TabelloneTavoliManager salaId={salaId} onMovimentoRegistrato={forzaRinfrescoCassa} />
+          <TabelloneTavoliManager salaId={salaId} onMovimentoRegistrato={handleMovimento} />
         </div>
 
-        {/* LIBRO MASTRO */}
+        {/* SEZIONE SECONDARIA: HUB DEI SERVIZI */}
         <div className="border-t border-gray-900 pt-8 space-y-4">
           <h2 className="text-xs font-black uppercase tracking-widest text-gray-500">
-            📊 RENDICONTAZIONE E LIBRO MASTRO
+            ⚙️ HUB SERVIZI DEL CLUB
           </h2>
-          <PlanciaCassaManager key={chiaveRinfrescoCassa} salaId={salaId} />
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {servizi.map((servizio, index) => (
+              <Link href={servizio.path} key={index}>
+                <div className="bg-[#11131a] border border-gray-800 hover:border-cyan-500/50 hover:bg-cyan-950/10 p-6 rounded-2xl transition-all cursor-pointer group flex items-center gap-5">
+                  <div className="text-4xl group-hover:scale-110 transition-transform">
+                    {servizio.icona}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black uppercase tracking-tight text-white group-hover:text-cyan-400 transition-colors">
+                      {servizio.nome}
+                    </h3>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+                      {servizio.desc}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+          
         </div>
 
       </div>
