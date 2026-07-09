@@ -16,8 +16,6 @@ export default function DashboardPage() {
   const [userEmail, setUserEmail] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Manteniamo la funzione per non rompere il componente dei tavoli, 
-  // anche se la cassa ora vivrà in una pagina separata e dedicata.
   const handleMovimento = () => {
     console.log("Incasso automatico registrato nel database.");
   };
@@ -81,7 +79,7 @@ export default function DashboardPage() {
   // MAPPATURA DEI SERVIZI DEL CLUB
   const servizi = [
     { nome: "Contabilità & Cassa", icona: "💶", path: `/dashboard/${salaId}/contabilita`, desc: "Libro mastro e bilanci" },
-    { nome: "Gestione Soci", icona: "👥", path: `/dashboard/${salaId}/soci`, desc: "Anagrafica e tessere VIP" },
+    { nome: "Gestione Soci", icona: "👥", path: `/dashboard/${salaId}/soci`, desc: "Anagrafica e tessere" },
     { nome: "Prenotazioni", icona: "📅", path: `/dashboard/${salaId}/prenotazioni`, desc: "Planning tavoli e orari" },
     { nome: "Magazzino Bar", icona: "📦", path: `/dashboard/${salaId}/magazzino`, desc: "Scorte e fornitori" },
     { nome: "Gestione Tornei", icona: "🏆", path: `/dashboard/${salaId}/tornei`, desc: "Gironi e tabelloni" },
@@ -89,11 +87,11 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 md:p-12 font-sans">
-      <div className="w-full max-w-[1400px] mx-auto space-y-12">
+    <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 font-sans">
+      <div className="w-full max-w-[1800px] mx-auto flex flex-col space-y-8">
         
-        {/* INTESTAZIONE */}
-        <div className="flex justify-between items-center border-b border-gray-800 pb-6">
+        {/* INTESTAZIONE SUPERIORE */}
+        <header className="flex justify-between items-center border-b border-gray-800 pb-6">
           <div>
             <span className="text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-500/20 px-3 py-1 rounded-full font-black uppercase tracking-wider">
               {isSuperAdmin ? "Sala Campione (Super Admin)" : "Plancia Gestore"}
@@ -122,44 +120,51 @@ export default function DashboardPage() {
               Esci
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* SEZIONE PRIMARIA: TABELLONE AUTOMATICO DEI TAVOLI */}
-        <div className="space-y-4">
-          <h2 className="text-xs font-black uppercase tracking-widest text-gray-500">
-            🎱 CONTROLLO UTENZE E TAVOLI DA GIOCO
-          </h2>
-          <TabelloneTavoliManager salaId={salaId} onMovimentoRegistrato={handleMovimento} />
-        </div>
-
-        {/* SEZIONE SECONDARIA: HUB DEI SERVIZI */}
-        <div className="border-t border-gray-900 pt-8 space-y-4">
-          <h2 className="text-xs font-black uppercase tracking-widest text-gray-500">
-            ⚙️ HUB SERVIZI DEL CLUB
-          </h2>
+        {/* LAYOUT A DUE COLONNE */}
+        <div className="flex flex-col lg:flex-row gap-8 items-start">
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {servizi.map((servizio, index) => (
-              <Link href={servizio.path} key={index}>
-                <div className="bg-[#11131a] border border-gray-800 hover:border-cyan-500/50 hover:bg-cyan-950/10 p-6 rounded-2xl transition-all cursor-pointer group flex items-center gap-5">
-                  <div className="text-4xl group-hover:scale-110 transition-transform">
-                    {servizio.icona}
+          {/* COLONNA SINISTRA: HUB SERVIZI (Sidebar) */}
+          <aside className="w-full lg:w-1/4 xl:w-[300px] flex-shrink-0 space-y-4">
+            <h2 className="text-xs font-black uppercase tracking-widest text-gray-500 px-2">
+              ⚙️ Hub Servizi del Club
+            </h2>
+            
+            <nav className="flex flex-col gap-3">
+              {servizi.map((servizio, index) => (
+                <Link href={servizio.path} key={index}>
+                  <div className="bg-[#11131a] border border-gray-800 hover:border-cyan-500/50 hover:bg-cyan-950/20 p-4 rounded-2xl transition-all cursor-pointer group flex items-center gap-4">
+                    <div className="text-3xl group-hover:scale-110 transition-transform">
+                      {servizio.icona}
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-tight text-white group-hover:text-cyan-400 transition-colors">
+                        {servizio.nome}
+                      </h3>
+                      <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">
+                        {servizio.desc}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-black uppercase tracking-tight text-white group-hover:text-cyan-400 transition-colors">
-                      {servizio.nome}
-                    </h3>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
-                      {servizio.desc}
-                    </p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-          
-        </div>
+                </Link>
+              ))}
+            </nav>
+          </aside>
 
+          {/* COLONNA DESTRA: TABELLONE BILIARDI */}
+          <main className="flex-1 w-full space-y-4">
+            <h2 className="text-xs font-black uppercase tracking-widest text-gray-500 px-2">
+              🎱 Controllo Utenze e Tavoli da Gioco
+            </h2>
+            
+            {/* Contenitore con background per staccare dal fondo nero assoluto */}
+            <div className="bg-[#0a0b0f] border border-gray-900/50 p-6 rounded-[2rem] shadow-2xl">
+              <TabelloneTavoliManager salaId={salaId} onMovimentoRegistrato={handleMovimento} />
+            </div>
+          </main>
+
+        </div>
       </div>
     </div>
   );
