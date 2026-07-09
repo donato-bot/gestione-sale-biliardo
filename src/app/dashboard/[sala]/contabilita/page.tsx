@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-// Qui in futuro importeremo i veri componenti, per ora mettiamo dei segnaposto o i componenti esistenti
 // import PlanciaCassaManager from "../../../../components/PlanciaCassaManager";
 
 export default function MovimentiContabiliPage() {
@@ -17,26 +16,20 @@ export default function MovimentiContabiliPage() {
     <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 font-sans">
       <div className="w-full max-w-[1400px] mx-auto space-y-8">
         
-        {/* INTESTAZIONE E TASTO INDIETRO */}
-        <header className="flex justify-between items-center border-b border-gray-800 pb-6">
-          <div>
-            <button 
-              onClick={() => router.push(`/dashboard/${salaId}`)}
-              className="text-gray-500 hover:text-cyan-400 text-[10px] font-black uppercase tracking-widest transition-colors mb-4 flex items-center gap-2"
-            >
-              ← Torna alla Plancia Operativa
-            </button>
-            <h1 className="text-4xl font-black uppercase tracking-tight text-white italic">
-              MOVIMENTI CONTABILI
-            </h1>
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
-              Gestione Finanziaria e Prima Nota
-            </p>
-          </div>
-          
-          <button className="bg-gray-800 hover:bg-gray-700 text-white font-black px-6 py-2.5 rounded-xl uppercase tracking-widest text-xs transition-all flex items-center gap-2">
-            📄 Salva / Stampa PDF
+        {/* INTESTAZIONE GENERALE */}
+        <header className="border-b border-gray-800 pb-6">
+          <button 
+            onClick={() => router.push(`/dashboard/${salaId}`)}
+            className="text-gray-500 hover:text-cyan-400 text-[10px] font-black uppercase tracking-widest transition-colors mb-4 flex items-center gap-2"
+          >
+            ← Torna alla Plancia Operativa
           </button>
+          <h1 className="text-4xl font-black uppercase tracking-tight text-white italic">
+            MOVIMENTI CONTABILI
+          </h1>
+          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
+            Gestione Finanziaria e Prima Nota
+          </p>
         </header>
 
         {/* BARRA DI NAVIGAZIONE A SCHEDE (TABS) */}
@@ -81,7 +74,13 @@ export default function MovimentiContabiliPage() {
           
           {tabAttivo === "prima-nota" && (
             <div className="animate-fade-in">
-              <h2 className="text-xl font-black italic text-cyan-400 mb-4 uppercase">Cassa del Turno Corrente</h2>
+              <div className="flex justify-between items-end mb-4">
+                <h2 className="text-xl font-black italic text-cyan-400 uppercase">Cassa del Turno Corrente</h2>
+                {/* Tasto stampa dedicato alla Prima Nota */}
+                <button className="bg-gray-800 hover:bg-gray-700 text-white font-black px-6 py-3 rounded-xl uppercase tracking-widest text-[10px] transition-all flex items-center gap-2">
+                  📄 Stampa Prima Nota
+                </button>
+              </div>
               <p className="text-gray-500 text-sm">Qui integreremo il componente PlanciaCassaManager che abbiamo creato per gestire entrate e uscite della giornata.</p>
               {/* <PlanciaCassaManager salaId={salaId} /> */}
             </div>
@@ -91,13 +90,20 @@ export default function MovimentiContabiliPage() {
             <div className="animate-fade-in space-y-6">
               <div className="flex justify-between items-end">
                 <h2 className="text-xl font-black italic text-amber-500 uppercase">Gestione Crediti e Riscossioni</h2>
-                <div className="bg-[#11131a] border border-gray-800 px-6 py-3 rounded-xl text-right">
-                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Totale Sospesi</p>
-                  <p className="text-2xl font-black text-amber-400">€ 50.50</p>
+                
+                {/* Blocco Allineato: Tasto Stampa + Totale Sospesi */}
+                <div className="flex items-stretch gap-4">
+                  <button className="bg-gray-800 hover:bg-gray-700 text-white font-black px-6 py-3 rounded-xl uppercase tracking-widest text-[10px] transition-all flex items-center gap-2">
+                    📄 Salva / Stampa PDF
+                  </button>
+                  <div className="bg-[#11131a] border border-gray-800 px-6 py-3 rounded-xl text-right">
+                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Totale Sospesi</p>
+                    <p className="text-2xl font-black text-amber-400">€ 50.50</p>
+                  </div>
                 </div>
               </div>
               
-              {/* Tabella fittizia basata sul tuo screenshot */}
+              {/* Tabella Crediti */}
               <div className="w-full bg-[#11131a] border border-gray-800 rounded-xl overflow-hidden">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -140,7 +146,13 @@ export default function MovimentiContabiliPage() {
 
           {tabAttivo === "archivio" && (
             <div className="animate-fade-in">
-              <h2 className="text-xl font-black italic text-cyan-400 mb-4 uppercase">Archivio Storico</h2>
+              <div className="flex justify-between items-end mb-4">
+                <h2 className="text-xl font-black italic text-cyan-400 uppercase">Archivio Storico</h2>
+                {/* Tasto stampa dedicato allo Storico */}
+                <button className="bg-gray-800 hover:bg-gray-700 text-white font-black px-6 py-3 rounded-xl uppercase tracking-widest text-[10px] transition-all flex items-center gap-2">
+                  📄 Esporta Storico Mastro
+                </button>
+              </div>
               <p className="text-gray-500 text-sm">Qui visualizzeremo l'elenco dei turni passati già chiusi e saldati.</p>
             </div>
           )}
