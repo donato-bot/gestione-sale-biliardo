@@ -1,16 +1,94 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-// import PlanciaCassaManager from "../../../../components/PlanciaCassaManager";
+import { supabase } from "../../../lib/supabase";
+import PlanciaCassaManager from "../../../../components/PlanciaCassaManager";
+
+interface MovimentoSospeso {
+  id: string;
+  created_at: string;
+  descrizione: string;
+  importo: number;
+}
 
 export default function MovimentiContabiliPage() {
   const router = useRouter();
   const urlParams = useParams();
   const salaId = (urlParams?.sala || Object.values(urlParams)[0]) as string;
 
-  // Stato per gestire quale scheda (Tab) è attualmente visibile
-  const [tabAttivo, setTabAttivo] = useState("sospesi");
+  const [tabAttivo, setTabAttivo] = useState("prima-nota");
+  const [sospesi, setSospesi] = useState<MovimentoSospeso[]>([]);
+  const [totaleSospesi, setTotaleSospesi] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // PESCA I CREDITI DAL DATABASE
+  const caricaSospesi = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("libro_mastro")
+        .select("*")
+        .eq("sala_id", salaId)
+        .eq("tipo", "SOSPESO")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      const records = data || [];
+      setSospesi(records);
+      
+      const totale = records.reduce((acc, curr) => acc + Number(curr.importo), 0);
+      setTotaleSospesi(totale);
+    } catch (err: any) {
+      console.error("Errore caricamento crediti sospesi:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [salaId]);
+
+  useEffect(() => {
+    caricaSospesi();
+  }, [caricaSospesi]);
+
+  // INCASSA IL CREDITO E LO TRASFERISCE NELLA PRIMA NOTA
+  const incassaCredito = async (sospeso: MovimentoSospeso) => {
+    if (!window.confirm(`Confermi di aver incassato € ${Number(sospeso.importo).toFixed(2)} per:\n${sospeso.descrizione}?`)) {
+      return;
+    }
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const email = sessionData.session?.user?.email;
+
+      // 1. Archivia il debito come saldato
+      const { error: updateError } = await supabase
+        .from("libro_mastro")
+        .update({ tipo: "SOSPESO_SALDATO" })
+        .eq("id", sospeso.id);
+
+      if (updateError) throw updateError;
+
+      // 2. Inietta i soldi freschi nella cassa del turno corrente
+      const { error: insertError } = await supabase
+        .from("libro_mastro")
+        .insert([{
+          sala_id: salaId,
+          manager_email: email,
+          tipo: "ENTRATA",
+          categoria: "Riscossione Credito",
+          importo: sospeso.importo,
+          descrizione: `[SALDATO] ${sospeso.descrizione}`,
+          id_chiusura: null // Lo manda dritto alla Prima Nota attuale
+        }]);
+
+      if (insertError) throw insertError;
+
+      await caricaSospesi();
+
+    } catch (err: any) {
+      alert("Errore durante la riscossione: " + err.message);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 font-sans">
@@ -46,7 +124,7 @@ export default function MovimentiContabiliPage() {
           </button>
           
           <button
-            onClick={() => setTabAttivo("sospesi")}
+            onClick={() => { setTabAttivo("sospesi"); caricaSospesi(); }}
             className={`px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${
               tabAttivo === "sospesi" 
                 ? "bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)]" 
@@ -54,7 +132,7 @@ export default function MovimentiContabiliPage() {
             }`}
           >
             ⏳ Crediti Sospesi
-            <span className="bg-black/50 text-white px-2 py-0.5 rounded-full text-[9px]">3</span>
+            <span className="bg-black/50 text-white px-2 py-0.5 rounded-full text-[9px]">{sospesi.length}</span>
           </button>
 
           <button
@@ -76,13 +154,12 @@ export default function MovimentiContabiliPage() {
             <div className="animate-fade-in">
               <div className="flex justify-between items-end mb-4">
                 <h2 className="text-xl font-black italic text-cyan-400 uppercase">Cassa del Turno Corrente</h2>
-                {/* Tasto stampa dedicato alla Prima Nota */}
                 <button className="bg-gray-800 hover:bg-gray-700 text-white font-black px-6 py-3 rounded-xl uppercase tracking-widest text-[10px] transition-all flex items-center gap-2">
                   📄 Stampa Prima Nota
                 </button>
               </div>
-              <p className="text-gray-500 text-sm">Qui integreremo il componente PlanciaCassaManager che abbiamo creato per gestire entrate e uscite della giornata.</p>
-              {/* <PlanciaCassaManager salaId={salaId} /> */}
+              
+              <PlanciaCassaManager salaId={salaId} />
             </div>
           )}
 
@@ -91,53 +168,59 @@ export default function MovimentiContabiliPage() {
               <div className="flex justify-between items-end">
                 <h2 className="text-xl font-black italic text-amber-500 uppercase">Gestione Crediti e Riscossioni</h2>
                 
-                {/* Blocco Allineato: Tasto Stampa + Totale Sospesi */}
                 <div className="flex items-stretch gap-4">
                   <button className="bg-gray-800 hover:bg-gray-700 text-white font-black px-6 py-3 rounded-xl uppercase tracking-widest text-[10px] transition-all flex items-center gap-2">
                     📄 Salva / Stampa PDF
                   </button>
                   <div className="bg-[#11131a] border border-gray-800 px-6 py-3 rounded-xl text-right">
                     <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Totale Sospesi</p>
-                    <p className="text-2xl font-black text-amber-400">€ 50.50</p>
+                    <p className="text-2xl font-black text-amber-400">€ {totaleSospesi.toFixed(2)}</p>
                   </div>
                 </div>
               </div>
               
-              {/* Tabella Crediti */}
               <div className="w-full bg-[#11131a] border border-gray-800 rounded-xl overflow-hidden">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-900/50 border-b border-gray-800 text-[9px] text-gray-500 font-black uppercase tracking-widest">
                       <th className="p-4">Data e Ora</th>
-                      <th className="p-4">Nominativo</th>
-                      <th className="p-4">Dettaglio</th>
+                      <th className="p-4">Dettaglio Credito</th>
                       <th className="p-4 text-right">Importo</th>
                       <th className="p-4 text-center">Azione</th>
                     </tr>
                   </thead>
                   <tbody className="text-sm font-bold text-white divide-y divide-gray-800">
-                    <tr className="hover:bg-gray-800/30 transition-colors">
-                      <td className="p-4 text-gray-400">23/06/2026, 08:02</td>
-                      <td className="p-4 uppercase">Fernando</td>
-                      <td className="p-4 text-gray-500 text-xs">Nessuna nota</td>
-                      <td className="p-4 text-right text-amber-400 text-lg">€ 18.50</td>
-                      <td className="p-4 text-center">
-                        <button className="bg-emerald-950/50 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors">
-                          ✓ Incassa
-                        </button>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-gray-800/30 transition-colors">
-                      <td className="p-4 text-gray-400">23/06/2026, 08:02</td>
-                      <td className="p-4 uppercase">Giuseppe</td>
-                      <td className="p-4 text-gray-500 text-xs">Nessuna nota</td>
-                      <td className="p-4 text-right text-amber-400 text-lg">€ 8.00</td>
-                      <td className="p-4 text-center">
-                        <button className="bg-emerald-950/50 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors">
-                          ✓ Incassa
-                        </button>
-                      </td>
-                    </tr>
+                    {loading ? (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-gray-500 font-black uppercase tracking-widest text-[10px] animate-pulse">
+                          Ricerca crediti sospesi in corso...
+                        </td>
+                      </tr>
+                    ) : sospesi.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-gray-500 font-black uppercase tracking-widest text-[10px]">
+                          Nessun credito in sospeso. Ottimo lavoro!
+                        </td>
+                      </tr>
+                    ) : (
+                      sospesi.map((mov) => (
+                        <tr key={mov.id} className="hover:bg-gray-800/30 transition-colors">
+                          <td className="p-4 text-gray-400">
+                            {new Date(mov.created_at).toLocaleDateString("it-IT")} <span className="text-gray-600 ml-2">{new Date(mov.created_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</span>
+                          </td>
+                          <td className="p-4 uppercase text-gray-300">{mov.descrizione}</td>
+                          <td className="p-4 text-right text-amber-400 text-lg">€ {Number(mov.importo).toFixed(2)}</td>
+                          <td className="p-4 text-center">
+                            <button 
+                              onClick={() => incassaCredito(mov)}
+                              className="bg-emerald-950/50 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors"
+                            >
+                              ✓ Incassa
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -145,15 +228,21 @@ export default function MovimentiContabiliPage() {
           )}
 
           {tabAttivo === "archivio" && (
-            <div className="animate-fade-in">
+            <div className="animate-fade-in space-y-6">
               <div className="flex justify-between items-end mb-4">
-                <h2 className="text-xl font-black italic text-cyan-400 uppercase">Archivio Storico</h2>
-                {/* Tasto stampa dedicato allo Storico */}
+                <h2 className="text-xl font-black italic text-cyan-400 uppercase">Archivio Storico Turni</h2>
                 <button className="bg-gray-800 hover:bg-gray-700 text-white font-black px-6 py-3 rounded-xl uppercase tracking-widest text-[10px] transition-all flex items-center gap-2">
-                  📄 Esporta Storico Mastro
+                  📄 Esporta Report Completo
                 </button>
               </div>
-              <p className="text-gray-500 text-sm">Qui visualizzeremo l'elenco dei turni passati già chiusi e saldati.</p>
+              
+              <div className="bg-[#11131a] border border-gray-800 rounded-xl p-8 text-center">
+                <p className="text-gray-500 font-bold text-xs uppercase tracking-widest">
+                  L'archivio mostra le chiusure di cassa già effettuate. 
+                  <br />
+                  <span className="text-cyan-500 mt-2 block">Modulo di consultazione storica in fase di finalizzazione.</span>
+                </p>
+              </div>
             </div>
           )}
 
