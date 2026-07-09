@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/app/lib/supabase";
+import { supabase } from "../../lib/supabase";
 import { useRouter, useParams } from "next/navigation";
 import PlanciaCassaManager from "../../../components/PlanciaCassaManager";
 import TabelloneTavoliManager from "../../../components/TabelloneTavoliManager";
@@ -10,7 +10,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const urlParams = useParams();
   
-  // Rileva l'ID della sala direttamente dal parametro della cartella [sala]
   const salaId = (urlParams?.sala || Object.values(urlParams)[0]) as string | undefined;
 
   const [nomeSala, setNomeSala] = useState("");
@@ -18,7 +17,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [chiaveRinfrescoCassa, setChiaveRinfrescoCassa] = useState(0);
 
-  // Sincronizza istantaneamente i totalizzatori della cassa quando un tavolo si spegne
   const forzaRinfrescoCassa = () => {
     setChiaveRinfrescoCassa(prev => prev + 1);
   };
@@ -26,7 +24,6 @@ export default function DashboardPage() {
   useEffect(() => {
     async function inizializzaDashboard() {
       try {
-        // 1. Controllo della sessione utente attiva
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           router.push("/login");
@@ -41,7 +38,6 @@ export default function DashboardPage() {
           return;
         }
 
-        // 2. Recupero nome della sala dal database
         const { data: salaData, error: salaError } = await supabase
           .from("sale")
           .select("name")
@@ -74,7 +70,7 @@ export default function DashboardPage() {
   if (!salaId) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center text-white font-black uppercase text-xs tracking-widest p-4 text-center">
-        🛑 ID Sala non valido o non intercettato nell'URL.
+        🛑 ID Sala non valido.
       </div>
     );
   }
@@ -97,12 +93,11 @@ export default function DashboardPage() {
           </div>
           
           <div className="flex items-center gap-4">
-            {/* TASTO SEGRETO RISERVATO AL SUPER ADMIN PER SALTARE ALLA TORRE DI CONTROLLO */}
             {isSuperAdmin && (
               <button
                 type="button"
                 onClick={() => router.push("/admin")}
-                className="bg-cyan-600 hover:bg-cyan-500 text-black font-black px-6 py-2.5 rounded-xl uppercase tracking-widest text-xs transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                className="bg-cyan-600 hover:bg-cyan-500 text-black font-black px-6 py-2.5 rounded-xl uppercase tracking-widest text-xs transition-all"
               >
                 🚀 Torre di Controllo
               </button>
@@ -118,7 +113,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* SEZIONE PRIMARIA: TABELLONE AUTOMATICO DEI TAVOLI */}
+        {/* TABELLONE TAVOLI */}
         <div className="space-y-4">
           <h2 className="text-xs font-black uppercase tracking-widest text-gray-500">
             🎱 CONTROLLO UTENZE E TAVOLI DA GIOCO
@@ -126,7 +121,7 @@ export default function DashboardPage() {
           <TabelloneTavoliManager salaId={salaId} onMovimentoRegistrato={forzaRinfrescoCassa} />
         </div>
 
-        {/* SEZIONE SECONDARIA: LIBRO MASTRO E BILANCIO DI CASSA */}
+        {/* LIBRO MASTRO */}
         <div className="border-t border-gray-900 pt-8 space-y-4">
           <h2 className="text-xs font-black uppercase tracking-widest text-gray-500">
             📊 RENDICONTAZIONE E LIBRO MASTRO
