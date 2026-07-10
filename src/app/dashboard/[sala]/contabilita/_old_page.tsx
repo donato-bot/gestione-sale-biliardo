@@ -39,18 +39,20 @@ export default function MovimentiContabiliPage() {
   const categorieUniche = useMemo(() => Array.from(new Set(movimenti.map(m => m.categoria))).filter(Boolean), [movimenti]);
   const turniUnici = useMemo(() => Array.from(new Set(movimenti.map(m => m.id_chiusura))).filter(Boolean), [movimenti]);
 
-  // 1. CARICAMENTO DATI (ANNO IN CORSO + TUTTI I SOSPESI)
+  // 1. CARICAMENTO DATI (ANNO IN CORSO DI DEFAULT)
   const caricaDati = useCallback(async () => {
     setLoading(true);
     try {
       const currentYear = new Date().getFullYear();
       const inizioAnno = `${currentYear}-01-01T00:00:00.000Z`;
+      const fineAnno = `${currentYear}-12-31T23:59:59.999Z`;
 
       const { data, error } = await supabase
         .from("libro_mastro")
         .select("*")
         .eq("sala_id", salaId)
-        .or(`created_at.gte.${inizioAnno},tipo.eq.SOSPESO`)
+        .gte("created_at", inizioAnno)
+        .lte("created_at", fineAnno)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -236,17 +238,19 @@ export default function MovimentiContabiliPage() {
               ) : (
                 movimentiFiltrati.map((mov) => {
                   const dataObj = new Date(mov.created_at);
-                  const isEntrata = mov.tipo === "ENTRATA" || mov.tipo === "SOSPESO_SALDATO";
+                  const isEntrata = mov.tipo === "ENTRATA";
                   const isUscita = mov.tipo === "USCITA";
                   const isSospeso = mov.tipo === "SOSPESO";
 
                   return (
                     <tr key={mov.id} className="hover:bg-gray-800/30 transition-colors group">
+                      {/* DATA E ORA */}
                       <td className="p-4 whitespace-nowrap">
                         <span className="text-gray-300 text-xs">{dataObj.toLocaleDateString("it-IT", { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                         <span className="text-gray-600 text-xs ml-2">{dataObj.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</span>
                       </td>
                       
+                      {/* TIPO (BADGE) */}
                       <td className="p-4 text-center">
                         <span className={`text-[8px] px-2 py-1 rounded border font-black uppercase tracking-widest
                           ${isEntrata ? "bg-emerald-950/30 text-emerald-500 border-emerald-500/20" : 
@@ -257,21 +261,24 @@ export default function MovimentiContabiliPage() {
                         </span>
                       </td>
 
+                      {/* DESCRIZIONE */}
                       <td className="p-4">
                         <p className="text-[9px] text-gray-500 font-black uppercase tracking-wider mb-0.5">{mov.categoria}</p>
                         <p className="text-sm font-bold text-gray-200 uppercase">{mov.descrizione}</p>
                       </td>
 
+                      {/* IMPORTO */}
                       <td className="p-4 text-right whitespace-nowrap">
                         <span className={`text-base font-black ${isUscita ? "text-red-400" : isSospeso ? "text-amber-400" : "text-emerald-400"}`}>
                           {isUscita ? "- " : "+ "}€ {Number(mov.importo).toFixed(2)}
                         </span>
                       </td>
 
+                      {/* TURNO / AZIONE */}
                       <td className="p-4 text-right whitespace-nowrap flex flex-col items-end justify-center">
                         {isSospeso ? (
                            <button onClick={() => incassaSospeso(mov)} className="text-[9px] bg-emerald-600 hover:bg-emerald-500 text-black px-3 py-1.5 rounded font-black uppercase tracking-widest transition-all opacity-0 group-hover:opacity-100">
-                               Incassa
+                             Incassa
                            </button>
                         ) : mov.id_chiusura && mov.id_chiusura !== "CREDITO_APERTO" ? (
                           <span className="text-[10px] text-gray-600 font-black uppercase tracking-wider flex items-center gap-1.5">
@@ -290,13 +297,14 @@ export default function MovimentiContabiliPage() {
             </tbody>
           </table>
           
+          {/* TOTALIZZATORI A PIE DI PAGINA (Basati sui filtri attuali) */}
           <div className="bg-black/80 border-t border-gray-800 p-4 flex justify-end gap-8">
              <div className="text-right">
-               <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest block mb-1">Totale Entrate Filtrate</span>
-               <span className="text-emerald-400 font-black text-lg">€ {movimentiFiltrati.filter(m => m.tipo === 'ENTRATA' || m.tipo === 'SOSPESO_SALDATO').reduce((acc, curr) => acc + Number(curr.importo), 0).toFixed(2)}</span>
+               <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest block mb-1">Totale Entrate FiltratE</span>
+               <span className="text-emerald-400 font-black text-lg">€ {movimentiFiltrati.filter(m => m.tipo === 'ENTRATA').reduce((acc, curr) => acc + Number(curr.importo), 0).toFixed(2)}</span>
              </div>
              <div className="text-right">
-               <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest block mb-1">Totale Uscite Filtrate</span>
+               <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest block mb-1">Totale Uscite FiltratE</span>
                <span className="text-red-400 font-black text-lg">€ {movimentiFiltrati.filter(m => m.tipo === 'USCITA').reduce((acc, curr) => acc + Number(curr.importo), 0).toFixed(2)}</span>
              </div>
           </div>
@@ -315,6 +323,7 @@ export default function MovimentiContabiliPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
