@@ -115,7 +115,7 @@ export default function MagazzinoPage() {
   const salvaProdotto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nomeProdotto.trim()) {
-      alert("Il Nome del Prodotto è obbligatori.");
+      alert("Il Nome del Prodotto è obbligatorio.");
       return;
     }
 
@@ -158,24 +158,32 @@ export default function MagazzinoPage() {
   const formattatoreEuro = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 font-sans">
+    <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 font-sans print:bg-white print:text-black print:p-0">
       <div className="w-full max-w-[1600px] mx-auto space-y-6">
         
         {/* HEADER */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-gray-800 pb-4 gap-4">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-gray-800 pb-4 gap-4 print:border-gray-300">
           <div>
             <button 
               onClick={() => router.push(`/dashboard/${salaId}`)}
-              className="text-gray-500 hover:text-cyan-400 text-[10px] font-black uppercase tracking-widest transition-colors mb-2 flex items-center gap-2"
+              className="text-gray-500 hover:text-cyan-400 text-[10px] font-black uppercase tracking-widest transition-colors mb-2 flex items-center gap-2 print:hidden"
             >
               ← Torna alla Plancia
             </button>
-            <p className="text-cyan-500 text-[10px] font-black uppercase tracking-widest mb-1 mt-2">Inventario e Consumazioni</p>
-            <h1 className="text-3xl font-black uppercase tracking-tight text-white italic">
+            <p className="text-cyan-500 text-[10px] font-black uppercase tracking-widest mb-1 mt-2 print:text-gray-600">Inventario e Consumazioni</p>
+            <h1 className="text-3xl font-black uppercase tracking-tight text-white italic print:text-black">
               MAGAZZINO E BAR
             </h1>
           </div>
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap gap-4 print:hidden">
+            {/* TASTO STAMPA PDF */}
+            <button 
+              onClick={() => window.print()}
+              className="bg-[#11131a] border border-gray-700 hover:border-white text-gray-300 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm flex items-center gap-2"
+            >
+              📄 Stampa PDF
+            </button>
+
             <button 
               onClick={apriNuovoProdotto}
               className="bg-cyan-600 hover:bg-cyan-500 text-black px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)]"
@@ -186,27 +194,27 @@ export default function MagazzinoPage() {
         </header>
 
         {/* TABELLONE UNICO */}
-        <div className="bg-[#0a0b0f] border border-gray-800/80 rounded-2xl overflow-hidden shadow-2xl">
-          <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-[#11131a]">
-            <h2 className="text-sm font-black uppercase tracking-widest text-white">Giacenze Attuali</h2>
-            <div className="bg-gray-900 border border-gray-700 text-[10px] font-black text-cyan-400 px-4 py-1.5 rounded-lg flex gap-4">
-              <span className="flex gap-2"><span className="text-gray-500">PRODOTTI:</span> <span>{prodotti.length}</span></span>
-              <span className="flex gap-2"><span className="text-gray-500">IN ESAURIMENTO:</span> <span className="text-red-500">{prodotti.filter(p => p.quantita_disponibile <= p.scorta_minima).length}</span></span>
+        <div className="bg-[#0a0b0f] border border-gray-800/80 rounded-2xl overflow-hidden shadow-2xl print:shadow-none print:border-gray-300 print:bg-white">
+          <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-[#11131a] print:bg-gray-100 print:border-gray-300">
+            <h2 className="text-sm font-black uppercase tracking-widest text-white print:text-black">Giacenze Attuali</h2>
+            <div className="bg-gray-900 border border-gray-700 text-[10px] font-black text-cyan-400 px-4 py-1.5 rounded-lg flex gap-4 print:bg-white print:border-gray-300 print:text-gray-800">
+              <span className="flex gap-2"><span className="text-gray-500 print:text-gray-600">PRODOTTI:</span> <span>{prodotti.length}</span></span>
+              <span className="flex gap-2"><span className="text-gray-500 print:text-gray-600">IN ESAURIMENTO:</span> <span className="text-red-500">{prodotti.filter(p => p.quantita_disponibile <= p.scorta_minima).length}</span></span>
             </div>
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
-                <tr className="bg-black/40 border-b border-gray-800 text-[9px] text-gray-500 font-black uppercase tracking-widest">
-                  <th className="p-5 w-[25%]">Nome Prodotto</th>
-                  <th className="p-5 w-[20%]">Categoria</th>
+                <tr className="bg-black/40 border-b border-gray-800 text-[9px] text-gray-500 font-black uppercase tracking-widest print:bg-gray-50 print:border-gray-300 print:text-gray-800">
+                  <th className="p-5 w-[30%]">Nome Prodotto</th>
+                  <th className="p-5 w-[25%]">Categoria</th>
                   <th className="p-5 w-[15%] text-center">Prezzo</th>
-                  <th className="p-5 w-[20%] text-center">Giacenza / Scorta</th>
-                  <th className="p-5 w-[20%] text-right">Azioni Rapide</th>
+                  <th className="p-5 w-[15%] text-center">Giacenza / Scorta</th>
+                  <th className="p-5 w-[15%] text-right print:hidden">Azioni Rapide</th>
                 </tr>
               </thead>
-              <tbody className="text-sm font-bold text-white divide-y divide-gray-800/40">
+              <tbody className="text-sm font-bold text-white divide-y divide-gray-800/40 print:text-black print:divide-gray-300">
                 {loading ? (
                   <tr><td colSpan={5} className="p-10 text-center text-cyan-500 font-black uppercase tracking-widest text-[10px] animate-pulse">Caricamento in corso...</td></tr>
                 ) : prodotti.length === 0 ? (
@@ -216,20 +224,20 @@ export default function MagazzinoPage() {
                     const inEsaurimento = prodotto.quantita_disponibile <= prodotto.scorta_minima;
                     
                     return (
-                      <tr key={prodotto.id} className="hover:bg-gray-800/30 transition-colors group">
+                      <tr key={prodotto.id} className="hover:bg-gray-800/30 transition-colors group print:hover:bg-transparent">
                         <td className="p-5">
-                          <p className="text-base font-black uppercase text-gray-200 flex items-center gap-2">
-                            {inEsaurimento && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Sotto scorta minima"></span>}
+                          <p className="text-base font-black uppercase text-gray-200 flex items-center gap-2 print:text-black">
+                            {inEsaurimento && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse print:animate-none" title="Sotto scorta minima"></span>}
                             {prodotto.nome_prodotto}
                           </p>
                         </td>
                         <td className="p-5">
-                          <span className="text-[10px] text-gray-400 uppercase tracking-widest border border-gray-700 px-2 py-1 rounded bg-black/50">
+                          <span className="text-[10px] text-gray-400 uppercase tracking-widest border border-gray-700 px-2 py-1 rounded bg-black/50 print:border-gray-300 print:text-gray-700 print:bg-transparent">
                             {prodotto.categoria}
                           </span>
                         </td>
                         <td className="p-5 text-center">
-                          <span className="text-emerald-400 font-black">
+                          <span className="text-emerald-400 font-black print:text-black">
                             {prodotto.prezzo_vendita ? formattatoreEuro.format(prodotto.prezzo_vendita) : "—"}
                           </span>
                         </td>
@@ -237,25 +245,25 @@ export default function MagazzinoPage() {
                           <div className="flex items-center justify-center gap-4">
                             <button 
                               onClick={() => aggiornaQuantitaVeloce(prodotto.id, prodotto.quantita_disponibile, -1)}
-                              className="w-8 h-8 rounded-full bg-gray-800 hover:bg-red-900/50 text-gray-400 hover:text-red-400 flex items-center justify-center font-black transition-colors"
+                              className="w-8 h-8 rounded-full bg-gray-800 hover:bg-red-900/50 text-gray-400 hover:text-red-400 flex items-center justify-center font-black transition-colors print:hidden"
                             >
                               -
                             </button>
                             <div className="flex flex-col items-center">
-                              <span className={`text-xl font-black ${inEsaurimento ? 'text-red-500' : 'text-white'}`}>
+                              <span className={`text-xl font-black ${inEsaurimento ? 'text-red-500' : 'text-white'} print:text-black`}>
                                 {prodotto.quantita_disponibile}
                               </span>
-                              <span className="text-[8px] text-gray-500 uppercase tracking-widest">Min {prodotto.scorta_minima}</span>
+                              <span className="text-[8px] text-gray-500 uppercase tracking-widest print:text-gray-500">Min {prodotto.scorta_minima}</span>
                             </div>
                             <button 
                               onClick={() => aggiornaQuantitaVeloce(prodotto.id, prodotto.quantita_disponibile, 1)}
-                              className="w-8 h-8 rounded-full bg-gray-800 hover:bg-emerald-900/50 text-gray-400 hover:text-emerald-400 flex items-center justify-center font-black transition-colors"
+                              className="w-8 h-8 rounded-full bg-gray-800 hover:bg-emerald-900/50 text-gray-400 hover:text-emerald-400 flex items-center justify-center font-black transition-colors print:hidden"
                             >
                               +
                             </button>
                           </div>
                         </td>
-                        <td className="p-5 text-right">
+                        <td className="p-5 text-right print:hidden">
                           <div className="flex justify-end gap-3">
                             <button 
                               onClick={() => apriModificaProdotto(prodotto)} 
@@ -283,7 +291,7 @@ export default function MagazzinoPage() {
 
       {/* POPUP MODAL: FORM PRODOTTO (Sovrimpressione) */}
       {mostraForm && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto print:hidden">
           <div className="bg-[#0a0b0f] border border-gray-800 rounded-2xl w-full max-w-lg shadow-2xl relative">
             <button onClick={() => setMostraForm(false)} className="absolute top-6 right-6 text-gray-500 hover:text-red-500 font-black text-xl z-10 transition-colors">✖</button>
             <div className="p-8">
