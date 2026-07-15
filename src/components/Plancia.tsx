@@ -19,15 +19,12 @@ export default function Plancia({
   const [now, setNow] = useState(new Date());
   const [successo, setSuccesso] = useState<string | null>(null);
 
-  // STATI PER IL BAR SUL TAVOLO
   const [tavoloBar, setTavoloBar] = useState<any | null>(null);
   const [carrelloBar, setCarrelloBar] = useState<any[]>([]);
   
-  // STATI PER LA VOCE MANUALE NEL BAR
   const [voceManualeDescrizione, setVoceManualeDescrizione] = useState("");
   const [voceManualeImporto, setVoceManualeImporto] = useState("");
 
-  // STATI PER LA CHIUSURA
   const [tavoloDaChiudere, setTavoloDaChiudere] = useState<any | null>(null);
   const [dettagliChiusura, setDettagliChiusura] = useState<any | null>(null);
   const [mostraInputSospeso, setMostraInputSospeso] = useState(false);
@@ -42,8 +39,9 @@ export default function Plancia({
   }, [salaId]);
 
   const fetchData = async () => {
-    // CORREZIONE: Tornati all'ordinamento per "numero" che è quello corretto nel database!
-    const { data, error } = await supabase.from("tavoli").select("*").eq("sala_id", salaId).order("numero");
+    // CORREZIONE CHIAVE: Rimosso completamente l'ordinamento (.order). 
+    // Ora il database non cercherà colonne inesistenti e farà passare i dati!
+    const { data, error } = await supabase.from("tavoli").select("*").eq("sala_id", salaId);
     if (error) {
       alert("ERRORE DATABASE (Tavoli): " + error.message);
     }
@@ -58,7 +56,6 @@ export default function Plancia({
     if (data) setProdotti(data);
   };
 
-  // --- LOGICA GESTIONE BAR TAVOLO ---
   const apriBarTavolo = (tavolo: any) => {
     setTavoloBar(tavolo);
     setCarrelloBar([]);
@@ -129,7 +126,6 @@ export default function Plancia({
     }
   };
 
-  // --- LOGICA GESTIONE GIOCO ---
   const gestisciTavolo = async (tavolo: any) => {
     if (tavolo.stato === 'libero') {
       await supabase.from('tavoli').update({ 
@@ -143,7 +139,7 @@ export default function Plancia({
       const inizio = new Date(tavolo.ora_inizio).getTime();
       const diff = new Date().getTime() - inizio;
       const durataOre = diff / (1000 * 60 * 60);
-      const costoGioco = parseFloat((durataOre * 8.00).toFixed(2)); // Tariffa base 8€/h
+      const costoGioco = parseFloat((durataOre * 8.00).toFixed(2));
       const costoBar = parseFloat(tavolo.conto_bar || 0);
 
       const ore = Math.floor(diff / 3600000);
@@ -181,8 +177,8 @@ export default function Plancia({
     const tGioco = parseFloat(dettagliChiusura.totaleGioco);
     const tBar = parseFloat(dettagliChiusura.totaleBar);
     
-    // Sicurezza per il nome del tavolo nello scontrino
-    const nomeTavoloStr = tavoloDaChiudere.nome_tavolo || `Tavolo ${tavoloDaChiudere.numero}`;
+    // Fallback visivo se mancano i nomi
+    const nomeTavoloStr = tavoloDaChiudere.nome_tavolo || tavoloDaChiudere.numero ? `Tavolo ${tavoloDaChiudere.numero}` : `Tavolo Sconosciuto`;
     const descBaseGioco = `${nomeTavoloStr} (Durata: ${dettagliChiusura.durata})`;
 
     try {
@@ -235,7 +231,7 @@ export default function Plancia({
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
           <div className="bg-[#0B0D14] border-4 border-cyan-500 p-8 rounded-3xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[95vh]">
             <h2 className="text-3xl font-black mb-6 uppercase text-white border-b-2 border-gray-800 pb-4 text-center">
-              Servizio Bar ➔ {tavoloBar.nome_tavolo || `Tavolo ${tavoloBar.numero}`}
+              Servizio Bar ➔ {tavoloBar.nome_tavolo || (tavoloBar.numero ? `Tavolo ${tavoloBar.numero}` : `Tavolo Sconosciuto`)}
             </h2>
             
             <div className="flex flex-col lg:flex-row gap-6 overflow-hidden flex-1">
@@ -396,7 +392,7 @@ export default function Plancia({
               return (
                 <div key={t.id} className="p-8 rounded-[2rem] bg-black border-2 border-gray-700 flex flex-col gap-6 relative">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-3xl font-black text-white">{t.nome_tavolo || `Tavolo ${t.numero}`}</h3>
+                    <h3 className="text-3xl font-black text-white">{t.nome_tavolo || (t.numero ? `Tavolo ${t.numero}` : `Tavolo Sconosciuto`)}</h3>
                     <div className={`px-4 py-2 rounded-full text-xs font-black ${isOccupied ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
                       {isOccupied ? 'IN USO' : 'DISPONIBILE'}
                     </div>
