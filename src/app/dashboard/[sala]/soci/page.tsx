@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { supabase } from "../../../lib/supabase";
+import { supabase } from "../../../../app/lib/supabase"; // Aggiustato il percorso relativo se necessario
 
 interface Socio {
   id: string;
@@ -12,6 +12,7 @@ interface Socio {
   email: string;
   codice_fiscale: string;
   scadenza_tessera: string;
+  app_inviata: boolean; // Aggiunto per rispecchiare il database
 }
 
 export default function SociPage() {
@@ -43,7 +44,10 @@ export default function SociPage() {
         .eq("sala_id", salaId)
         .order("cognome", { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        alert("ERRORE DATABASE (Lettura Soci): " + error.message);
+        throw error;
+      }
       setSoci(data || []);
     } catch (err: any) {
       console.error("Errore caricamento soci:", err.message);
@@ -91,9 +95,10 @@ export default function SociPage() {
         nome: nome.toUpperCase(),
         cognome: cognome.toUpperCase(),
         telefono,
-        email,
+        email: email.trim().toLowerCase(), // Convertiamo in minuscolo per facilitare il login dell'App
         codice_fiscale: codiceFiscale.toUpperCase(),
-        scadenza_tessera: scadenzaTessera || null
+        scadenza_tessera: scadenzaTessera || null,
+        app_inviata: false // Default come da DB
       };
 
       if (socioInModificaId) {
@@ -109,7 +114,7 @@ export default function SociPage() {
       setMostraForm(false);
       await caricaSoci();
     } catch (err: any) {
-      alert("Errore salvataggio socio: " + err.message);
+      alert("ERRORE DATABASE (Salvataggio Socio): " + err.message);
     } finally {
       setSalvataggio(false);
     }
