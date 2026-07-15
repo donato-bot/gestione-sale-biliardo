@@ -10,7 +10,11 @@
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",
+<<<<<<< HEAD
     "@supabase/supabase-js": "^2.110.5",
+=======
+    "@supabase/supabase-js": "^2.110.3",
+>>>>>>> 1f470ac9d8a3e19ccc1caa3151361682a23fc101
     "autoprefixer": "^10.4.27",
     "chart.js": "^4.5.1",
     "jspdf": "^4.2.1",

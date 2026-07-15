@@ -1,0 +1,452 @@
+parte1
+
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from '@supabase/supabase-js';
+import { useParams, useRouter } from "next/navigation";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export default function DashboardSala() {
+  const params = useParams();
+  const router = useRouter();
+  
+  const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState<"hub" | "plancia" | "magazzino" | "report" | "soci" | "impostazioni" | "statistiche" | "staff" | "tornei" | "prenotazioni" | "bacheca">("hub");
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [currentSalaId, setCurrentSalaId] = useState<string | null>(null);
+  const [nomeSala, setNomeSala] = useState<string>("La Mia Sala");
+  
+  // STATI PER LA SICUREZZA E SOSPENSIONE
+  const [isSalaSuspended, setIsSalaSuspended] = useState(false);
+  const [supportActive, setSupportActive] = useState(false); 
+
+  const [tariffaStandard, setTariffaStandard] = useState(10.00);
+  const [tariffaSoci, setTariffaSoci] = useState(8.00);
+
+  const [tavoli, setTavoli] = useState<any[]>([]);
+  const [recenti, setRecenti] = useState<any[]>([]);
+  const [prodotti, setProdotti] = useState<any[]>([]);
+  const [soci, setSoci] = useState<any[]>([]);
+  const [listaStaff, setListaStaff] = useState<any[]>([]);
+  const [tornei, setTornei] = useState<any[]>([]); 
+  const [prenotazioniList, setPrenotazioniList] = useState<any[]>([]); 
+  
+  const [bachecaPosts, setBachecaPosts] = useState<any[]>([]);
+  const [newPostText, setNewPostText] = useState("");
+  const [incassoTotale, setIncassoTotale] = useState(0);
+  const [incassoContanti, setIncassoContanti] = useState(0);
+  const [incassoPOS, setIncassoPOS] = useState(0);
+  const [primaNota, setPrimaNota] = useState<any[]>([]);
+  const [usciteTotali, setUsciteTotali] = useState(0);
+  
+  // STATO PER IL GRAFICO DEGLI INCASSI
+  const [datiGrafico, setDatiGrafico] = useState<{data: string, totale: number}[]>([]);
+  // STATI PER ESPORTAZIONE AVANZATA
+  const [storicoDal, setStoricoDal] = useState("");
+  const [storicoAl, setStoricoAl] = useState("");
+  const [isNewUscitaModalOpen, setIsNewUscitaModalOpen] = useState(false);
+  const [uscitaImporto, setUscitaImporto] = useState("");
+  const [uscitaDescrizione, setUscitaDescrizione] = useState("");
+  const [uscitaMetodo, setUscitaMetodo] = useState("contanti");
+  const [rechargeMetodo, setRechargeMetodo] = useState("contanti");
+
+  const [activeTableId, setActiveTableId] = useState<string | null>(null); 
+  const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+  const [isBarModalOpen, setIsBarModalOpen] = useState(false);
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+  
+  // MODALI MAGAZZINO
+  const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
+  const [isEditProductModalOpen, setIsEditProductModalOpen] = useState(false);
+  const [editProdId, setEditProdId] = useState("");
+  const [editProdName, setEditProdName] = useState("");
+  const [editProdPrice, setEditProdPrice] = useState("");
+  const [editProdStock, setEditProdStock] = useState("");
+  
+  const [isNewSocioModalOpen, setIsNewSocioModalOpen] = useState(false);
+  const [isEditSocioModalOpen, setIsEditSocioModalOpen] = useState(false);
+  const [editSocioId, setEditSocioId] = useState("");
+  const [editSocioNome, setEditSocioNome] = useState("");
+  const [editSocioCognome, setEditSocioCognome] = useState("");
+  const [editSocioTelefono, setEditSocioTelefono] = useState("");
+
+  const [isNewStaffModalOpen, setIsNewStaffModalOpen] = useState(false);
+  const [isNewTableModalOpen, setIsNewTableModalOpen] = useState(false);
+  
+  const [isEditTableModalOpen, setIsEditTableModalOpen] = useState(false);
+  const [editTableNumber, setEditTableNumber] = useState("");
+
+  const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
+  const [isReserveModalOpen, setIsReserveModalOpen] = useState(false);
+  const [isNewTorneoModalOpen, setIsNewTorneoModalOpen] = useState(false); 
+  const [isManageIscrittiOpen, setIsManageIscrittiOpen] = useState(false); 
+  const [isBracketModalOpen, setIsBracketModalOpen] = useState(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  
+  const [pinBuffer, setPinBuffer] = useState("");
+  const [pendingAction, setPendingAction] = useState<any>(null);
+
+  const [activeStaff, setActiveStaff] = useState<any>(null);
+  const [filtroStatoPrenotazione, setFiltroStatoPrenotazione] = useState<"da_impostare" | "impostate" | "tutte">("tutte");
+  const [filtroTempoPrenotazione, setFiltroTempoPrenotazione] = useState<"oggi" | "settimana" | "mese" | "tutte">("tutte");
+  const [reserveName, setReserveName] = useState("");
+  const [reserveTime, setReserveTime] = useState("");
+  const [newTableNumber, setNewTableNumber] = useState("");
+  const [newProdName, setNewProdName] = useState("");
+  const [newProdPrice, setNewProdPrice] = useState("");
+  const [newProdStock, setNewProdStock] = useState("");
+  const [newSocioNome, setNewSocioNome] = useState("");
+  const [newSocioCognome, setNewSocioCognome] = useState("");
+  const [newStaffNome, setNewStaffNome] = useState("");
+  const [newStaffPin, setNewStaffPin] = useState("");
+  const [rechargeAmount, setRechargeAmount] = useState("");
+  
+  const [newTorneoNome, setNewTorneoNome] = useState("");
+  const [newTorneoData, setNewTorneoData] = useState("");
+  const [newTorneoQuota, setNewTorneoQuota] = useState("");
+  const [activeTorneo, setActiveTorneo] = useState<any>(null); 
+  const [iscrittoSelezionato, setIscrittoSelezionato] = useState("");
+  const [iscrittoEsterno, setIscrittoEsterno] = useState("");
+
+  const [socioToRecharge, setSocioToRecharge] = useState<any>(null);
+  const [summaryData, setSummaryData] = useState<any>(null);
+  const [selectedSocioId, setSelectedSocioId] = useState("");
+  const [selectedProdottoId, setSelectedProdottoId] = useState("");
+  const [players, setPlayers] = useState(["", "", "", ""]);
+  
+  const [now, setNow] = useState(Date.now());
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+
+  // Calcolo delle prenotazioni in attesa per l'avviso globale
+  const pendingPrenotazioni = prenotazioniList.filter(p => p.stato === 'in_attesa');
+  
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  useEffect(() => {
+    async function init() {
+      setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const email = session.user.email ?? null;
+          setUserEmail(email);
+          const { data: salaData } = await supabase.from("sale").select("*").eq("manager_email", email).single();
+        
+          if (salaData) {
+            setIsSalaSuspended(salaData.is_active === false);
+            setCurrentSalaId(salaData.id);
+            setNomeSala(salaData.name);
+            setTariffaStandard(salaData.tariffa_standard || 10.00);
+            setTariffaSoci(salaData.tariffa_soci || 8.00);
+            setSupportActive(salaData.support_active || false); 
+            await refreshDati(salaData.id);
+          }
+        }
+      } catch (e) { console.error(e); }
+      setLoading(false);
+    }
+    init();
+  }, []);
+  
+  // RADAR IN TEMPO REALE SULLE PRENOTAZIONI + INVIO EMAIL
+  useEffect(() => {
+    if (!currentSalaId) return;
+    
+    const channel = supabase.channel('realtime_prenotazioni')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prenotazioni', filter: `sala_id=eq.${currentSalaId}` }, (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new.stato === 'in_attesa') {
+           const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+           audio.play().catch(() => console.log("Audio bloccato dal browser"));
+
+           fetch('/api/notify-reservation', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({
+               managerEmail: userEmail,
+               salaName: nomeSala,
+               cliente: payload.new.nome_cliente,
+               dataOra: payload.new.data_ora
+             })
+           });
+        }
+        refreshDati(currentSalaId);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentSalaId, userEmail, nomeSala]);
+
+  async function refreshDati(salaId: string) {
+    try {
+        const oggi = new Date();
+        oggi.setHours(0, 0, 0, 0);
+        const setteGiorniFa = new Date(oggi);
+        setteGiorniFa.setDate(oggi.getDate() - 6);
+
+        const { data: sInfo } = await supabase.from('sale').select('support_active').eq('id', salaId).single();
+        if (sInfo) setSupportActive(sInfo.support_active);
+        
+        const { data: tDB } = await supabase.from('tavoli').select('*').eq('sala_id', salaId).order('numero', { ascending: true });
+        const { data: sDB } = await supabase.from('sessioni').select('*, consumazioni(*), staff(nome)').eq('sala_id', salaId).eq('stato', 'in_corso');
+        const { data: pDB } = await supabase.from('prodotti').select('*').eq('sala_id', salaId).order('nome', { ascending: true });
+        const { data: sociDB } = await supabase.from('soci').select('*').eq('sala_id', salaId).order('cognome', { ascending: true });
+        const { data: staffDB } = await supabase.from('staff').select('*').eq('sala_id', salaId).order('nome', { ascending: true });
+        const { data: torneiDB } = await supabase.from('tornei').select('*').eq('sala_id', salaId).order('data_inizio', { ascending: false });
+        const { data: prenDB } = await supabase.from('prenotazioni').select('*').eq('sala_id', salaId).order('data_ora', { ascending: true });
+        const { data: bachecaDB } = await supabase.from('bacheca').select('*, reazioni_bacheca(*)').eq('sala_id', salaId).order('created_at', { ascending: false });
+        const { data: movimentiDB } = await supabase.from('movimenti_cassa').select('*, staff(nome)').eq('sala_id', salaId).gte('created_at', setteGiorniFa.toISOString()).order('created_at', { ascending: false });
+        
+        if (pDB) setProdotti(pDB);
+        if (sociDB) setSoci(sociDB);
+        if (staffDB) setListaStaff(staffDB);
+        if (prenDB) setPrenotazioniList(prenDB);
+        if (bachecaDB) setBachecaPosts(bachecaDB);
+        
+        if (movimentiDB) {
+          const movimentiOggi = movimentiDB.filter(m => new Date(m.created_at) >= oggi);
+          setPrimaNota(movimentiOggi);
+          
+          let entrate = 0, uscite = 0, contanti = 0, pos = 0;
+          movimentiOggi.forEach(m => {
+            const val = parseFloat(m.importo);
+            if (m.tipo === 'entrata') {
+              if (m.metodo_pagamento !== 'credito_vip') entrate += val; 
+              if (m.metodo_pagamento === 'contanti') contanti += val;
+              if (m.metodo_pagamento === 'pos') pos += val;
+            } else if (m.tipo === 'uscita') {
+              uscite += val;
+              if (m.metodo_pagamento === 'contanti') contanti -= val;
+              if (m.metodo_pagamento === 'pos') pos -= val;
+            }
+          });
+          setIncassoTotale(entrate);
+          setUsciteTotali(uscite);
+          setIncassoContanti(contanti); 
+          setIncassoPOS(pos);
+
+          const raggruppamentoGiorni: Record<string, number> = {};
+          for(let i=6; i>=0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dataStr = d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+            raggruppamentoGiorni[dataStr] = 0;
+          }
+
+          movimentiDB.forEach(m => {
+            if(m.tipo === 'entrata' && m.metodo_pagamento !== 'credito_vip') {
+              const dataStr = new Date(m.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+              if(raggruppamentoGiorni[dataStr] !== undefined) {
+                raggruppamentoGiorni[dataStr] += parseFloat(m.importo);
+              }
+            }
+          });
+          const arrayGrafico = Object.keys(raggruppamentoGiorni).map(k => ({
+            data: k,
+            totale: raggruppamentoGiorni[k]
+          }));
+          setDatiGrafico(arrayGrafico);
+        }
+
+        if (torneiDB) {
+          setTornei(torneiDB);
+          if(activeTorneo) {
+            const up = torneiDB.find(tx => tx.id === activeTorneo.id);
+            if(up) setActiveTorneo(up);
+          }
+        }
+
+        if (tDB) {
+          setTavoli(tDB.map(t => {
+            const sess = sDB?.find(s => s.tavolo_id === t.id);
+            const consumazioniDettaglio = sess?.consumazioni?.map(c => {
+               const p = pDB?.find(prod => prod.id === c.prodotto_id);
+               return { ...c, nome_prodotto: p?.nome || "Prodotto" };
+            }) || [];
+            const bTot = consumazioniDettaglio.reduce((acc: number, c: any) => acc + (c.prezzo_istante * c.quantita), 0);
+            return {
+              id: t.id, numero: t.numero, nome: `Tavolo ${t.numero}`, 
+              prezzo: sess ? sess.tariffa_oraria : tariffaStandard, 
+              stato: t.stato === 'occupato' ? "IN GIOCO" : (t.stato === 'prenotato' ? "PRENOTATO" : "LIBERO"), 
+              startTime: sess ? new Date(sess.inizio).getTime() : null,
+              giocatori: sess?.giocatori || [], barTotal: bTot, sessioneId: sess?.id, socio_id: sess?.socio_id,
+              consumazioni: consumazioniDettaglio, prenotato_da: t.prenotato_da, prenotato_alle: t.prenotato_alle,
+              staff_nome: sess?.staff?.nome
+            };
+          }));
+        }
+    } catch (e) { console.error(e); }
+  }
+
+  const handlePinDigit = (digit: string) => {
+    if (pinBuffer.length < 4) {
+      const newBuffer = pinBuffer + digit;
+      setPinBuffer(newBuffer);
+      if (newBuffer.length === 4) {
+        const staff = listaStaff.find(s => s.pin === newBuffer);
+        if (staff) {
+          const action = pendingAction;
+          setActiveStaff(staff); 
+          setPinBuffer(""); setIsPinModalOpen(false); setPendingAction(null);
+          if (action) action.callback(staff.id);
+        } else {
+          alert("❌ PIN Errato!"); setPinBuffer("");
+        }
+      }
+    }
+  };
+  
+  const richiedePin = (callback: (staffId: string) => void, descrizione: string) => {
+    if (isSalaSuspended) {
+      alert("⚠️ Azione bloccata: Il servizio è sospeso ed è in modalità Sola Lettura.");
+      return;
+    }
+    if (listaStaff.length === 0) { alert("⚠️ Crea Staff."); setActiveView("staff"); return; }
+    if (activeStaff) { callback(activeStaff.id); return; }
+    setPendingAction({ callback, descrizione }); setIsPinModalOpen(true);
+  };
+  
+  const getPrenotazioniFiltrate = () => {
+    let filtered = [...prenotazioniList];
+    const oggi = new Date();
+    oggi.setHours(0,0,0,0);
+    if (filtroStatoPrenotazione === 'da_impostare') {
+      filtered = filtered.filter(p => p.stato === 'in_attesa');
+    } else if (filtroStatoPrenotazione === 'impostate') {
+      filtered = filtered.filter(p => p.stato === 'confermata');
+    }
+
+    if (filtroTempoPrenotazione === 'oggi') {
+      filtered = filtered.filter(p => {
+        const d = new Date(p.data_ora);
+        d.setHours(0,0,0,0);
+        return d.getTime() === oggi.getTime();
+      });
+    } else if (filtroTempoPrenotazione === 'settimana') {
+      const prossimaSettimana = new Date(oggi);
+      prossimaSettimana.setDate(oggi.getDate() + 7);
+      filtered = filtered.filter(p => {
+        const d = new Date(p.data_ora);
+        return d >= oggi && d <= prossimaSettimana;
+      });
+    } else if (filtroTempoPrenotazione === 'mese') {
+      filtered = filtered.filter(p => {
+        const d = new Date(p.data_ora);
+        return d.getMonth() === oggi.getMonth() && d.getFullYear() === oggi.getFullYear();
+      });
+    }
+    return filtered;
+  };
+
+  const getPrenotazioniConfermateOggi = () => {
+    const oggi = new Date();
+    oggi.setHours(0,0,0,0);
+    return prenotazioniList.filter(p => {
+      const d = new Date(p.data_ora);
+      d.setHours(0,0,0,0);
+      return d.getTime() === oggi.getTime() && p.stato === 'confermata';
+    }).sort((a,b) => new Date(a.data_ora).getTime() - new Date(b.data_ora).getTime());
+  };
+
+  const gestisciStatoPrenotazione = async (id: string, nuovoStato: 'confermata' | 'rifiutata', staffId: string) => {
+    await supabase.from('prenotazioni').update({ stato: nuovoStato }).eq('id', id);
+    await refreshDati(currentSalaId!);
+  };
+
+  const prenotaTavolo = async (staffId: string) => {
+    if (!activeTableId || !reserveName || !reserveTime) return;
+    await supabase.from('tavoli').update({ stato: 'prenotato', prenotato_da: reserveName, prenotato_alle: reserveTime }).eq('id', activeTableId);
+    alert("✅ Prenotazione registrata!");
+    await refreshDati(currentSalaId!); setIsReserveModalOpen(false); setReserveName(""); setReserveTime("");
+  };
+
+  const annullaPrenotazioneTavolo = async (tavoloId: string, staffId: string) => {
+    await supabase.from('tavoli').update({ stato: 'libero', prenotato_da: null, prenotato_alle: null }).eq('id', tavoloId);
+    await refreshDati(currentSalaId!);
+  };
+
+  const salvaNuovoTorneo = async (staffId: string) => {
+    if(!newTorneoNome || !newTorneoData) { alert("Inserisci Nome e Data!"); return; }
+    await supabase.from('tornei').insert([{ 
+      sala_id: currentSalaId, nome: newTorneoNome, data_inizio: newTorneoData, 
+      quota_iscrizione: parseFloat(newTorneoQuota) || 0, stato: 'iscrizioni', iscritti: [], tabellone: []
+    }]);
+    alert("✅ Torneo Creato!");
+    await refreshDati(currentSalaId!); setIsNewTorneoModalOpen(false); setNewTorneoNome(""); setNewTorneoData(""); setNewTorneoQuota("");
+  };
+  
+  const normalizeIscritti = (iscrittiArray: any[]) => {
+    return (iscrittiArray || []).map(i => {
+      if (typeof i === 'string') {
+        const s = soci.find(x => x.id === i);
+        return { id: i, tipo: 'socio', nome: s ? `${s.cognome} ${s.nome}` : 'Sconosciuto', confermato: true };
+      }
+      return i;
+    });
+  };
+
+  const aggiungiIscritto = async (staffId: string, tipo: 'socio' | 'esterno') => {
+    if (!activeTorneo) return;
+    let currentIscritti = normalizeIscritti(activeTorneo.iscritti);
+
+    if (tipo === 'socio') {
+      if (!iscrittoSelezionato) return;
+      if (currentIscritti.find(i => i.id === iscrittoSelezionato)) {
+        alert("⚠️ Questo socio è già iscritto."); return;
+      }
+      const s = soci.find(x => x.id === iscrittoSelezionato);
+      currentIscritti.push({ id: iscrittoSelezionato, tipo: 'socio', nome: `${s.cognome} ${s.nome}`, confermato: true });
+      setIscrittoSelezionato("");
+    } else {
+      if (!iscrittoEsterno.trim()) return;
+      currentIscritti.push({ id: 'ext_' + Date.now(), tipo: 'esterno', nome: iscrittoEsterno.trim(), confermato: true });
+      setIscrittoEsterno("");
+    }
+
+    await supabase.from('tornei').update({ iscritti: currentIscritti }).eq('id', activeTorneo.id);
+    await refreshDati(currentSalaId!);
+  };
+  
+  const rimuoviIscritto = async (idIscritto: string, staffId: string) => {
+    if (!activeTorneo) return;
+    let currentIscritti = normalizeIscritti(activeTorneo.iscritti);
+    currentIscritti = currentIscritti.filter(i => i.id !== idIscritto);
+    await supabase.from('tornei').update({ iscritti: currentIscritti }).eq('id', activeTorneo.id);
+    await refreshDati(currentSalaId!);
+  };
+  
+  const confermaIscrizione = async (idIscritto: string, staffId: string) => {
+    if (!activeTorneo) return;
+    let currentIscritti = normalizeIscritti(activeTorneo.iscritti);
+    currentIscritti = currentIscritti.map(i => i.id === idIscritto ? { ...i, confermato: true } : i);
+    await supabase.from('tornei').update({ iscritti: currentIscritti }).eq('id', activeTorneo.id);
+    await refreshDati(currentSalaId!);
+  };
+
+  const avviaTorneo = async (torneo: any, staffId: string) => {
+    const iscritti = normalizeIscritti(torneo.iscritti);
+    if (iscritti.length < 2) { alert("⚠️ Servono almeno 2 iscritti per avviare il torneo!"); return; }
+    if (iscritti.some(i => !i.confermato)) { alert("⚠️ Ci sono iscritti in attesa di conferma. Conferma tutti o rimuovili prima di avviare."); return; }
+
+    const shuffled = [...iscritti].sort(() => 0.5 - Math.random());
+    let round1 = [];
+    for (let i = 0; i < shuffled.length; i += 2) {
+      let p1 = shuffled[i];
+      let p2 = shuffled[i+1] || null; 
+      round1.push({ id: 'match_' + Date.now() + i, p1: p1, p2: p2, vincitore: p2 === null ? p1 : null });
+    }
+
+    const tabellone = [round1];
+    await supabase.from('tornei').update({ stato: 'in_corso', tabellone: tabellone }).eq('id', torneo.id);
+    await refreshDati(currentSalaId!);
+  };

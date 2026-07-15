@@ -1,85 +1,174 @@
-export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
 
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+const SUPER_ADMIN = "donatorzz1946@gmail.com";
+
+// CONTROLLO DI SICUREZZA UNIFICATO
+async function verificaSuperAdmin(request: Request) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+  const authHeader = request.headers.get("Authorization");
+  const token = authHeader?.replace("Bearer ", "");
+  
+  if (!token) return null;
+  
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user || user.email !== SUPER_ADMIN) return null;
+  
+  return user;
+}
+
+// 1. GESTIONE CREAZIONE SALA E UTENTE (POST)
 export async function POST(request: Request) {
   try {
-    // 0A. INIZIALIZZAZIONE RESEND PROTETTA
-    const resendKey = process.env.RESEND_API_KEY || '';
-    if (!resendKey) {
-        return NextResponse.json({ error: 'Configurazione mail mancante' }, { status: 500 });
-    }
-    const resend = new Resend(resendKey);
-
-    // 0B. INIZIALIZZAZIONE SUPABASE PROTETTA
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!supabaseUrl || !supabaseKey) {
-        return NextResponse.json({ error: 'Configurazione database mancante' }, { status: 500 });
-    }
-    const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-
-    const body = await request.json();
-    const { email, password, nomeSala } = body;
-
-    if (!email || !password || !nomeSala) {
-      return NextResponse.json({ error: 'Dati mancanti' }, { status: 400 });
+    const adminAutenticato = await verificaSuperAdmin(request);
+    if (!adminAutenticato) {
+      return NextResponse.json({ error: "Accesso negato: Solo il Super Admin può varare nuovi club" }, { status: 403 });
     }
 
-    // 1. CREAZIONE UTENTE IN AUTH
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: email,
-      password: password,
+    const { nomeSala, emailManager, passwordTemporanea } = await request.json();
+
+    if (!nomeSala || !emailManager || !passwordTemporanea) {
+      return NextResponse.json({ error: "Dati incompleti" }, { status: 400 });
+    }
+
+    // Creazione Utente in Auth
+    const { data: authUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
+      email: emailManager,
+      password: passwordTemporanea,
       email_confirm: true,
     });
 
-    if (authError) throw new Error(`Errore Auth: ${authError.message}`);
-
-    // 2. CREAZIONE SALA NEL DATABASE
-    const { error: dbError } = await supabaseAdmin.from('sale').insert([
-      {
-        name: nomeSala,
-        manager_email: email,
-        is_active: true,
-      }
-    ]);
-
-    if (dbError) throw new Error(`Errore DB: ${dbError.message}`);
-
-    // 3. SPEDIZIONE EMAIL CON RESEND
-    const { error: emailError } = await resend.emails.send({
-      from: 'onboarding@resend.dev',
-      to: [email],
-      subject: 'Benvenuto a bordo - Credenziali di Accesso',
-      html: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Benvenuto ne Il Campione!</h2>
-          <p>La tua sala <strong>${nomeSala}</strong> è stata configurata ed è pronta all'uso.</p>
-          <p>Ecco le tue credenziali di accesso provvisorie:</p>
-          <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px;">
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Password:</strong> ${password}</p>
-          </div>
-          <p>Ti consigliamo di cambiare la password al primo accesso.</p>
-          <p>Buon lavoro!</p>
-        </div>
-      `,
-    });
-
-    if (emailError) {
-      console.warn("Problema Resend:", emailError.message);
-      return NextResponse.json({ 
-        success: true, 
-        message: '✅ VARO COMPLETATO! (Sala e Utente creati. Email non inviata per limiti di test Resend)' 
-      });
+    if (createUserError) {
+      return NextResponse.json({ error: `Errore creazione Auth: ${createUserError.message}` }, { status: 400 });
     }
 
-    // Se tutto è andato bene e anche l'email è partita
-    return NextResponse.json({ success: true, message: '✅ VARO COMPLETATO! Sala creata ed email inviata.' });
+    // Calcolo scadenza contributo (30 giorni)
+    const scadenza = new Date();
+    scadenza.setDate(scadenza.getDate() + 30);
 
-  } catch (error: any) {
-    console.error('Errore durante l\'onboarding:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Inserimento nella tabella 'sale'
+    const { error: dbError } = await supabaseAdmin
+      .from("sale")
+      .insert([
+        {
+          name: nomeSala.toUpperCase(),
+          manager_email: emailManager.toLowerCase(),
+          scadenza_contributo: scadenza.toISOString(),
+          is_active: true,
+        },
+      ]);
+
+    if (dbError) {
+      // Se il DB fallisce, eliminiamo l'utente appena creato in Auth per non lasciare sporco
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      return NextResponse.json({ error: `Errore inserimento DB: ${dbError.message}` }, { status: 400 });
+    }
+
+    // Registrazione dell'azione nei Log
+    await supabaseAdmin.from("admin_logs").insert([
+      { azione: "VARO CLUB", dettagli: `Creata la sala ${nomeSala.toUpperCase()} (${emailManager})` },
+    ]);
+
+    // Invio Email con Resend
+    try {
+      if (process.env.RESEND_API_KEY) {
+        await resend.emails.send({
+          from: "Il Campione <onboarding@ilcampione-biliardo.it>", 
+          to: emailManager,
+          subject: "Benvenuto su Il Campione - Credenziali della tua Plancia",
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
+              <h2 style="color: #06b6d4; text-transform: uppercase;">Il Campione</h2>
+              <p>La tua sala <strong>${nomeSala.toUpperCase()}</strong> è attiva.</p>
+              <div style="background-color: #f4f4f5; padding: 15px; border-radius: 8px; font-family: monospace; margin: 20px 0;">
+                <strong>Email:</strong> ${emailManager}<br/>
+                <strong>Password Temporanea:</strong> ${passwordTemporanea}
+              </div>
+            </div>
+          `,
+        });
+      }
+    } catch (mErr) { console.error("Errore invio email:", mErr); }
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// 2. GESTIONE INTERRUTTORE KILL SWITCH (PATCH)
+export async function PATCH(request: Request) {
+  try {
+    const adminAutenticato = await verificaSuperAdmin(request);
+    if (!adminAutenticato) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
+    }
+
+    const { id, is_active } = await request.json();
+    if (id === undefined || is_active === undefined) {
+      return NextResponse.json({ error: "Parametri mancanti" }, { status: 400 });
+    }
+
+    const { error: dbError } = await supabaseAdmin
+      .from("sale")
+      .update({ is_active: is_active })
+      .eq("id", id);
+
+    if (dbError) throw dbError;
+
+    const statoTesto = is_active ? "RIATTIVAZIONE" : "SOSPENSIONE";
+    await supabaseAdmin.from("admin_logs").insert([
+      { azione: statoTesto, dettagli: `Modificato stato is_active a ${is_active} per la sala con ID ${id}` },
+    ]);
+
+    return NextResponse.json({ success: true, message: `Stato sala aggiornato` });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// 3. GESTIONE CANCELLAZIONE TOTALE (DELETE)
+export async function DELETE(request: Request) {
+  try {
+    const adminAutenticato = await verificaSuperAdmin(request);
+    if (!adminAutenticato) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
+    }
+
+    const { id, manager_email } = await request.json();
+    if (!id || !manager_email) {
+      return NextResponse.json({ error: "Dati mancanti per l'eliminazione" }, { status: 400 });
+    }
+
+    // Elimina riga dal Database
+    const { error: dbError } = await supabaseAdmin.from("sale").delete().eq("id", id);
+    if (dbError) throw dbError;
+
+    // Cerca ed elimina l'utente da Supabase Auth
+    const { data: usersData, error: userError } = await supabaseAdmin.auth.admin.listUsers();
+    if (!userError && usersData?.users) {
+      const targetUser = usersData.users.find(u => u.email?.toLowerCase() === manager_email.toLowerCase());
+      if (targetUser) {
+        await supabaseAdmin.auth.admin.deleteUser(targetUser.id);
+      }
+    }
+
+    await supabaseAdmin.from("admin_logs").insert([
+      { azione: "ELIMINAZIONE CLUB", dettagli: `Rimossa definitivamente la sala con ID ${id} (${manager_email})` },
+    ]);
+
+    return NextResponse.json({ success: true, message: "Sala ed utente rimossi con successo" });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

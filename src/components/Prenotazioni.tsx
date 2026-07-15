@@ -1,11 +1,15 @@
 "use client";
 
+// ==========================================
+// FILE: src/components/Prenotazioni.tsx
+// OBIETTIVO: Componente motore Gestione Agenda (Sbloccato e Validato)
+// ==========================================
+
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from "@/app/lib/supabase";
+import { useRouter } from 'next/navigation';
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-
-export default function Prenotazioni({ salaId, setActiveView }: { salaId: string, setActiveView?: (view: string) => void }) {
+export default function Prenotazioni({ salaId }: { salaId: string }) {
   const [prenotazioni, setPrenotazioni] = useState<any[]>([]);
   const [nomeCliente, setNomeCliente] = useState('');
   const [tavoloNumero, setTavoloNumero] = useState('');
@@ -21,6 +25,8 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
   const [modTavolo, setModTavolo] = useState('');
   const [modDataOra, setModDataOra] = useState('');
   const [modNote, setModNote] = useState('');
+
+  const router = useRouter();
 
   useEffect(() => {
     caricaPrenotazioni();
@@ -47,7 +53,12 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
 
   async function gestisciSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!nomeCliente || !dataOra) return;
+    
+    // SISTEMA DI AVVISO (Evita il "falso silenzio")
+    if (!nomeCliente.trim() || !dataOra) {
+      alert("⚠️ Attenzione: Compila il Nome Cliente e la Data/Ora per confermare la prenotazione.");
+      return;
+    }
     
     setLoading(true);
     const notaFormattata = `[${sorgente.toUpperCase()}] ${note}`.trim();
@@ -55,21 +66,27 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
     try {
       const { error } = await supabase.from('prenotazioni').insert([{
         sala_id: salaId,
-        nome_cliente: nomeCliente,
-        tavolo_numero: tavoloNumero,
+        nome_cliente: nomeCliente.trim(),
+        tavolo_numero: tavoloNumero.trim(),
         data_ora: new Date(dataOra).toISOString(), 
         note: notaFormattata
       }]);
 
-          if (error) {
-            alert("ERRORE DI SALVATAGGIO: " + error.message);
-          } else {
-            setSuccesso(`PRENOTAZIONE "${nomeCliente}" CONFERMATA!`);
-            setTimeout(() => setSuccesso(null), 3000);
+      if (error) {
+        alert("ERRORE DI SALVATAGGIO: " + error.message);
+      } else {
+        setSuccesso(`PRENOTAZIONE "${nomeCliente}" CONFERMATA!`);
+        setTimeout(() => setSuccesso(null), 3000);
 
-            setNomeCliente(''); setTavoloNumero(''); setDataOra(''); setNote(''); setSorgente('telefono');
-            caricaPrenotazioni();
-          }
+        // Reset del form
+        setNomeCliente(''); 
+        setTavoloNumero(''); 
+        setDataOra(''); 
+        setNote(''); 
+        setSorgente('telefono');
+        
+        caricaPrenotazioni();
+      }
     } catch (err: any) {
       alert("Errore di rete: " + err.message);
     } finally {
@@ -187,9 +204,8 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
   };
 
   return (
-    <div className="min-h-screen bg-emerald-50 p-4 sm:p-8 md:p-12 lg:p-16 flex flex-col items-center transition-colors duration-500 font-sans">
+    <div className="min-h-screen bg-[#050505] p-4 sm:p-8 flex flex-col items-center transition-colors duration-500 font-sans">
       
-      {/* POPUP SUCCESSO HIGH-CONTRAST */}
       {successo && (
         <div className="fixed top-10 left-1/2 transform -translate-x-1/2 bg-white border-4 border-emerald-600 text-emerald-700 px-10 py-5 rounded-2xl shadow-2xl z-[100] animate-bounce font-black uppercase tracking-widest text-xl">
           ✓ {successo}
@@ -202,50 +218,50 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
         </div>
       )}
 
-      {/* SCHERMO NERO PRINCIPALE */}
-      <div className="w-full max-w-[1600px] bg-[#050505] rounded-[3rem] p-8 sm:p-12 shadow-[0_20px_60px_rgba(0,0,0,0.3)] border-8 border-emerald-100/60 relative overflow-hidden">
+      <div className="w-full max-w-[1600px] bg-[#050505] rounded-[3rem] p-8 sm:p-12 shadow-[0_20px_60px_rgba(0,0,0,0.3)] border border-gray-800 relative">
         
-        {/* HEADER */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-gray-800 pb-8 mb-10 gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-8 mb-10 gap-4">
           <div>
             <p className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-1">Gestione Agenda</p>
-            <h2 className="text-4xl font-black text-white uppercase italic tracking-tight">PRENOTAZIONI SALA</h2>
+            <h2 className="text-4xl font-black text-white uppercase tracking-widest">PRENOTAZIONI SALA</h2>
           </div>
           
+          {/* PULSANTI DI INTESTAZIONE PULITI DA Z-INDEX INVASIVI */}
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
             <button 
-              onClick={() => setActiveView && setActiveView('hub')} 
-              className="bg-cyan-600 text-white hover:bg-cyan-500 px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all border-2 border-cyan-400 w-full sm:w-auto shadow-[0_0_20px_rgba(6,182,212,0.4)] active:scale-95 text-center"
+              type="button"
+              onClick={() => router.push(`/dashboard/${salaId}`)} 
+              className="bg-cyan-600/20 text-cyan-500 hover:bg-cyan-500 hover:text-white px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all border border-cyan-500/50 w-full sm:w-auto text-center"
             >
-              ← Torre di Controllo
+              ← Torna alla Plancia
             </button>
             <button 
+              type="button"
               onClick={stampaPDF} 
-              className="bg-zinc-800 hover:bg-zinc-700 text-white px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all border-2 border-zinc-600 w-full sm:w-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] active:scale-95 text-center"
+              className="bg-zinc-800 hover:bg-zinc-700 text-white px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all border border-zinc-600 w-full sm:w-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] active:scale-95 text-center"
             >
               📄 Stampa Foglio Turni
             </button>
           </div>
         </div>
 
-        {/* LAYOUT A COLONNE (TABELLONE SINISTRA, FORM DESTRA) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           
           {/* COLONNA SINISTRA: TABELLONE PRENOTAZIONI */}
           <div className="lg:col-span-8 flex flex-col">
-            <div className="flex justify-between items-center mb-6 border-b-2 border-gray-800 pb-3">
+            <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-3">
               <h3 className="text-2xl font-black text-white uppercase tracking-widest">Tabellone Attivo</h3>
-              <div className="bg-gray-900 px-6 py-2 rounded-xl border-2 border-gray-700 text-center">
+              <div className="bg-gray-900 px-6 py-2 rounded-xl border border-gray-700 text-center">
                 <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block">Records</span>
                 <span className="text-2xl font-black text-emerald-400 tabular-nums">{prenotazioni.length}</span>
               </div>
             </div>
 
-            <div className="p-8 rounded-[2rem] bg-black border-[3px] border-gray-400 shadow-[0_0_30px_rgba(0,0,0,0.6)] flex-1 overflow-hidden flex flex-col min-h-[500px]">
+            <div className="p-8 rounded-[2rem] bg-[#11131a] border border-gray-800 shadow-xl flex-1 flex flex-col min-h-[500px]">
               <div className="overflow-x-auto h-full max-h-[650px] pr-2 custom-scrollbar">
                 <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-black z-10">
-                    <tr className="border-b-2 border-gray-600">
+                  <thead className="sticky top-0 bg-[#11131a] z-10">
+                    <tr className="border-b border-gray-600">
                       <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-emerald-500 w-[18%]">Orario / Data</th>
                       <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-emerald-500 w-[35%]">Anagrafica Cliente</th>
                       <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-emerald-500 w-[20%]">Biliardo</th>
@@ -259,33 +275,31 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
                       let origineTesto = "App Soci";
                       let badgeColor = "bg-gray-800 text-gray-300 border-gray-600";
                       
-                      if (p.note?.includes("[TELEFONO]")) { badgeColor = "bg-blue-100 text-blue-800 border-blue-400"; origineTesto = "📞 Telefono"; }
-                      if (p.note?.includes("[WHATSAPP]")) { badgeColor = "bg-green-100 text-green-800 border-green-400"; origineTesto = "💬 WhatsApp"; }
-                      if (p.note?.includes("[SOCIAL]")) { badgeColor = "bg-purple-100 text-purple-800 border-purple-400"; origineTesto = "📱 Social"; }
-                      if (p.note?.includes("[DI_PERSONA]")) { badgeColor = "bg-amber-100 text-amber-800 border-amber-400"; origineTesto = "👤 In Sala"; }
+                      if (p.note?.includes("[TELEFONO]")) { badgeColor = "bg-blue-900/50 text-blue-400 border-blue-500/50"; origineTesto = "📞 Telefono"; }
+                      if (p.note?.includes("[WHATSAPP]")) { badgeColor = "bg-green-900/50 text-green-400 border-green-500/50"; origineTesto = "💬 WhatsApp"; }
+                      if (p.note?.includes("[SOCIAL]")) { badgeColor = "bg-purple-900/50 text-purple-400 border-purple-500/50"; origineTesto = "📱 Social"; }
+                      if (p.note?.includes("[DI_PERSONA]")) { badgeColor = "bg-amber-900/50 text-amber-400 border-amber-500/50"; origineTesto = "👤 In Sala"; }
                       
                       const notaPulita = p.note ? p.note.replace(/^\[(TELEFONO|WHATSAPP|SOCIAL|DI_PERSONA)\]/, '').replace('(App Soci)', '').trim() : '';
 
-                      // RIGA IN MODIFICA (ALTO CONTRASTO)
                       if (idInModifica === p.id) return (
-                        <tr key={p.id} className="bg-gray-900 border-b-2 border-gray-700">
-                          <td className="py-4 px-2"><input type="datetime-local" value={modDataOra} onChange={e => setModDataOra(e.target.value)} className="bg-gray-100 border-2 border-gray-400 p-3 rounded-xl text-xs w-full text-black font-black outline-none focus:border-emerald-500" /></td>
+                        <tr key={p.id} className="bg-gray-900 border-b border-gray-700">
+                          <td className="py-4 px-2"><input type="datetime-local" value={modDataOra} onChange={e => setModDataOra(e.target.value)} className="bg-black border border-gray-700 p-3 rounded-xl text-xs w-full text-white font-black outline-none focus:border-emerald-500" /></td>
                           <td className="py-4 px-2">
-                            <input type="text" value={modNome} onChange={e => setModNome(e.target.value)} className="bg-gray-100 border-2 border-gray-400 p-3 rounded-xl text-xs w-full text-black font-bold outline-none focus:border-emerald-500 mb-2" />
-                            <input type="text" value={modNote} onChange={e => setModNote(e.target.value)} placeholder="Modifica nota..." className="bg-gray-100 border-2 border-gray-400 p-2 rounded-lg text-xs w-full text-black font-mono outline-none focus:border-emerald-500" />
+                            <input type="text" value={modNome} onChange={e => setModNome(e.target.value)} className="bg-black border border-gray-700 p-3 rounded-xl text-xs w-full text-white font-bold outline-none focus:border-emerald-500 mb-2" />
+                            <input type="text" value={modNote} onChange={e => setModNote(e.target.value)} placeholder="Modifica nota..." className="bg-black border border-gray-700 p-2 rounded-lg text-xs w-full text-white font-mono outline-none focus:border-emerald-500" />
                           </td>
-                          <td className="py-4 px-2"><input type="text" value={modTavolo} onChange={e => setModTavolo(e.target.value)} className="bg-gray-100 border-2 border-gray-400 p-3 rounded-xl text-xs w-full text-black font-bold outline-none focus:border-emerald-500" /></td>
+                          <td className="py-4 px-2"><input type="text" value={modTavolo} onChange={e => setModTavolo(e.target.value)} className="bg-black border border-gray-700 p-3 rounded-xl text-xs w-full text-white font-bold outline-none focus:border-emerald-500" /></td>
                           <td className="py-4 px-2 text-center text-[10px] text-gray-400 italic font-bold uppercase">In Modifica</td>
                           <td className="py-4 px-2 text-center space-y-2">
-                            <button onClick={() => salvaModifica(p.id)} className="w-full bg-emerald-600 text-white px-3 py-2 rounded-lg text-[10px] font-black uppercase border-2 border-emerald-400">Salva</button>
-                            <button onClick={() => setIdInModifica(null)} className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg text-[10px] font-black uppercase border-2 border-gray-500">Annulla</button>
+                            <button type="button" onClick={() => salvaModifica(p.id)} className="w-full bg-emerald-600 text-white px-3 py-2 rounded-lg text-[10px] font-black uppercase border border-emerald-400">Salva</button>
+                            <button type="button" onClick={() => setIdInModifica(null)} className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg text-[10px] font-black uppercase border border-gray-500">Annulla</button>
                           </td>
                         </tr>
                       );
 
-                      // RIGA STANDARD
                       return (
-                        <tr key={p.id} className="hover:bg-gray-900 transition-colors group">
+                        <tr key={p.id} className="hover:bg-white/5 transition-colors group">
                           <td className="py-6 px-4 whitespace-nowrap">
                             <span className="text-xl font-black text-emerald-400 tabular-nums block mb-1">{data.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span>
                             <span className="text-xs font-bold text-gray-400">{data.toLocaleDateString('it-IT', {day: '2-digit', month: '2-digit'})}</span>
@@ -298,13 +312,13 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
                             {p.tavolo_numero ? `📌 ${p.tavolo_numero}` : '—'}
                           </td>
                           <td className="py-6 px-4 whitespace-nowrap">
-                            <span className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border-2 ${badgeColor}`}>
+                            <span className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border ${badgeColor}`}>
                               {origineTesto}
                             </span>
                           </td>
                           <td className="py-6 px-4 text-center space-x-3 whitespace-nowrap">
-                            <button onClick={() => avviaModifica(p)} className="text-2xl opacity-50 hover:opacity-100 transition-opacity" title="Modifica">✏️</button>
-                            <button onClick={() => annullaPrenotazione(p.id)} className="text-2xl opacity-50 hover:opacity-100 transition-opacity" title="Annulla">🗑️</button>
+                            <button type="button" onClick={() => avviaModifica(p)} className="text-2xl opacity-50 hover:opacity-100 transition-opacity" title="Modifica">✏️</button>
+                            <button type="button" onClick={() => annullaPrenotazione(p.id)} className="text-2xl opacity-50 hover:opacity-100 transition-opacity" title="Annulla">🗑️</button>
                           </td>
                         </tr>
                       );
@@ -325,12 +339,12 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
 
           {/* COLONNA DESTRA: INSERIMENTO MANUALE */}
           <div className="lg:col-span-4 flex flex-col">
-            <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-6 border-b-2 border-gray-800 pb-3">Ricezione Manuale</h3>
+            <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-6 border-b border-gray-800 pb-3">Ricezione Manuale</h3>
             
-            <form onSubmit={gestisciSubmit} className="p-8 rounded-[2rem] bg-black border-[3px] border-gray-400 shadow-[0_0_30px_rgba(0,0,0,0.6)]">
+            <form onSubmit={gestisciSubmit} className="p-8 rounded-[2rem] bg-[#11131a] border border-gray-800 shadow-xl flex flex-col">
               <div className="mb-6">
                 <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Sorgente Contatto</label>
-                <select value={sorgente} onChange={e => setSorgente(e.target.value)} className="w-full bg-gray-100 border-2 border-gray-400 p-5 rounded-xl text-black font-black text-sm outline-none focus:border-emerald-500 appearance-none">
+                <select value={sorgente} onChange={e => setSorgente(e.target.value)} className="w-full bg-black border border-gray-700 p-5 rounded-xl text-white font-black text-sm outline-none focus:border-emerald-500 appearance-none">
                   <option value="telefono">📞 Chiamata Telefonica</option>
                   <option value="whatsapp">💬 Messaggio WhatsApp</option>
                   <option value="social">📱 Social Network</option>
@@ -339,26 +353,26 @@ export default function Prenotazioni({ salaId, setActiveView }: { salaId: string
               </div>
 
               <div className="mb-6">
-                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Nominativo Cliente</label>
-                <input type="text" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} placeholder="Es. Mario Rossi" className="w-full bg-gray-100 border-2 border-gray-400 p-5 rounded-xl text-black font-black text-lg outline-none focus:border-emerald-500 placeholder-gray-400" required />
+                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Nominativo Cliente *</label>
+                <input type="text" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} placeholder="Es. Mario Rossi" className="w-full bg-black border border-gray-700 p-5 rounded-xl text-white font-black text-lg outline-none focus:border-emerald-500 placeholder-gray-600" required />
               </div>
 
               <div className="mb-6">
                 <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Tavolo o Specialità</label>
-                <input type="text" value={tavoloNumero} onChange={e => setTavoloNumero(e.target.value)} placeholder="Es. Tavolo 3" className="w-full bg-gray-100 border-2 border-gray-400 p-5 rounded-xl text-black font-black text-lg outline-none focus:border-emerald-500 placeholder-gray-400" />
+                <input type="text" value={tavoloNumero} onChange={e => setTavoloNumero(e.target.value)} placeholder="Es. Tavolo 3" className="w-full bg-black border border-gray-700 p-5 rounded-xl text-white font-black text-lg outline-none focus:border-emerald-500 placeholder-gray-600" />
               </div>
 
               <div className="mb-6">
-                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Data e Ora Prevista</label>
-                <input type="datetime-local" value={dataOra} onChange={e => setDataOra(e.target.value)} className="w-full bg-gray-100 border-2 border-gray-400 p-5 rounded-xl text-black font-black text-lg outline-none focus:border-emerald-500" required />
+                <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Data e Ora Prevista *</label>
+                <input type="datetime-local" value={dataOra} onChange={e => setDataOra(e.target.value)} className="w-full bg-black border border-gray-700 p-5 rounded-xl text-white font-black text-lg outline-none focus:border-emerald-500" required />
               </div>
 
               <div className="mb-10">
                 <label className="text-gray-400 font-black uppercase text-xs tracking-widest ml-2 mb-1 block">Note Aggiuntive</label>
-                <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Es. Richiede stecca personale..." className="w-full bg-gray-100 border-2 border-gray-400 p-5 rounded-xl text-black font-bold text-sm h-24 resize-none outline-none focus:border-emerald-500 placeholder-gray-400" />
+                <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Es. Richiede stecca personale..." className="w-full bg-black border border-gray-700 p-5 rounded-xl text-white font-bold text-sm h-24 resize-none outline-none focus:border-emerald-500 placeholder-gray-600" />
               </div>
 
-              <button disabled={loading} type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-6 rounded-2xl font-black text-xl uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(16,185,129,0.4)] border-2 border-emerald-400 disabled:opacity-50">
+              <button disabled={loading} type="submit" className="mt-auto w-full bg-emerald-600 hover:bg-emerald-500 text-white py-6 rounded-2xl font-black text-xl uppercase tracking-widest transition-all shadow-lg disabled:opacity-50">
                 {loading ? 'Attendere...' : 'Salva Prenotazione'}
               </button>
             </form>
