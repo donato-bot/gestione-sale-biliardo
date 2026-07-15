@@ -42,7 +42,7 @@ export default function Plancia({
   }, [salaId]);
 
   const fetchData = async () => {
-    // Abbiamo aggiunto la cattura dell'errore e cambiato l'ordinamento per sicurezza
+    // Sistema di Allarme Attivato: se il DB fallisce, ora ce lo dice!
     const { data, error } = await supabase.from("tavoli").select("*").eq("sala_id", salaId).order("nome_tavolo");
     if (error) {
       alert("ERRORE DATABASE (Tavoli): " + error.message);
@@ -376,6 +376,7 @@ export default function Plancia({
       <div className="w-full max-w-[1600px] bg-[#050505] rounded-[3rem] p-8 border-8 border-emerald-100/60">
         <div className="flex justify-between items-center border-b-2 border-gray-800 pb-8 mb-10">
           <div><p className="text-[10px] text-cyan-500 font-black uppercase tracking-widest">Pannello</p><h2 className="text-4xl font-black text-white uppercase italic">PLANCIA OPERATIVA</h2></div>
+          {/* IL BOTTONE DOPPIONE È STATO ELIMINATO DA QUI! */}
         </div>
 
         {/* FEEDBACK VISIVO SE NON CI SONO TAVOLI */}
