@@ -69,13 +69,13 @@ export default function DashboardGestore({ params }: { params: { sala: string } 
         {sezioneAttiva === "magazzino" && <Magazzino salaId={params.sala} setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "report" && <Report salaId={params.sala} onBack={() => setSezioneAttiva("hub")} />}
         {sezioneAttiva === "prenotazioni" && <Prenotazioni salaId={params.sala} setActiveView={setSezioneAttiva} />}
-        {sezioneAttiva === "tornei" && <Tornei salaId={params.sala} setActiveView={setSezioneAttiva} />}
+        
+        {/* LA RIGA 69 CORRETTA: Niente più setActiveView per i Tornei! */}
+        {sezioneAttiva === "tornei" && <Tornei salaId={params.sala} />}
+        
         {sezioneAttiva === "staff" && <Staff salaId={params.sala} setActiveView={setSezioneAttiva} />}
         {sezioneAttiva === "impostazioni" && <Impostazioni salaId={params.sala} setActiveView={setSezioneAttiva} />}
-        
-        {/* CORREZIONE CHIAVE PER SERVIZI */}
         {sezioneAttiva === "servizi" && <Servizi salaId={params.sala} onBack={() => setSezioneAttiva("hub")} />}
-        
         {sezioneAttiva === "manuale" && <ManualeOperativo salaId={params.sala} setActiveView={setSezioneAttiva} />}
       </div>
     </div>
