@@ -46,7 +46,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
   const urlSoci = typeof window !== "undefined" ? `${window.location.origin}/club/${salaId}` : "";
 
   // ==========================================
-  // FETCH INIZIALE
+  // FETCH INIZIALE CON SISTEMA DI ALLARME
   // ==========================================
   async function fetchTornei(isInitial = false) {
     if (!salaId) return;
@@ -56,7 +56,11 @@ export default function Tornei({ salaId }: { salaId: string }) {
       .eq('sala_id', salaId)
       .order('created_at', { ascending: false });
     
-    if (!error && data) {
+    if (error) {
+      alert(`ERRORE DATABASE (Lettura Tornei): ${error.message}`);
+    }
+    
+    if (data) {
       setTorneiList(data);
       if (isInitial) {
         const torneoAttivo = data.find(t => t.stato === 'in_corso');
@@ -71,11 +75,19 @@ export default function Tornei({ salaId }: { salaId: string }) {
 
   async function fetchIscrittiEPartite(torneo: any) {
     const resIscritti = await supabase.from('iscritti_torneo').select('*').eq('torneo_id', torneo.id).order('created_at', { ascending: true });
-    if (resIscritti.data) setIscritti(resIscritti.data);
+    if (resIscritti.error) {
+       alert(`ERRORE DATABASE (Lettura Iscritti): ${resIscritti.error.message}`);
+    } else if (resIscritti.data) {
+       setIscritti(resIscritti.data);
+    }
 
     if (torneo.stato === 'in_corso' || torneo.stato === 'concluso') {
       const resPartite = await supabase.from('partite_torneo').select('*').eq('torneo_id', torneo.id).order('partita_num', { ascending: true });
-      if (resPartite.data) setPartite(resPartite.data);
+      if (resPartite.error) {
+         alert(`ERRORE DATABASE (Lettura Partite Tabellone): ${resPartite.error.message}`);
+      } else if (resPartite.data) {
+         setPartite(resPartite.data);
+      }
     }
   }
 
@@ -91,24 +103,25 @@ export default function Tornei({ salaId }: { salaId: string }) {
     if (!nomeTorneo || !quota) return;
     setLoading(true);
     
+    // CORREZIONE VOCABOLARIO DB: titolo e descrizione
     const payload = {
       sala_id: salaId, 
-      nome: nomeTorneo, 
+      titolo: nomeTorneo, 
       disciplina, 
       max_iscritti: parseInt(iscrittiMax), 
       quota: parseFloat(quota), 
       formula, 
-      stato: 'iscrizioni', // Standardizza lo stato a 'iscrizioni'
+      stato: 'iscrizioni',
       data_inizio: dataInizio || null,
       data_fine: dataFine || null,
       scadenza_iscrizioni: scadenzaIscrizioni || null,
-      note: note
+      descrizione: note
     };
 
     const { error } = await supabase.from('tornei').insert([payload]);
     
     setLoading(false);
-    if (error) alert(`ERRORE DATABASE: ${error.message}`);
+    if (error) alert(`ERRORE DATABASE (Creazione Torneo): ${error.message}`);
     else { 
       setNomeTorneo(""); setQuota(""); setDataInizio(""); setDataFine(""); setScadenzaIscrizioni(""); setNote("");
       fetchTornei(false); 
@@ -117,7 +130,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
 
   const apriModifica = () => {
     setEditForm({
-      nome: torneoSelezionato.nome || "",
+      nome: torneoSelezionato.titolo || "",
       disciplina: torneoSelezionato.disciplina || "5 Birilli",
       max_iscritti: torneoSelezionato.max_iscritti || 32,
       quota: torneoSelezionato.quota || 0,
@@ -125,7 +138,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
       data_inizio: torneoSelezionato.data_inizio || "",
       data_fine: torneoSelezionato.data_fine || "",
       scadenza_iscrizioni: torneoSelezionato.scadenza_iscrizioni || "",
-      note: torneoSelezionato.note || ""
+      note: torneoSelezionato.descrizione || ""
     });
     setShowEditModal(true);
   };
@@ -135,7 +148,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
     setLoading(true);
 
     const payload = {
-      nome: editForm.nome,
+      titolo: editForm.nome,
       disciplina: editForm.disciplina,
       max_iscritti: parseInt(editForm.max_iscritti),
       quota: parseFloat(editForm.quota),
@@ -143,14 +156,14 @@ export default function Tornei({ salaId }: { salaId: string }) {
       data_inizio: editForm.data_inizio || null,
       data_fine: editForm.data_fine || null,
       scadenza_iscrizioni: editForm.scadenza_iscrizioni || null,
-      note: editForm.note
+      descrizione: editForm.note
     };
 
     const { error } = await supabase.from('tornei').update(payload).eq('id', torneoSelezionato.id);
 
     setLoading(false);
     if (error) {
-      alert(`ERRORE: ${error.message}`);
+      alert(`ERRORE DATABASE (Salvataggio Modifiche): ${error.message}`);
     } else {
       const torneoAggiornato = { ...torneoSelezionato, ...payload };
       setTorneoSelezionato(torneoAggiornato);
@@ -170,20 +183,25 @@ export default function Tornei({ salaId }: { salaId: string }) {
     }
     
     if (!nomeGiocatore) return;
-    const { error } = await supabase.from('iscritti_torneo').insert([{ torneo_id: torneoSelezionato.id, nominativo: nomeGiocatore, pagato: quotaPagata }]);
-    if (error) alert(`ERRORE: ${error.message}`);
+    
+    // CORREZIONE VOCABOLARIO DB: nome_completo
+    const { error } = await supabase.from('iscritti_torneo').insert([{ torneo_id: torneoSelezionato.id, nome_completo: nomeGiocatore, pagato: quotaPagata }]);
+    
+    if (error) alert(`ERRORE DATABASE (Iscrizione): ${error.message}`);
     else { setNomeGiocatore(""); setQuotaPagata(false); fetchIscrittiEPartite(torneoSelezionato); }
   };
 
   const togglePagamento = async (iscritto: any) => {
-    await supabase.from('iscritti_torneo').update({ pagato: !iscritto.pagato }).eq('id', iscritto.id);
-    fetchIscrittiEPartite(torneoSelezionato);
+    const { error } = await supabase.from('iscritti_torneo').update({ pagato: !iscritto.pagato }).eq('id', iscritto.id);
+    if (error) alert(`ERRORE DATABASE (Aggiornamento Pagamento): ${error.message}`);
+    else fetchIscrittiEPartite(torneoSelezionato);
   };
 
   const eliminaIscritto = async (id: string) => {
     if(!window.confirm("Rimuovere il giocatore?")) return;
-    await supabase.from('iscritti_torneo').delete().eq('id', id);
-    fetchIscrittiEPartite(torneoSelezionato);
+    const { error } = await supabase.from('iscritti_torneo').delete().eq('id', id);
+    if (error) alert(`ERRORE DATABASE (Eliminazione): ${error.message}`);
+    else fetchIscrittiEPartite(torneoSelezionato);
   };
 
   const handleGeneraTabellone = async () => {
@@ -198,7 +216,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
 
     const byesNeeded = targetSize - giocatori.length;
     for (let i = 0; i < byesNeeded; i++) {
-      giocatori.push({ id: null, nominativo: "BYE (Passaggio Turno)" });
+      giocatori.push({ id: null, nome_completo: "BYE (Passaggio Turno)" });
     }
 
     giocatori.sort(() => Math.random() - 0.5);
@@ -214,8 +232,8 @@ export default function Tornei({ salaId }: { salaId: string }) {
         partita_num: (i / 2) + 1,
         giocatore1_id: giocatori[i].id,
         giocatore2_id: giocatori[i+1].id,
-        giocatore1_nome: giocatori[i].nominativo,
-        giocatore2_nome: giocatori[i+1].nominativo,
+        giocatore1_nome: giocatori[i].nome_completo,
+        giocatore2_nome: giocatori[i+1].nome_completo,
         stato: 'da_giocare'
       });
     }
@@ -240,7 +258,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
 
     const { error: partiteError } = await supabase.from('partite_torneo').insert(nuovePartite);
     if (partiteError) {
-      alert(`ERRORE: ${partiteError.message}`);
+      alert(`ERRORE DATABASE (Generazione Tabellone): ${partiteError.message}`);
       setLoading(false);
       return;
     }
@@ -258,7 +276,12 @@ export default function Tornei({ salaId }: { salaId: string }) {
     if (!partitaDaArbitrare) return;
     setLoading(true);
 
-    await supabase.from('partite_torneo').update({ stato: 'conclusa' }).eq('id', partitaDaArbitrare.id);
+    const { error } = await supabase.from('partite_torneo').update({ stato: 'conclusa' }).eq('id', partitaDaArbitrare.id);
+    if (error) {
+       alert(`ERRORE DATABASE (Chiusura Incontro): ${error.message}`);
+       setLoading(false);
+       return;
+    }
 
     const nextTurno = partitaDaArbitrare.turno + 1;
     const nextPartitaNum = Math.ceil(partitaDaArbitrare.partita_num / 2);
@@ -307,7 +330,6 @@ export default function Tornei({ salaId }: { salaId: string }) {
     return `Turno Preliminare`;
   };
 
-  // HELPER: Verifica se un torneo è in fase di iscrizione accettando le due diciture vecchie e nuove
   const isIscrizioniAperte = (stato: string) => stato === 'iscrizioni' || stato === 'Iscrizioni Aperte';
 
   return (
@@ -430,7 +452,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
               {torneoSelezionato ? (torneoSelezionato.stato === 'concluso' ? '🏆 Torneo Concluso' : (isIscrizioniAperte(torneoSelezionato.stato) ? '🟢 Iscrizioni Aperte' : '🔴 Live: Organigramma Torneo')) : 'Direzione Gara'}
             </p>
             <h2 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tight print:text-black">
-              {torneoSelezionato ? torneoSelezionato.nome : 'Gestione Tornei'}
+              {torneoSelezionato ? torneoSelezionato.titolo : 'Gestione Tornei'}
             </h2>
           </div>
           
@@ -499,7 +521,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
                 {iscritti.length === 0 ? <div className="h-full flex items-center justify-center opacity-50"><p className="font-black text-sm uppercase tracking-widest">Nessun giocatore iscritto</p></div> 
                 : iscritti.map((iscritto, i) => (
                   <div key={iscritto.id} className="bg-[#1A1D24] border border-[#2A2E39] p-4 rounded-xl flex justify-between items-center group">
-                    <div className="flex items-center gap-4"><span className="text-gray-600 font-black w-6 text-right">{i + 1}.</span><h4 className="text-white font-bold text-sm uppercase">{iscritto.nominativo}</h4></div>
+                    <div className="flex items-center gap-4"><span className="text-gray-600 font-black w-6 text-right">{i + 1}.</span><h4 className="text-white font-bold text-sm uppercase">{iscritto.nome_completo}</h4></div>
                     <div className="flex items-center gap-4">
                       <button type="button" onClick={() => togglePagamento(iscritto)} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest border ${iscritto.pagato ? 'bg-[#00E676]/20 text-[#00E676] border-[#00E676]/30' : 'bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/30'}`}>{iscritto.pagato ? '✓ PAGATO' : 'DA PAGARE'}</button>
                       <button type="button" onClick={() => eliminaIscritto(iscritto.id)} className="text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100">🗑️</button>
@@ -542,7 +564,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
                   {torneiList.map((torneo) => (
                     <div key={torneo.id} onClick={() => setTorneoSelezionato(torneo)} className="bg-[#1A1D24] border border-[#2A2E39] p-5 rounded-xl flex justify-between items-center hover:border-[#E91E63] hover:shadow-[0_0_15px_rgba(233,30,99,0.2)] transition-all cursor-pointer group">
                       <div>
-                        <h4 className="text-white font-black text-lg uppercase tracking-tight group-hover:text-[#E91E63] transition-colors">{torneo.nome}</h4>
+                        <h4 className="text-white font-black text-lg uppercase tracking-tight group-hover:text-[#E91E63] transition-colors">{torneo.titolo}</h4>
                         <div className="flex gap-3 mt-2">
                           <span className="text-[10px] text-[#00E5FF] font-black uppercase bg-[#00E5FF]/10 px-2 py-0.5 rounded-sm">{torneo.disciplina}</span>
                           <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-sm ${torneo.stato === 'in_corso' ? 'bg-[#00E676]/10 text-[#00E676]' : (torneo.stato === 'concluso' ? 'bg-gray-600/20 text-gray-400' : 'bg-[#FFCC00]/10 text-[#FFCC00]')}`}>
