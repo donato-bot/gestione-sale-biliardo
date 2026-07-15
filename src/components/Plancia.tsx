@@ -42,12 +42,19 @@ export default function Plancia({
   }, [salaId]);
 
   const fetchData = async () => {
-    const { data } = await supabase.from("tavoli").select("*").eq("sala_id", salaId).order("numero");
+    // Abbiamo aggiunto la cattura dell'errore e cambiato l'ordinamento per sicurezza
+    const { data, error } = await supabase.from("tavoli").select("*").eq("sala_id", salaId).order("nome_tavolo");
+    if (error) {
+      alert("ERRORE DATABASE (Tavoli): " + error.message);
+    }
     if (data) setTables(data);
   };
 
   const caricaMagazzino = async () => {
-    const { data } = await supabase.from("magazzino").select("*").eq("sala_id", salaId).order("nome_prodotto");
+    const { data, error } = await supabase.from("magazzino").select("*").eq("sala_id", salaId).order("nome_prodotto");
+    if (error) {
+      console.error("Errore Magazzino:", error.message);
+    }
     if (data) setProdotti(data);
   };
 
@@ -75,12 +82,11 @@ export default function Plancia({
       return alert("Inserisci una descrizione e un importo valido.");
     }
 
-    // Creiamo un "prodotto virtuale" per la voce manuale
     const prodottoManuale = {
       id: `manuale-${Date.now()}`,
       nome_prodotto: voceManualeDescrizione.trim(),
       prezzo_vendita: imp,
-      giacenza: 0, // Ininfluente per la voce manuale
+      giacenza: 0, 
       isManuale: true
     };
 
@@ -105,7 +111,6 @@ export default function Plancia({
     try {
       await supabase.from("tavoli").update({ conto_bar: nuovoConto, dettagli_bar: nuovoDettaglio }).eq("id", tavoloBar.id);
       
-      // Scaliamo dal magazzino SOLO i prodotti reali, non le voci manuali
       for (const voce of carrelloBar) {
         if (!voce.prodotto.isManuale) {
           const nuovaGiacenza = voce.prodotto.giacenza - voce.quantita;
@@ -179,7 +184,6 @@ export default function Plancia({
 
     try {
       if (modalita === 'INCASSO') {
-        // Scrittura Scorporata per Report Pulito
         if (tGioco > 0) {
           await supabase.from('movimenti_contabili').insert({ sala_id: salaId, importo: tGioco, descrizione: descBaseGioco, tipo_movimento: 'ENTRATA', causale_origine: 'Biliardi' });
         }
@@ -187,7 +191,6 @@ export default function Plancia({
           await supabase.from('movimenti_contabili').insert({ sala_id: salaId, importo: tBar, descrizione: `Consumazioni ${tavoloDaChiudere.nome_tavolo}: ${dettagliChiusura.dettagliBar}`, tipo_movimento: 'ENTRATA', causale_origine: 'Bar' });
         }
       } else {
-        // Scrittura Unificata per il Sospeso
         const descSospeso = `[SOSPESO - RIF: ${notaSospeso.trim().toUpperCase()}] ${descBaseGioco}${tBar > 0 ? ` + Consumazioni Bar` : ''}`;
         await supabase.from('movimenti_contabili').insert({ sala_id: salaId, importo: parseFloat(dettagliChiusura.totaleComplessivo), descrizione: descSospeso, tipo_movimento: 'ENTRATA', causale_origine: 'Incasso Sospeso' });
       }
@@ -236,7 +239,6 @@ export default function Plancia({
               
               {/* ZONA SINISTRA: PRODOTTI + INSERIMENTO MANUALE */}
               <div className="w-full lg:w-2/3 flex flex-col overflow-hidden gap-4">
-                {/* PRODOTTI DA MAGAZZINO */}
                 <div className="overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 content-start pb-4 border-b border-gray-800">
                   {prodotti.map(p => (
                     <button key={p.id} onClick={() => aggiungiProdotto(p)} className="bg-[#1A1D24] border-2 border-gray-700 hover:border-cyan-500 rounded-xl p-4 flex flex-col items-center transition-all active:scale-95 h-24 justify-center">
@@ -246,7 +248,7 @@ export default function Plancia({
                   ))}
                 </div>
 
-                {/* INSERIMENTO VOCE MANUALE (CUSTOM) */}
+                {/* INSERIMENTO VOCE MANUALE */}
                 <div className="bg-cyan-950/30 border border-cyan-900 rounded-xl p-4 mt-auto shrink-0">
                   <span className="block text-cyan-400 font-black uppercase text-xs mb-2 tracking-widest">Aggiungi Voce Libera</span>
                   <div className="flex gap-2">
@@ -374,52 +376,60 @@ export default function Plancia({
       <div className="w-full max-w-[1600px] bg-[#050505] rounded-[3rem] p-8 border-8 border-emerald-100/60">
         <div className="flex justify-between items-center border-b-2 border-gray-800 pb-8 mb-10">
           <div><p className="text-[10px] text-cyan-500 font-black uppercase tracking-widest">Pannello</p><h2 className="text-4xl font-black text-white uppercase italic">PLANCIA OPERATIVA</h2></div>
-          <button onClick={() => setActiveView && setActiveView('hub')} className="bg-gray-800/50 text-gray-400 hover:text-white px-8 py-4 rounded-xl font-black uppercase text-xs">← TORRE DI CONTROLLO</button>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
-          {tables.map((t) => {
-            const isOccupied = t.stato === 'occupato';
-            const contoBarCorrente = parseFloat(t.conto_bar || 0);
+        {/* FEEDBACK VISIVO SE NON CI SONO TAVOLI */}
+        {tables.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-700">
+            <span className="text-6xl mb-6">🎱</span>
+            <h3 className="text-white text-2xl font-black uppercase tracking-widest mb-2">Nessun Tavolo Configurato</h3>
+            <p className="text-gray-400 font-bold uppercase text-xs">Aggiungi i tavoli per questa sala dal database per iniziare.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
+            {tables.map((t) => {
+              const isOccupied = t.stato === 'occupato';
+              const contoBarCorrente = parseFloat(t.conto_bar || 0);
 
-            return (
-              <div key={t.id} className="p-8 rounded-[2rem] bg-black border-2 border-gray-700 flex flex-col gap-6 relative">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-3xl font-black text-white">{t.nome_tavolo}</h3>
-                  <div className={`px-4 py-2 rounded-full text-xs font-black ${isOccupied ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
-                    {isOccupied ? 'IN USO' : 'DISPONIBILE'}
-                  </div>
-                </div>
-                
-                <div className="py-8 bg-gray-100 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden">
-                  <span className="text-6xl font-mono font-black text-black">
-                    {isOccupied && t.ora_inizio ? getTempoTrascorso(t.ora_inizio) : "PRONTO"}
-                  </span>
-                  {isOccupied && contoBarCorrente > 0 && (
-                    <div className="absolute top-2 right-2 bg-amber-200 text-amber-900 px-3 py-1 rounded-lg font-black text-xs uppercase border border-amber-400">
-                      Bar: €{contoBarCorrente.toFixed(2)}
+              return (
+                <div key={t.id} className="p-8 rounded-[2rem] bg-black border-2 border-gray-700 flex flex-col gap-6 relative">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-3xl font-black text-white">{t.nome_tavolo}</h3>
+                    <div className={`px-4 py-2 rounded-full text-xs font-black ${isOccupied ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
+                      {isOccupied ? 'IN USO' : 'DISPONIBILE'}
                     </div>
+                  </div>
+                  
+                  <div className="py-8 bg-gray-100 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden">
+                    <span className="text-6xl font-mono font-black text-black">
+                      {isOccupied && t.ora_inizio ? getTempoTrascorso(t.ora_inizio) : "PRONTO"}
+                    </span>
+                    {isOccupied && contoBarCorrente > 0 && (
+                      <div className="absolute top-2 right-2 bg-amber-200 text-amber-900 px-3 py-1 rounded-lg font-black text-xs uppercase border border-amber-400">
+                        Bar: €{contoBarCorrente.toFixed(2)}
+                      </div>
+                    )}
+                  </div>
+
+                  {isOccupied ? (
+                    <div className="flex gap-4">
+                      <button onClick={() => apriBarTavolo(t)} className="w-1/3 py-5 rounded-2xl font-black text-sm uppercase bg-cyan-900 hover:bg-cyan-800 text-cyan-100 border border-cyan-700 transition-all">
+                        + BAR
+                      </button>
+                      <button onClick={() => gestisciTavolo(t)} className="w-2/3 py-5 rounded-2xl font-black text-xl uppercase bg-red-600 hover:bg-red-500 text-white transition-all">
+                        CHIUDI TAVOLO
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => gestisciTavolo(t)} className="w-full py-5 rounded-2xl font-black text-xl uppercase bg-[#0f172a] text-white hover:bg-gray-800 transition-all">
+                      APRI SESSIONE
+                    </button>
                   )}
                 </div>
-
-                {isOccupied ? (
-                  <div className="flex gap-4">
-                    <button onClick={() => apriBarTavolo(t)} className="w-1/3 py-5 rounded-2xl font-black text-sm uppercase bg-cyan-900 hover:bg-cyan-800 text-cyan-100 border border-cyan-700 transition-all">
-                      + BAR
-                    </button>
-                    <button onClick={() => gestisciTavolo(t)} className="w-2/3 py-5 rounded-2xl font-black text-xl uppercase bg-red-600 hover:bg-red-500 text-white transition-all">
-                      CHIUDI TAVOLO
-                    </button>
-                  </div>
-                ) : (
-                  <button onClick={() => gestisciTavolo(t)} className="w-full py-5 rounded-2xl font-black text-xl uppercase bg-[#0f172a] text-white hover:bg-gray-800 transition-all">
-                    APRI SESSIONE
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
