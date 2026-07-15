@@ -54,7 +54,6 @@ export default function Prenotazioni({ salaId }: { salaId: string }) {
   async function gestisciSubmit(e: React.FormEvent) {
     e.preventDefault();
     
-    // SISTEMA DI AVVISO (Evita il "falso silenzio")
     if (!nomeCliente.trim() || !dataOra) {
       alert("⚠️ Attenzione: Compila il Nome Cliente e la Data/Ora per confermare la prenotazione.");
       return;
@@ -73,12 +72,11 @@ export default function Prenotazioni({ salaId }: { salaId: string }) {
       }]);
 
       if (error) {
-        alert("ERRORE DI SALVATAGGIO: " + error.message);
+        setErroreDiagnostica(error.message);
       } else {
         setSuccesso(`PRENOTAZIONE "${nomeCliente}" CONFERMATA!`);
         setTimeout(() => setSuccesso(null), 3000);
 
-        // Reset del form
         setNomeCliente(''); 
         setTavoloNumero(''); 
         setDataOra(''); 
@@ -88,7 +86,7 @@ export default function Prenotazioni({ salaId }: { salaId: string }) {
         caricaPrenotazioni();
       }
     } catch (err: any) {
-      alert("Errore di rete: " + err.message);
+      setErroreDiagnostica(err.message);
     } finally {
       setLoading(false);
     }
@@ -119,7 +117,7 @@ export default function Prenotazioni({ salaId }: { salaId: string }) {
       .eq('id', id);
 
     if (error) {
-      alert("ERRORE DURANTE LA MODIFICA: " + error.message);
+      setErroreDiagnostica(error.message);
     } else {
       setSuccesso("PRENOTAZIONE AGGIORNATA!");
       setTimeout(() => setSuccesso(null), 3000);
@@ -137,14 +135,14 @@ export default function Prenotazioni({ salaId }: { salaId: string }) {
           .eq('id', id);
 
         if (error) {
-          alert("ERRORE DURANTE L'ANNULLAMENTO: " + error.message);
+          setErroreDiagnostica(error.message);
         } else {
           setSuccesso("PRENOTAZIONE ELIMINATA CON SUCCESSO!");
           setTimeout(() => setSuccesso(null), 3000);
           caricaPrenotazioni();
         }
       } catch (err: any) {
-        alert("Errore di rete: " + err.message);
+        setErroreDiagnostica(err.message);
       }
     }
   }
@@ -213,8 +211,9 @@ export default function Prenotazioni({ salaId }: { salaId: string }) {
       )}
 
       {erroreDiagnostica && (
-        <div className="fixed top-10 left-1/2 transform -translate-x-1/2 bg-red-600 border-4 border-white text-white px-10 py-5 rounded-2xl shadow-2xl z-[100] font-black uppercase tracking-widest text-sm">
-          ERRORE DB: {erroreDiagnostica}
+        <div className="fixed top-10 left-1/2 transform -translate-x-1/2 bg-red-600 border-4 border-white text-white px-10 py-5 rounded-2xl shadow-2xl z-[100] font-black uppercase tracking-widest text-sm flex items-center justify-between gap-4">
+          <span>ERRORE DB: {erroreDiagnostica}</span>
+          <button onClick={() => setErroreDiagnostica(null)} className="text-white hover:text-gray-300">✖</button>
         </div>
       )}
 
@@ -226,7 +225,6 @@ export default function Prenotazioni({ salaId }: { salaId: string }) {
             <h2 className="text-4xl font-black text-white uppercase tracking-widest">PRENOTAZIONI SALA</h2>
           </div>
           
-          {/* PULSANTI DI INTESTAZIONE PULITI DA Z-INDEX INVASIVI */}
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
             <button 
               type="button"

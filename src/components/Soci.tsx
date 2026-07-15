@@ -2,7 +2,7 @@
 
 // ==========================================
 // FILE: src/components/Soci.tsx
-// OBIETTIVO: Componente motore per l'Anagrafica Soci (Logica e UI)
+// OBIETTIVO: Componente motore per l'Anagrafica Soci (Logica, UI e Sicurezza DB)
 // ==========================================
 
 import { useState, useEffect } from 'react';
@@ -50,7 +50,10 @@ export default function Soci({ salaId }: SociProps) {
         .eq('sala_id', salaId)
         .order('cognome', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        alert("ERRORE DATABASE (Lettura Soci): " + error.message);
+        throw error;
+      }
       if (data) setSoci(data);
     } catch (error) {
       console.error('Errore nel caricamento dei soci:', error);
@@ -74,15 +77,18 @@ export default function Soci({ salaId }: SociProps) {
         .from('soci')
         .insert([{
           sala_id: salaId,
-          nome: nuovoNome.trim(),
-          cognome: nuovoCognome.trim(),
+          nome: nuovoNome.trim().toUpperCase(), // Maiuscolo per standard DB
+          cognome: nuovoCognome.trim().toUpperCase(), // Maiuscolo per standard DB
           telefono: nuovoTelefono.trim() === "" ? null : nuovoTelefono.trim(),
-          email: nuovaEmail.trim() === "" ? null : nuovaEmail.trim(),
+          email: nuovaEmail.trim() === "" ? null : nuovaEmail.trim().toLowerCase(), // Minuscolo vitale per Login AppWeb!
           app_inviata: false
         }])
         .select();
 
-      if (error) throw error;
+      if (error) {
+        alert("ERRORE DATABASE (Salvataggio Socio): " + error.message);
+        throw error;
+      }
 
       if (data) {
         setSoci([...soci, data[0]].sort((a, b) => a.cognome.localeCompare(b.cognome)));
@@ -93,7 +99,7 @@ export default function Soci({ salaId }: SociProps) {
         alert("Socio registrato con successo!");
       }
     } catch (error) {
-      alert('Errore di connessione: impossibile salvare il socio.');
+      console.error('Errore di connessione:', error);
     } finally {
       setInInvia(false);
     }
@@ -164,10 +170,10 @@ export default function Soci({ salaId }: SociProps) {
             </div>
 
             <div>
-              <label className="block text-gray-400 text-xs font-bold uppercase mb-1">Email</label>
+              <label className="block text-gray-400 text-xs font-bold uppercase mb-1">Email (Per Login App)</label>
               <input 
                 type="email" placeholder="Es. mario@email.com" value={nuovaEmail}
-                onChange={(e) => nuovaEmail(e.target.value)}
+                onChange={(e) => setNuovaEmail(e.target.value)}
                 className="w-full bg-black text-white font-bold p-3 rounded-lg border border-gray-700 focus:border-emerald-500 focus:outline-none"
               />
             </div>
