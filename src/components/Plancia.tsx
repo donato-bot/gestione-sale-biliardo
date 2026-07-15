@@ -39,9 +39,8 @@ export default function Plancia({
   }, [salaId]);
 
   const fetchData = async () => {
-    // CORREZIONE CHIAVE: Rimosso completamente l'ordinamento (.order). 
-    // Ora il database non cercherà colonne inesistenti e farà passare i dati!
-    const { data, error } = await supabase.from("tavoli").select("*").eq("sala_id", salaId);
+    // Ordinamento corretto basato esattamente sulla tua colonna Supabase
+    const { data, error } = await supabase.from("tavoli").select("*").eq("sala_id", salaId).order("numero_tavolo");
     if (error) {
       alert("ERRORE DATABASE (Tavoli): " + error.message);
     }
@@ -127,16 +126,16 @@ export default function Plancia({
   };
 
   const gestisciTavolo = async (tavolo: any) => {
-    if (tavolo.stato === 'libero') {
+    if (tavolo.stato !== 'occupato') {
       await supabase.from('tavoli').update({ 
         stato: 'occupato', 
-        ora_inizio: new Date().toISOString(),
+        orario_inizio: new Date().toISOString(), // Usiamo orario_inizio come da DB
         conto_bar: 0,
         dettagli_bar: ''
       }).eq('id', tavolo.id);
       fetchData();
     } else {
-      const inizio = new Date(tavolo.ora_inizio).getTime();
+      const inizio = new Date(tavolo.orario_inizio).getTime();
       const diff = new Date().getTime() - inizio;
       const durataOre = diff / (1000 * 60 * 60);
       const costoGioco = parseFloat((durataOre * 8.00).toFixed(2));
@@ -177,8 +176,7 @@ export default function Plancia({
     const tGioco = parseFloat(dettagliChiusura.totaleGioco);
     const tBar = parseFloat(dettagliChiusura.totaleBar);
     
-    // Fallback visivo se mancano i nomi
-    const nomeTavoloStr = tavoloDaChiudere.nome_tavolo || tavoloDaChiudere.numero ? `Tavolo ${tavoloDaChiudere.numero}` : `Tavolo Sconosciuto`;
+    const nomeTavoloStr = tavoloDaChiudere.nome_tavolo || tavoloDaChiudere.numero_tavolo ? `Tavolo ${tavoloDaChiudere.numero_tavolo}` : `Tavolo Sconosciuto`;
     const descBaseGioco = `${nomeTavoloStr} (Durata: ${dettagliChiusura.durata})`;
 
     try {
@@ -194,7 +192,7 @@ export default function Plancia({
         await supabase.from('movimenti_contabili').insert({ sala_id: salaId, importo: parseFloat(dettagliChiusura.totaleComplessivo), descrizione: descSospeso, tipo_movimento: 'ENTRATA', causale_origine: 'Incasso Sospeso' });
       }
 
-      await supabase.from('tavoli').update({ stato: 'libero', ora_inizio: null, conto_bar: 0, dettagli_bar: '' }).eq('id', tavoloDaChiudere.id);
+      await supabase.from('tavoli').update({ stato: 'libero', orario_inizio: null, conto_bar: 0, dettagli_bar: '' }).eq('id', tavoloDaChiudere.id);
       
       setSuccesso(modalita === 'INCASSO' ? "SESSIONE CHIUSA E INCASSATA!" : "IMPORTO REGISTRATO COME SOSPESO!");
       setTimeout(() => setSuccesso(null), 3500);
@@ -231,11 +229,10 @@ export default function Plancia({
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
           <div className="bg-[#0B0D14] border-4 border-cyan-500 p-8 rounded-3xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[95vh]">
             <h2 className="text-3xl font-black mb-6 uppercase text-white border-b-2 border-gray-800 pb-4 text-center">
-              Servizio Bar ➔ {tavoloBar.nome_tavolo || (tavoloBar.numero ? `Tavolo ${tavoloBar.numero}` : `Tavolo Sconosciuto`)}
+              Servizio Bar ➔ {tavoloBar.nome_tavolo || (tavoloBar.numero_tavolo ? `Tavolo ${tavoloBar.numero_tavolo}` : `Tavolo Sconosciuto`)}
             </h2>
             
             <div className="flex flex-col lg:flex-row gap-6 overflow-hidden flex-1">
-              {/* ZONA SINISTRA: PRODOTTI + INSERIMENTO MANUALE */}
               <div className="w-full lg:w-2/3 flex flex-col overflow-hidden gap-4">
                 <div className="overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 content-start pb-4 border-b border-gray-800">
                   {prodotti.map(p => (
@@ -246,7 +243,6 @@ export default function Plancia({
                   ))}
                 </div>
 
-                {/* INSERIMENTO VOCE MANUALE */}
                 <div className="bg-cyan-950/30 border border-cyan-900 rounded-xl p-4 mt-auto shrink-0">
                   <span className="block text-cyan-400 font-black uppercase text-xs mb-2 tracking-widest">Aggiungi Voce Libera</span>
                   <div className="flex gap-2">
@@ -274,7 +270,6 @@ export default function Plancia({
                 </div>
               </div>
               
-              {/* ZONA DESTRA: CONTO CORRENTE */}
               <div className="w-full lg:w-1/3 bg-gray-100 rounded-2xl p-4 flex flex-col">
                 <h3 className="text-black font-black uppercase text-center mb-4 border-b-2 border-gray-300 pb-2">Conto Corrente</h3>
                 <div className="flex-1 overflow-y-auto space-y-2 mb-4">
@@ -376,7 +371,6 @@ export default function Plancia({
           <div><p className="text-[10px] text-cyan-500 font-black uppercase tracking-widest">Pannello</p><h2 className="text-4xl font-black text-white uppercase italic">PLANCIA OPERATIVA</h2></div>
         </div>
 
-        {/* FEEDBACK VISIVO SE NON CI SONO TAVOLI */}
         {tables.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-700">
             <span className="text-6xl mb-6">🎱</span>
@@ -392,7 +386,8 @@ export default function Plancia({
               return (
                 <div key={t.id} className="p-8 rounded-[2rem] bg-black border-2 border-gray-700 flex flex-col gap-6 relative">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-3xl font-black text-white">{t.nome_tavolo || (t.numero ? `Tavolo ${t.numero}` : `Tavolo Sconosciuto`)}</h3>
+                    {/* Qui stampa finalmente i nomi reali o i numeri corretti */}
+                    <h3 className="text-3xl font-black text-white">{t.nome_tavolo || (t.numero_tavolo ? `Tavolo ${t.numero_tavolo}` : `Tavolo Sconosciuto`)}</h3>
                     <div className={`px-4 py-2 rounded-full text-xs font-black ${isOccupied ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
                       {isOccupied ? 'IN USO' : 'DISPONIBILE'}
                     </div>
@@ -400,7 +395,8 @@ export default function Plancia({
                   
                   <div className="py-8 bg-gray-100 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden">
                     <span className="text-6xl font-mono font-black text-black">
-                      {isOccupied && t.ora_inizio ? getTempoTrascorso(t.ora_inizio) : "PRONTO"}
+                      {/* Il cronometro ora leggerà orario_inizio */}
+                      {isOccupied && t.orario_inizio ? getTempoTrascorso(t.orario_inizio) : "PRONTO"}
                     </span>
                     {isOccupied && contoBarCorrente > 0 && (
                       <div className="absolute top-2 right-2 bg-amber-200 text-amber-900 px-3 py-1 rounded-lg font-black text-xs uppercase border border-amber-400">
