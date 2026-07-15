@@ -2,7 +2,7 @@
 
 // ==========================================
 // FILE: src/components/Tornei.tsx
-// OBIETTIVO: Componente Motore Avanzato Tornei (Sbloccato e Retrocompatibile)
+// OBIETTIVO: Componente Motore Avanzato Tornei (Allineato al DB Originale)
 // ==========================================
 
 import { useState, useEffect } from "react";
@@ -46,7 +46,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
   const urlSoci = typeof window !== "undefined" ? `${window.location.origin}/club/${salaId}` : "";
 
   // ==========================================
-  // FETCH INIZIALE CON SISTEMA DI ALLARME
+  // FETCH INIZIALE
   // ==========================================
   async function fetchTornei(isInitial = false) {
     if (!salaId) return;
@@ -103,14 +103,14 @@ export default function Tornei({ salaId }: { salaId: string }) {
     if (!nomeTorneo || !quota) return;
     setLoading(true);
     
-    // CORREZIONE VOCABOLARIO DB: titolo e descrizione
+    // ALLINEAMENTO PERFETTO CON IL TUO DATABASE
     const payload = {
       sala_id: salaId, 
       titolo: nomeTorneo, 
-      disciplina, 
-      max_iscritti: parseInt(iscrittiMax), 
-      quota: parseFloat(quota), 
-      formula, 
+      specialita: disciplina, 
+      max_partecipanti: parseInt(iscrittiMax), 
+      quota_iscrizione: parseFloat(quota), 
+      formato: formula, 
       stato: 'iscrizioni',
       data_inizio: dataInizio || null,
       data_fine: dataFine || null,
@@ -129,13 +129,14 @@ export default function Tornei({ salaId }: { salaId: string }) {
   };
 
   const apriModifica = () => {
+    // PRECARICAMENTO DATI USANDO I NOMI DEL DB
     setEditForm({
       nome: torneoSelezionato.titolo || "",
-      disciplina: torneoSelezionato.disciplina || "5 Birilli",
-      max_iscritti: torneoSelezionato.max_iscritti || 32,
-      quota: torneoSelezionato.quota || 0,
-      formula: torneoSelezionato.formula || "Eliminazione Diretta",
-      data_inizio: torneoSelezionato.data_inizio || "",
+      disciplina: torneoSelezionato.specialita || "5 Birilli",
+      max_iscritti: torneoSelezionato.max_partecipanti || 32,
+      quota: torneoSelezionato.quota_iscrizione || 0,
+      formula: torneoSelezionato.formato || "Eliminazione Diretta",
+      data_inizio: torneoSelezionato.data_inizio ? torneoSelezionato.data_inizio.split('T')[0] : "",
       data_fine: torneoSelezionato.data_fine || "",
       scadenza_iscrizioni: torneoSelezionato.scadenza_iscrizioni || "",
       note: torneoSelezionato.descrizione || ""
@@ -149,10 +150,10 @@ export default function Tornei({ salaId }: { salaId: string }) {
 
     const payload = {
       titolo: editForm.nome,
-      disciplina: editForm.disciplina,
-      max_iscritti: parseInt(editForm.max_iscritti),
-      quota: parseFloat(editForm.quota),
-      formula: editForm.formula,
+      specialita: editForm.disciplina,
+      max_partecipanti: parseInt(editForm.max_iscritti),
+      quota_iscrizione: parseFloat(editForm.quota),
+      formato: editForm.formula,
       data_inizio: editForm.data_inizio || null,
       data_fine: editForm.data_fine || null,
       scadenza_iscrizioni: editForm.scadenza_iscrizioni || null,
@@ -177,14 +178,13 @@ export default function Tornei({ salaId }: { salaId: string }) {
   // ==========================================
   const handleIscriviGiocatore = async (e: any) => {
     e.preventDefault();
-    if (iscritti.length >= torneoSelezionato.max_iscritti) {
+    if (iscritti.length >= (torneoSelezionato.max_partecipanti || 32)) {
       alert("🚨 Attenzione: Raggiunto il limite massimo di iscritti per questo torneo!");
       return;
     }
     
     if (!nomeGiocatore) return;
     
-    // CORREZIONE VOCABOLARIO DB: nome_completo
     const { error } = await supabase.from('iscritti_torneo').insert([{ torneo_id: torneoSelezionato.id, nome_completo: nomeGiocatore, pagato: quotaPagata }]);
     
     if (error) alert(`ERRORE DATABASE (Iscrizione): ${error.message}`);
@@ -515,7 +515,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
             <div className="col-span-1 md:col-span-8 bg-transparent border border-gray-700 rounded-2xl p-6 flex flex-col min-h-[500px]">
               <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
                 <h3 className="text-sm font-black uppercase tracking-widest text-white">Elenco Giocatori</h3>
-                <span className="bg-[#1A1D24] px-3 py-1 rounded-md text-[10px] text-white font-black tracking-widest">ISCRITTI: {iscritti.length} / {torneoSelezionato.max_iscritti}</span>
+                <span className="bg-[#1A1D24] px-3 py-1 rounded-md text-[10px] text-white font-black tracking-widest">ISCRITTI: {iscritti.length} / {torneoSelezionato.max_partecipanti || 32}</span>
               </div>
               <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                 {iscritti.length === 0 ? <div className="h-full flex items-center justify-center opacity-50"><p className="font-black text-sm uppercase tracking-widest">Nessun giocatore iscritto</p></div> 
@@ -534,13 +534,13 @@ export default function Tornei({ salaId }: { salaId: string }) {
             <div className="col-span-1 md:col-span-4 bg-transparent border border-gray-700 rounded-2xl p-6 h-fit sticky top-6">
               <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-[#E91E63] border-b border-gray-800 pb-4">Nuovo Iscritto</h3>
               <form onSubmit={handleIscriviGiocatore} className="space-y-5">
-                <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63]" placeholder="Es. Mario Rossi" value={nomeGiocatore} onChange={(e) => setNomeGiocatore(e.target.value)} disabled={iscritti.length >= torneoSelezionato.max_iscritti} />
+                <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63]" placeholder="Es. Mario Rossi" value={nomeGiocatore} onChange={(e) => setNomeGiocatore(e.target.value)} disabled={iscritti.length >= (torneoSelezionato.max_partecipanti || 32)} />
                 <label className="flex items-center gap-3 cursor-pointer p-3 bg-[#1A1D24] border border-[#2A2E39] rounded-lg">
-                  <input type="checkbox" className="w-5 h-5 accent-[#E91E63]" checked={quotaPagata} onChange={(e) => setQuotaPagata(e.target.checked)} disabled={iscritti.length >= torneoSelezionato.max_iscritti}/>
-                  <span className="text-sm font-bold text-white">Quota Versata (€ {torneoSelezionato.quota})</span>
+                  <input type="checkbox" className="w-5 h-5 accent-[#E91E63]" checked={quotaPagata} onChange={(e) => setQuotaPagata(e.target.checked)} disabled={iscritti.length >= (torneoSelezionato.max_partecipanti || 32)}/>
+                  <span className="text-sm font-bold text-white">Quota Versata (€ {torneoSelezionato.quota_iscrizione})</span>
                 </label>
-                <button type="submit" disabled={!nomeGiocatore && iscritti.length < torneoSelezionato.max_iscritti} className={`w-full py-4 rounded-xl font-black uppercase text-sm mt-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${iscritti.length >= torneoSelezionato.max_iscritti ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-[#E91E63] text-white hover:bg-[#C2185B]'}`}>
-                  {iscritti.length >= torneoSelezionato.max_iscritti ? "Torneo Completo" : "Iscrivi"}
+                <button type="submit" disabled={!nomeGiocatore && iscritti.length < (torneoSelezionato.max_partecipanti || 32)} className={`w-full py-4 rounded-xl font-black uppercase text-sm mt-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${iscritti.length >= (torneoSelezionato.max_partecipanti || 32) ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-[#E91E63] text-white hover:bg-[#C2185B]'}`}>
+                  {iscritti.length >= (torneoSelezionato.max_partecipanti || 32) ? "Torneo Completo" : "Iscrivi"}
                 </button>
               </form>
               <div className="mt-8 pt-6 border-t border-gray-800">
@@ -566,7 +566,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
                       <div>
                         <h4 className="text-white font-black text-lg uppercase tracking-tight group-hover:text-[#E91E63] transition-colors">{torneo.titolo}</h4>
                         <div className="flex gap-3 mt-2">
-                          <span className="text-[10px] text-[#00E5FF] font-black uppercase bg-[#00E5FF]/10 px-2 py-0.5 rounded-sm">{torneo.disciplina}</span>
+                          <span className="text-[10px] text-[#00E5FF] font-black uppercase bg-[#00E5FF]/10 px-2 py-0.5 rounded-sm">{torneo.specialita}</span>
                           <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-sm ${torneo.stato === 'in_corso' ? 'bg-[#00E676]/10 text-[#00E676]' : (torneo.stato === 'concluso' ? 'bg-gray-600/20 text-gray-400' : 'bg-[#FFCC00]/10 text-[#FFCC00]')}`}>
                             {torneo.stato === 'in_corso' ? 'In Corso' : (torneo.stato === 'concluso' ? 'Concluso' : 'Iscrizioni Aperte')}
                           </span>
