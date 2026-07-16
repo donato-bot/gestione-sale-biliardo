@@ -14,6 +14,7 @@ export default function SocioPage() {
   const [email, setEmail] = useState("");
   const [socio, setSocio] = useState<any>(null);
   const [tavoli, setTavoli] = useState<any[]>([]);
+  const [miePrenotazioni, setMiePrenotazioni] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"login" | "dashboard" | "prenota">("login");
   const [selectedTable, setSelectedTable] = useState("");
@@ -35,6 +36,22 @@ export default function SocioPage() {
     fetchTavoli();
   }, [salaId]);
 
+  // Nuova funzione per caricare lo storico prenotazioni del socio
+  const caricaLeMiePrenotazioni = async (socioData: any) => {
+    const nomeCompleto = `${socioData.cognome} ${socioData.nome}`;
+    const { data, error } = await supabase
+      .from('prenotazioni')
+      .select('*')
+      .eq('sala_id', socioData.sala_id)
+      .eq('nome_cliente', nomeCompleto)
+      .order('data_ora', { ascending: false })
+      .limit(5); // Mostriamo le ultime 5
+      
+    if (data) {
+      setMiePrenotazioni(data);
+    }
+  };
+
   const loginSocio = async () => {
     if (!email.trim()) return;
     setLoading(true);
@@ -49,6 +66,7 @@ export default function SocioPage() {
       alert("❌ Email non trovata. Assicurati di essere registrato al Club.");
     } else {
       setSocio(data);
+      await caricaLeMiePrenotazioni(data); // Carichiamo le prenotazioni appena fatto il login
       setView("dashboard");
     }
     setLoading(false);
@@ -80,7 +98,8 @@ export default function SocioPage() {
     if (error) {
       alert("ERRORE DATABASE (Prenotazione): " + error.message);
     } else {
-      alert("✅ Prenotazione inviata con successo all'Agenda del Club!");
+      alert("✅ Prenotazione confermata!");
+      await caricaLeMiePrenotazioni(socio); // Aggiorniamo la lista in tempo reale
       setView("dashboard");
       setBookingTime(""); 
       setSelectedTable(""); 
@@ -113,6 +132,45 @@ export default function SocioPage() {
             <p className="text-6xl font-black text-white">€ {parseFloat(socio.credito || 0).toFixed(2)}</p>
         </div>
 
+        {/* SEZIONE: LE MIE PRENOTAZIONI */}
+        <div className="bg-gray-900/50 border border-gray-800 rounded-[2rem] p-6 mb-8 shadow-inner">
+          <h3 className="text-sm font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#8B5CF6]"></span>
+            Le Mie Prenotazioni
+          </h3>
+          
+          {miePrenotazioni.length === 0 ? (
+            <div className="text-center py-6">
+              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Nessuna prenotazione recente</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {miePrenotazioni.map((p) => {
+                 const dataPrenotazione = new Date(p.data_ora);
+                 const isPassata = dataPrenotazione < new Date();
+                 
+                 return (
+                   <div key={p.id} className="bg-black border border-gray-800 p-4 rounded-2xl flex justify-between items-center">
+                     <div>
+                       <p className="text-white font-black uppercase text-xs">{p.tavolo_numero}</p>
+                       <p className="text-gray-400 text-[10px] font-bold uppercase mt-1">
+                         {dataPrenotazione.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                       </p>
+                     </div>
+                     <div>
+                       {isPassata ? (
+                         <span className="bg-gray-800 text-gray-400 px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest">Conclusa</span>
+                       ) : (
+                         <span className="bg-green-600/20 text-green-500 px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest">Confermata</span>
+                       )}
+                     </div>
+                   </div>
+                 )
+              })}
+            </div>
+          )}
+        </div>
+
         {socio && <BachecaSocio salaId={socio.sala_id} socioId={socio.id} />}
 
         <button onClick={() => setView("prenota")} className="w-full bg-white text-black hover:bg-gray-200 transition-colors font-black py-6 rounded-3xl mt-8 shadow-lg uppercase tracking-widest text-sm">
@@ -128,31 +186,41 @@ export default function SocioPage() {
             <button onClick={() => setView("dashboard")} className="mb-8 text-gray-500 hover:text-white text-xs font-bold uppercase tracking-widest">← Indietro</button>
             <h2 className="text-3xl font-black uppercase mb-8 italic">Scegli sessione</h2>
             
-            {/* CORREZIONE MOBILE: Aggiunto style={{ colorScheme: 'dark' }} per forzare i menu nativi di Android/iOS in modalità scura */}
-            <select 
-              value={selectedTable} 
-              onChange={(e) => setSelectedTable(e.target.value)} 
-              className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-4 outline-none focus:border focus:border-green-500 cursor-pointer"
-              style={{ colorScheme: 'dark' }}
-            >
-                <option value="">Seleziona Tavolo...</option>
+            <div className="mb-6">
+              <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-3 block">Seleziona il Tavolo</label>
+              <div className="grid grid-cols-2 gap-3">
                 {tavoli.map(t => (
-                  <option key={t.id} value={t.id} disabled={t.stato === 'manutenzione'}>
-                    Tavolo {t.numero_tavolo || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}
-                  </option>
+                  <button
+                    key={t.id}
+                    onClick={() => setSelectedTable(t.id)}
+                    disabled={t.stato === 'manutenzione'}
+                    className={`p-4 rounded-2xl font-black uppercase text-xs transition-all border-2 ${
+                      selectedTable === t.id
+                        ? 'bg-green-600 border-green-500 text-black shadow-[0_0_15px_rgba(34,197,94,0.3)]'
+                        : t.stato === 'manutenzione'
+                        ? 'bg-gray-900/50 border-gray-800 text-gray-600 cursor-not-allowed'
+                        : 'bg-gray-900 border-gray-800 text-white hover:border-gray-600'
+                    }`}
+                  >
+                    Tavolo {t.numero_tavolo || t.nome_tavolo}
+                    {t.stato === 'manutenzione' && <span className="block text-[9px] mt-1 text-red-500 tracking-widest">Manutenzione</span>}
+                  </button>
                 ))}
-            </select>
+              </div>
+            </div>
             
-            {/* Stesso trucco per il calendario nativo del telefono */}
-            <input 
-              type="datetime-local" 
-              value={bookingTime} 
-              onChange={(e) => setBookingTime(e.target.value)} 
-              className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-8 outline-none focus:border focus:border-green-500 cursor-pointer" 
-              style={{ colorScheme: 'dark' }}
-            />
+            <div className="mb-8">
+              <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-3 block">Data e Ora</label>
+              <input 
+                type="datetime-local" 
+                value={bookingTime} 
+                onChange={(e) => setBookingTime(e.target.value)} 
+                className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl outline-none border-2 border-gray-800 focus:border-green-500 cursor-pointer" 
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
             
-            <button onClick={confermaPrenotazione} disabled={loading} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 py-6 rounded-3xl font-black uppercase tracking-widest transition-colors shadow-lg">
+            <button onClick={confermaPrenotazione} disabled={loading || !selectedTable || !bookingTime} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 disabled:text-gray-500 py-6 rounded-3xl font-black uppercase tracking-widest transition-colors shadow-lg">
               {loading ? "ELABORAZIONE..." : "CONFERMA"}
             </button>
         </div>
