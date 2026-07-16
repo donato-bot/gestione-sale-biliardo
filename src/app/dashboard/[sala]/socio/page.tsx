@@ -13,10 +13,11 @@ export default function SocioPage() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"login" | "dashboard" | "prenota">("login");
   const [selectedTable, setSelectedTable] = useState("");
-  const [bookingTime, setBookingTime] = useState("");
+  const [bookingTime, setBookingTime] = useState(""); // Ora sarà un formato Data e Ora
 
   useEffect(() => {
     async function fetchTavoli() {
+      // Continuiamo a leggere i tavoli per mostrarli nel menu a tendina
       const { data, error } = await supabase.from('tavoli').select('*').order('numero', { ascending: true });
       if (error) console.error("Errore lettura tavoli AppWeb:", error.message);
       if (data) setTavoli(data);
@@ -28,7 +29,6 @@ export default function SocioPage() {
     if (!email.trim()) return;
     setLoading(true);
     
-    // Sistema di allarme: controlliamo se l'email esiste
     const { data, error } = await supabase
       .from('soci')
       .select('*')
@@ -45,21 +45,34 @@ export default function SocioPage() {
   };
 
   const confermaPrenotazione = async () => {
-    if (!selectedTable || !bookingTime) { alert("Seleziona tavolo e orario!"); return; }
+    if (!selectedTable || !bookingTime) { 
+      alert("Seleziona tavolo e orario (Giorno e Ora)!"); 
+      return; 
+    }
     setLoading(true);
     
+    // Recuperiamo il nome del tavolo selezionato per scriverlo in Agenda
+    const tavoloObj = tavoli.find(t => t.id === selectedTable);
+    const nomeTavoloScelto = tavoloObj ? `Tavolo ${tavoloObj.numero || tavoloObj.nome_tavolo}` : "Tavolo Generico";
+
+    // IL PONTE CON LA TUA AGENDA: Scriviamo nella tabella 'prenotazioni'
     const { error } = await supabase
-      .from('tavoli')
-      .update({ stato: 'prenotato', prenotato_da: `${socio.nome} ${socio.cognome}`, prenotato_alle: bookingTime })
-      .eq('id', selectedTable);
+      .from('prenotazioni')
+      .insert([{
+        sala_id: socio.sala_id,
+        nome_cliente: `${socio.cognome} ${socio.nome}`,
+        tavolo_numero: nomeTavoloScelto,
+        data_ora: new Date(bookingTime).toISOString(),
+        note: "[APP SOCI] Prenotazione inviata automaticamente da smartphone."
+      }]);
 
     if (error) {
       alert("ERRORE DATABASE (Prenotazione): " + error.message);
     } else {
-      alert("✅ Prenotazione inviata!");
+      alert("✅ Prenotazione inviata con successo all'Agenda del Club!");
       setView("dashboard");
-      const { data } = await supabase.from('tavoli').select('*').order('numero', { ascending: true });
-      if (data) setTavoli(data);
+      setBookingTime(""); // Reset
+      setSelectedTable(""); // Reset
     }
     setLoading(false);
   };
@@ -68,7 +81,7 @@ export default function SocioPage() {
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm text-center">
         <h1 className="text-4xl font-black text-green-500 mb-8 italic">Biliardo Royal</h1>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="La tua Email" className="w-full bg-gray-900 p-5 rounded-2xl mb-4 text-center outline-none focus:border focus:border-green-500" />
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="La tua Email" className="w-full bg-gray-900 p-5 rounded-2xl mb-4 text-center outline-none focus:border focus:border-green-500 font-bold" />
         <button onClick={loginSocio} disabled={loading} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 py-5 rounded-2xl font-black transition-colors">
           {loading ? "VERIFICA IN CORSO..." : "ACCEDI"}
         </button>
@@ -81,16 +94,14 @@ export default function SocioPage() {
       <div className="max-w-sm mx-auto">
         <div className="flex justify-between items-center mb-8">
             <h2 className="text-2xl font-black italic text-white">Ciao, <span className="text-green-500">{socio.nome}</span>!</h2>
-            <button onClick={() => setView("login")} className="text-xs font-bold uppercase text-gray-500 hover:text-white">Esci</button>
+            <button onClick={() => {setView("login"); setEmail("");}} className="text-xs font-bold uppercase text-gray-500 hover:text-white">Esci</button>
         </div>
         
         <div className="bg-gray-900 rounded-[2.5rem] p-8 border-2 border-green-600/30 shadow-[0_0_30px_rgba(34,197,94,0.1)] mb-8">
             <p className="text-green-500 text-xs font-bold uppercase tracking-widest mb-2">Il tuo Credito</p>
-            {/* Ora che hai creato la colonna 'credito' su Supabase, questa riga funzionerà alla perfezione */}
             <p className="text-6xl font-black text-white">€ {parseFloat(socio.credito || 0).toFixed(2)}</p>
         </div>
 
-        {/* INTEGRAZIONE BACHECA */}
         {socio && <BachecaSocio salaId={socio.sala_id} socioId={socio.id} />}
 
         <button onClick={() => setView("prenota")} className="w-full bg-white text-black hover:bg-gray-200 transition-colors font-black py-6 rounded-3xl mt-8 shadow-lg uppercase tracking-widest text-sm">
@@ -108,10 +119,11 @@ export default function SocioPage() {
             
             <select value={selectedTable} onChange={(e) => setSelectedTable(e.target.value)} className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-4 outline-none focus:border focus:border-green-500 appearance-none">
                 <option value="">Seleziona Tavolo...</option>
-                {tavoli.map(t => <option key={t.id} value={t.id} disabled={t.stato !== 'libero'}>Tavolo {t.numero || t.nome_tavolo} {t.stato !== 'libero' && '(Occupato)'}</option>)}
+                {tavoli.map(t => <option key={t.id} value={t.id} disabled={t.stato === 'manutenzione'}>Tavolo {t.numero || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}</option>)}
             </select>
             
-            <input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-8 outline-none focus:border focus:border-green-500" />
+            {/* AGGIORNATO DA TYPE="TIME" A TYPE="DATETIME-LOCAL" */}
+            <input type="datetime-local" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-8 outline-none focus:border focus:border-green-500" />
             
             <button onClick={confermaPrenotazione} disabled={loading} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 py-6 rounded-3xl font-black uppercase tracking-widest transition-colors shadow-lg">
               {loading ? "ELABORAZIONE..." : "CONFERMA"}
