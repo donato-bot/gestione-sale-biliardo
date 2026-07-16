@@ -64,12 +64,14 @@ export default function SocioPage() {
     const tavoloObj = tavoli.find(t => t.id === selectedTable);
     const nomeTavoloScelto = tavoloObj ? `Tavolo ${tavoloObj.numero_tavolo || tavoloObj.nome_tavolo || ''}` : "Tavolo Generico";
 
-    // IL PACCHETTO COMPLETO (Ora include anche manager_email)
+    // PIANO B INFALLIBILE: Se il socio è vecchio e non ha la tua email, la peschiamo dal tavolo!
+    const emailGestore = socio.manager_email || (tavoloObj ? tavoloObj.manager_email : null);
+
     const { error } = await supabase
       .from('prenotazioni')
       .insert([{
         sala_id: socio.sala_id,
-        manager_email: socio.manager_email, // <-- ECCO LA CHIAVE DI SICUREZZA CHE MANCAVA!
+        manager_email: emailGestore, // Usiamo la variabile corazzata
         nome_cliente: `${socio.cognome} ${socio.nome}`,
         tavolo_numero: nomeTavoloScelto,
         data_ora: new Date(bookingTime).toISOString(),
