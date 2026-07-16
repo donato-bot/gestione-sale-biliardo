@@ -128,40 +128,31 @@ export default function SocioPage() {
             <button onClick={() => setView("dashboard")} className="mb-8 text-gray-500 hover:text-white text-xs font-bold uppercase tracking-widest">← Indietro</button>
             <h2 className="text-3xl font-black uppercase mb-8 italic">Scegli sessione</h2>
             
-            {/* NUOVO SISTEMA: Pulsantiera a griglia invece della tendina */}
-            <div className="mb-8">
-              <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-3">Seleziona il Biliardo</p>
-              <div className="grid grid-cols-2 gap-3">
+            {/* CORREZIONE MOBILE: Aggiunto style={{ colorScheme: 'dark' }} per forzare i menu nativi di Android/iOS in modalità scura */}
+            <select 
+              value={selectedTable} 
+              onChange={(e) => setSelectedTable(e.target.value)} 
+              className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-4 outline-none focus:border focus:border-green-500 cursor-pointer"
+              style={{ colorScheme: 'dark' }}
+            >
+                <option value="">Seleziona Tavolo...</option>
                 {tavoli.map(t => (
-                  <button 
-                    key={t.id}
-                    onClick={() => setSelectedTable(t.id)}
-                    disabled={t.stato === 'manutenzione'}
-                    className={`py-4 rounded-xl font-black border transition-all ${
-                      selectedTable === t.id 
-                        ? 'bg-green-600 border-green-500 text-black shadow-[0_0_15px_rgba(34,197,94,0.4)]' 
-                        : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'
-                    } ${t.stato === 'manutenzione' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    TAVOLO {t.numero_tavolo || t.nome_tavolo}
-                    {t.stato === 'manutenzione' && <span className="block text-[9px] text-red-500 mt-1 uppercase">Manutenzione</span>}
-                  </button>
+                  <option key={t.id} value={t.id} disabled={t.stato === 'manutenzione'}>
+                    Tavolo {t.numero_tavolo || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}
+                  </option>
                 ))}
-              </div>
-            </div>
+            </select>
             
-            <div className="mb-10">
-              <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-3">Data e Ora</p>
-              <input 
-                type="datetime-local" 
-                value={bookingTime} 
-                onChange={(e) => setBookingTime(e.target.value)} 
-                className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl outline-none focus:border focus:border-green-500 cursor-pointer" 
-                style={{ colorScheme: 'dark' }}
-              />
-            </div>
+            {/* Stesso trucco per il calendario nativo del telefono */}
+            <input 
+              type="datetime-local" 
+              value={bookingTime} 
+              onChange={(e) => setBookingTime(e.target.value)} 
+              className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-8 outline-none focus:border focus:border-green-500 cursor-pointer" 
+              style={{ colorScheme: 'dark' }}
+            />
             
-            <button onClick={confermaPrenotazione} disabled={loading} className="w-full bg-white hover:bg-gray-200 text-black disabled:bg-gray-800 disabled:text-gray-500 py-6 rounded-3xl font-black uppercase tracking-widest transition-colors shadow-lg">
+            <button onClick={confermaPrenotazione} disabled={loading} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 py-6 rounded-3xl font-black uppercase tracking-widest transition-colors shadow-lg">
               {loading ? "ELABORAZIONE..." : "CONFERMA"}
             </button>
         </div>
