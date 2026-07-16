@@ -2,7 +2,7 @@
 
 // ==========================================
 // FILE: src/components/Tornei.tsx
-// OBIETTIVO: Componente Motore Avanzato Tornei (Allineato al DB Originale)
+// OBIETTIVO: Componente Motore Tornei - Fase 3 (Ponte con Anagrafica Soci)
 // ==========================================
 
 import { useState, useEffect } from "react";
@@ -29,7 +29,12 @@ export default function Tornei({ salaId }: { salaId: string }) {
   const [torneoSelezionato, setTorneoSelezionato] = useState<any>(null);
   const [iscritti, setIscritti] = useState<any[]>([]);
   const [partite, setPartite] = useState<any[]>([]);
-  const [nomeGiocatore, setNomeGiocatore] = useState("");
+  
+  // STATI DEL PONTE (SOCI)
+  const [listaSoci, setListaSoci] = useState<any[]>([]);
+  const [tipoIscrizione, setTipoIscrizione] = useState<'socio' | 'esterno'>('socio');
+  const [socioSelezionato, setSocioSelezionato] = useState("");
+  const [nomeGiocatoreEsterno, setNomeGiocatoreEsterno] = useState("");
   const [quotaPagata, setQuotaPagata] = useState(false);
 
   // LIVELLO 3: DIREZIONE GARA & VISUALIZZAZIONE
@@ -46,7 +51,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
   const urlSoci = typeof window !== "undefined" ? `${window.location.origin}/club/${salaId}` : "";
 
   // ==========================================
-  // FETCH INIZIALE
+  // FETCH INIZIALE E SOCI
   // ==========================================
   async function fetchTornei(isInitial = false) {
     if (!salaId) return;
@@ -56,9 +61,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
       .eq('sala_id', salaId)
       .order('created_at', { ascending: false });
     
-    if (error) {
-      alert(`ERRORE DATABASE (Lettura Tornei): ${error.message}`);
-    }
+    if (error) alert(`ERRORE DATABASE (Lettura Tornei): ${error.message}`);
     
     if (data) {
       setTorneiList(data);
@@ -69,25 +72,32 @@ export default function Tornei({ salaId }: { salaId: string }) {
     }
   }
 
+  async function fetchSoci() {
+    if (!salaId) return;
+    const { data, error } = await supabase
+      .from('soci')
+      .select('id, nome, cognome')
+      .eq('sala_id', salaId)
+      .order('cognome', { ascending: true });
+      
+    if (error) console.error("Errore caricamento soci nel modulo Tornei:", error.message);
+    if (data) setListaSoci(data);
+  }
+
   useEffect(() => {
     fetchTornei(true);
+    fetchSoci(); // Carichiamo i soci all'avvio del modulo
   }, [salaId]);
 
   async function fetchIscrittiEPartite(torneo: any) {
     const resIscritti = await supabase.from('iscritti_torneo').select('*').eq('torneo_id', torneo.id).order('created_at', { ascending: true });
-    if (resIscritti.error) {
-       alert(`ERRORE DATABASE (Lettura Iscritti): ${resIscritti.error.message}`);
-    } else if (resIscritti.data) {
-       setIscritti(resIscritti.data);
-    }
+    if (resIscritti.error) alert(`ERRORE DATABASE (Lettura Iscritti): ${resIscritti.error.message}`);
+    else if (resIscritti.data) setIscritti(resIscritti.data);
 
     if (torneo.stato === 'in_corso' || torneo.stato === 'concluso') {
       const resPartite = await supabase.from('partite_torneo').select('*').eq('torneo_id', torneo.id).order('partita_num', { ascending: true });
-      if (resPartite.error) {
-         alert(`ERRORE DATABASE (Lettura Partite Tabellone): ${resPartite.error.message}`);
-      } else if (resPartite.data) {
-         setPartite(resPartite.data);
-      }
+      if (resPartite.error) alert(`ERRORE DATABASE (Lettura Partite Tabellone): ${resPartite.error.message}`);
+      else if (resPartite.data) setPartite(resPartite.data);
     }
   }
 
@@ -103,7 +113,6 @@ export default function Tornei({ salaId }: { salaId: string }) {
     if (!nomeTorneo || !quota) return;
     setLoading(true);
     
-    // ALLINEAMENTO PERFETTO CON IL TUO DATABASE
     const payload = {
       sala_id: salaId, 
       titolo: nomeTorneo, 
@@ -129,7 +138,6 @@ export default function Tornei({ salaId }: { salaId: string }) {
   };
 
   const apriModifica = () => {
-    // PRECARICAMENTO DATI USANDO I NOMI DEL DB
     setEditForm({
       nome: torneoSelezionato.titolo || "",
       disciplina: torneoSelezionato.specialita || "5 Birilli",
@@ -174,7 +182,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
   };
 
   // ==========================================
-  // GESTIONE ISCRITTI
+  // GESTIONE ISCRITTI (IL PONTE)
   // ==========================================
   const handleIscriviGiocatore = async (e: any) => {
     e.preventDefault();
@@ -183,12 +191,31 @@ export default function Tornei({ salaId }: { salaId: string }) {
       return;
     }
     
-    if (!nomeGiocatore) return;
+    let nomeFinale = "";
+
+    if (tipoIscrizione === 'socio') {
+      if (!socioSelezionato) return alert("Seleziona un socio dal menu a tendina.");
+      const socioDb = listaSoci.find(s => s.id === socioSelezionato);
+      if (!socioDb) return;
+      nomeFinale = `${socioDb.cognome} ${socioDb.nome}`;
+    } else {
+      if (!nomeGiocatoreEsterno.trim()) return alert("Inserisci il nome del giocatore esterno.");
+      nomeFinale = `${nomeGiocatoreEsterno.trim()} (Esterno)`;
+    }
     
-    const { error } = await supabase.from('iscritti_torneo').insert([{ torneo_id: torneoSelezionato.id, nome_completo: nomeGiocatore, pagato: quotaPagata }]);
+    const { error } = await supabase.from('iscritti_torneo').insert([{ 
+      torneo_id: torneoSelezionato.id, 
+      nome_completo: nomeFinale, 
+      pagato: quotaPagata 
+    }]);
     
     if (error) alert(`ERRORE DATABASE (Iscrizione): ${error.message}`);
-    else { setNomeGiocatore(""); setQuotaPagata(false); fetchIscrittiEPartite(torneoSelezionato); }
+    else { 
+      setSocioSelezionato(""); 
+      setNomeGiocatoreEsterno(""); 
+      setQuotaPagata(false); 
+      fetchIscrittiEPartite(torneoSelezionato); 
+    }
   };
 
   const togglePagamento = async (iscritto: any) => {
@@ -509,7 +536,7 @@ export default function Tornei({ salaId }: { salaId: string }) {
           </div>
         )}
 
-        {/* VISTA 2: ISCRIZIONI APERTE */}
+        {/* VISTA 2: ISCRIZIONI APERTE (IL PONTE AGGIORNATO) */}
         {torneoSelezionato && isIscrizioniAperte(torneoSelezionato.stato) && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
             <div className="col-span-1 md:col-span-8 bg-transparent border border-gray-700 rounded-2xl p-6 flex flex-col min-h-[500px]">
@@ -521,7 +548,12 @@ export default function Tornei({ salaId }: { salaId: string }) {
                 {iscritti.length === 0 ? <div className="h-full flex items-center justify-center opacity-50"><p className="font-black text-sm uppercase tracking-widest">Nessun giocatore iscritto</p></div> 
                 : iscritti.map((iscritto, i) => (
                   <div key={iscritto.id} className="bg-[#1A1D24] border border-[#2A2E39] p-4 rounded-xl flex justify-between items-center group">
-                    <div className="flex items-center gap-4"><span className="text-gray-600 font-black w-6 text-right">{i + 1}.</span><h4 className="text-white font-bold text-sm uppercase">{iscritto.nome_completo}</h4></div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-gray-600 font-black w-6 text-right">{i + 1}.</span>
+                      <h4 className="text-white font-bold text-sm uppercase">
+                        {iscritto.nome_completo}
+                      </h4>
+                    </div>
                     <div className="flex items-center gap-4">
                       <button type="button" onClick={() => togglePagamento(iscritto)} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest border ${iscritto.pagato ? 'bg-[#00E676]/20 text-[#00E676] border-[#00E676]/30' : 'bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/30'}`}>{iscritto.pagato ? '✓ PAGATO' : 'DA PAGARE'}</button>
                       <button type="button" onClick={() => eliminaIscritto(iscritto.id)} className="text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100">🗑️</button>
@@ -533,16 +565,68 @@ export default function Tornei({ salaId }: { salaId: string }) {
 
             <div className="col-span-1 md:col-span-4 bg-transparent border border-gray-700 rounded-2xl p-6 h-fit sticky top-6">
               <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-[#E91E63] border-b border-gray-800 pb-4">Nuovo Iscritto</h3>
+              
+              {/* TOGGLE TIPO ISCRIZIONE */}
+              <div className="flex mb-6 bg-[#1A1D24] p-1 rounded-lg border border-[#2A2E39]">
+                <button 
+                  onClick={() => setTipoIscrizione('socio')} 
+                  className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-md transition-all ${tipoIscrizione === 'socio' ? 'bg-[#E91E63] text-white shadow-md' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                  Socio Club
+                </button>
+                <button 
+                  onClick={() => setTipoIscrizione('esterno')} 
+                  className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-md transition-all ${tipoIscrizione === 'esterno' ? 'bg-gray-700 text-white shadow-md' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                  Esterno
+                </button>
+              </div>
+
               <form onSubmit={handleIscriviGiocatore} className="space-y-5">
-                <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63]" placeholder="Es. Mario Rossi" value={nomeGiocatore} onChange={(e) => setNomeGiocatore(e.target.value)} disabled={iscritti.length >= (torneoSelezionato.max_partecipanti || 32)} />
+                
+                {tipoIscrizione === 'socio' ? (
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Seleziona dal Database</label>
+                    <select 
+                      value={socioSelezionato} 
+                      onChange={(e) => setSocioSelezionato(e.target.value)} 
+                      disabled={iscritti.length >= (torneoSelezionato.max_partecipanti || 32)}
+                      className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] appearance-none"
+                    >
+                      <option value="">-- Clicca per cercare --</option>
+                      {listaSoci.map(s => (
+                        <option key={s.id} value={s.id}>{s.cognome} {s.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Nome Giocatore Esterno</label>
+                    <input 
+                      type="text" 
+                      className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-gray-500" 
+                      placeholder="Es. Mario Rossi" 
+                      value={nomeGiocatoreEsterno} 
+                      onChange={(e) => setNomeGiocatoreEsterno(e.target.value)} 
+                      disabled={iscritti.length >= (torneoSelezionato.max_partecipanti || 32)} 
+                    />
+                  </div>
+                )}
+
                 <label className="flex items-center gap-3 cursor-pointer p-3 bg-[#1A1D24] border border-[#2A2E39] rounded-lg">
                   <input type="checkbox" className="w-5 h-5 accent-[#E91E63]" checked={quotaPagata} onChange={(e) => setQuotaPagata(e.target.checked)} disabled={iscritti.length >= (torneoSelezionato.max_partecipanti || 32)}/>
                   <span className="text-sm font-bold text-white">Quota Versata (€ {torneoSelezionato.quota_iscrizione})</span>
                 </label>
-                <button type="submit" disabled={!nomeGiocatore && iscritti.length < (torneoSelezionato.max_partecipanti || 32)} className={`w-full py-4 rounded-xl font-black uppercase text-sm mt-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${iscritti.length >= (torneoSelezionato.max_partecipanti || 32) ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-[#E91E63] text-white hover:bg-[#C2185B]'}`}>
-                  {iscritti.length >= (torneoSelezionato.max_partecipanti || 32) ? "Torneo Completo" : "Iscrivi"}
+
+                <button 
+                  type="submit" 
+                  disabled={(tipoIscrizione === 'socio' ? !socioSelezionato : !nomeGiocatoreEsterno) || iscritti.length >= (torneoSelezionato.max_partecipanti || 32)} 
+                  className={`w-full py-4 rounded-xl font-black uppercase text-sm mt-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${iscritti.length >= (torneoSelezionato.max_partecipanti || 32) ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : (tipoIscrizione === 'socio' ? 'bg-[#E91E63] text-white hover:bg-[#C2185B]' : 'bg-gray-600 text-white hover:bg-gray-500')}`}
+                >
+                  {iscritti.length >= (torneoSelezionato.max_partecipanti || 32) ? "Torneo Completo" : "Iscrivi Giocatore"}
                 </button>
               </form>
+              
               <div className="mt-8 pt-6 border-t border-gray-800">
                 <button type="button" onClick={handleGeneraTabellone} disabled={iscritti.length < 2 || loading} className="w-full bg-[#00ADC6] hover:bg-[#008A9E] disabled:bg-gray-800 text-white py-4 rounded-xl font-black uppercase text-xs shadow-[0_5px_15px_rgba(0,173,198,0.2)]">
                   {loading ? 'Elaborazione...' : 'Genera Tabellone 🏁'}
