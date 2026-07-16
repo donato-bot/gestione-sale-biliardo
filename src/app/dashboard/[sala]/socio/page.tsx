@@ -128,30 +128,28 @@ export default function SocioPage() {
             <button onClick={() => setView("dashboard")} className="mb-8 text-gray-500 hover:text-white text-xs font-bold uppercase tracking-widest">← Indietro</button>
             <h2 className="text-3xl font-black uppercase mb-8 italic">Scegli sessione</h2>
             
-            {/* CORREZIONE MOBILE: Rimossa la classe 'appearance-none' per far comparire la freccia di sistema, e aggiunti i colori base alle singole option */}
+            {/* CORREZIONE MOBILE: Aggiunto style={{ colorScheme: 'dark' }} per forzare i menu nativi di Android/iOS in modalità scura */}
             <select 
               value={selectedTable} 
               onChange={(e) => setSelectedTable(e.target.value)} 
               className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-4 outline-none focus:border focus:border-green-500 cursor-pointer"
+              style={{ colorScheme: 'dark' }}
             >
-                <option value="" className="bg-gray-900 text-white">Seleziona Tavolo...</option>
+                <option value="">Seleziona Tavolo...</option>
                 {tavoli.map(t => (
-                  <option 
-                    key={t.id} 
-                    value={t.id} 
-                    disabled={t.stato === 'manutenzione'}
-                    className="bg-gray-900 text-white"
-                  >
+                  <option key={t.id} value={t.id} disabled={t.stato === 'manutenzione'}>
                     Tavolo {t.numero_tavolo || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}
                   </option>
                 ))}
             </select>
             
+            {/* Stesso trucco per il calendario nativo del telefono */}
             <input 
               type="datetime-local" 
               value={bookingTime} 
               onChange={(e) => setBookingTime(e.target.value)} 
               className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-8 outline-none focus:border focus:border-green-500 cursor-pointer" 
+              style={{ colorScheme: 'dark' }}
             />
             
             <button onClick={confermaPrenotazione} disabled={loading} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 py-6 rounded-3xl font-black uppercase tracking-widest transition-colors shadow-lg">
