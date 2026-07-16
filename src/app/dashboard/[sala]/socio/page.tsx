@@ -2,28 +2,40 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from '@supabase/supabase-js';
+import { useParams } from 'next/navigation'; // Aggiunto per leggere l'ID della sala
 import BachecaSocio from "../../../../components/BachecaSocio"; 
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
 export default function SocioPage() {
+  const params = useParams();
+  // Estraiamo in modo sicuro l'ID della sala dall'URL
+  const salaId = (params?.sala || Object.values(params)[0]) as string;
+
   const [email, setEmail] = useState("");
   const [socio, setSocio] = useState<any>(null);
   const [tavoli, setTavoli] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"login" | "dashboard" | "prenota">("login");
   const [selectedTable, setSelectedTable] = useState("");
-  const [bookingTime, setBookingTime] = useState(""); // Ora sarà un formato Data e Ora
+  const [bookingTime, setBookingTime] = useState("");
 
   useEffect(() => {
     async function fetchTavoli() {
-      // Continuiamo a leggere i tavoli per mostrarli nel menu a tendina
-      const { data, error } = await supabase.from('tavoli').select('*').order('numero', { ascending: true });
+      if (!salaId) return; // Se non c'è la sala, ci fermiamo per sicurezza
+
+      // Il "ponte": Peschiamo solo i tavoli appartenenti a QUESTA sala
+      const { data, error } = await supabase
+        .from('tavoli')
+        .select('*')
+        .eq('sala_id', salaId) 
+        .order('numero', { ascending: true });
+        
       if (error) console.error("Errore lettura tavoli AppWeb:", error.message);
       if (data) setTavoli(data);
     }
     fetchTavoli();
-  }, []);
+  }, [salaId]);
 
   const loginSocio = async () => {
     if (!email.trim()) return;
@@ -51,11 +63,11 @@ export default function SocioPage() {
     }
     setLoading(true);
     
-    // Recuperiamo il nome del tavolo selezionato per scriverlo in Agenda
+    // Recuperiamo il nome del tavolo selezionato
     const tavoloObj = tavoli.find(t => t.id === selectedTable);
     const nomeTavoloScelto = tavoloObj ? `Tavolo ${tavoloObj.numero || tavoloObj.nome_tavolo}` : "Tavolo Generico";
 
-    // IL PONTE CON LA TUA AGENDA: Scriviamo nella tabella 'prenotazioni'
+    // Scriviamo l'appuntamento nell'Agenda Generale del Club
     const { error } = await supabase
       .from('prenotazioni')
       .insert([{
@@ -71,8 +83,8 @@ export default function SocioPage() {
     } else {
       alert("✅ Prenotazione inviata con successo all'Agenda del Club!");
       setView("dashboard");
-      setBookingTime(""); // Reset
-      setSelectedTable(""); // Reset
+      setBookingTime(""); 
+      setSelectedTable(""); 
     }
     setLoading(false);
   };
@@ -122,7 +134,6 @@ export default function SocioPage() {
                 {tavoli.map(t => <option key={t.id} value={t.id} disabled={t.stato === 'manutenzione'}>Tavolo {t.numero || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}</option>)}
             </select>
             
-            {/* AGGIORNATO DA TYPE="TIME" A TYPE="DATETIME-LOCAL" */}
             <input type="datetime-local" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-8 outline-none focus:border focus:border-green-500" />
             
             <button onClick={confermaPrenotazione} disabled={loading} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 py-6 rounded-3xl font-black uppercase tracking-widest transition-colors shadow-lg">
