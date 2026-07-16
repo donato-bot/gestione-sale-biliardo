@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from '@supabase/supabase-js';
-import { useParams } from 'next/navigation'; // Aggiunto per leggere l'ID della sala
+import { useParams } from 'next/navigation';
 import BachecaSocio from "../../../../components/BachecaSocio"; 
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
 export default function SocioPage() {
   const params = useParams();
-  // Estraiamo in modo sicuro l'ID della sala dall'URL
   const salaId = (params?.sala || Object.values(params)[0]) as string;
 
   const [email, setEmail] = useState("");
@@ -22,14 +21,14 @@ export default function SocioPage() {
 
   useEffect(() => {
     async function fetchTavoli() {
-      if (!salaId) return; // Se non c'è la sala, ci fermiamo per sicurezza
+      if (!salaId) return; 
 
-      // Il "ponte": Peschiamo solo i tavoli appartenenti a QUESTA sala
+      // CORREZIONE: Ordiniamo usando il nome esatto della colonna su DB: 'numero_tavolo'
       const { data, error } = await supabase
         .from('tavoli')
         .select('*')
         .eq('sala_id', salaId) 
-        .order('numero', { ascending: true });
+        .order('numero_tavolo', { ascending: true });
         
       if (error) console.error("Errore lettura tavoli AppWeb:", error.message);
       if (data) setTavoli(data);
@@ -63,11 +62,10 @@ export default function SocioPage() {
     }
     setLoading(true);
     
-    // Recuperiamo il nome del tavolo selezionato
     const tavoloObj = tavoli.find(t => t.id === selectedTable);
-    const nomeTavoloScelto = tavoloObj ? `Tavolo ${tavoloObj.numero || tavoloObj.nome_tavolo}` : "Tavolo Generico";
+    // CORREZIONE: Usiamo 'numero_tavolo' per recuperare il nome da salvare in Agenda
+    const nomeTavoloScelto = tavoloObj ? `Tavolo ${tavoloObj.numero_tavolo || tavoloObj.nome_tavolo || ''}` : "Tavolo Generico";
 
-    // Scriviamo l'appuntamento nell'Agenda Generale del Club
     const { error } = await supabase
       .from('prenotazioni')
       .insert([{
@@ -131,7 +129,8 @@ export default function SocioPage() {
             
             <select value={selectedTable} onChange={(e) => setSelectedTable(e.target.value)} className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-4 outline-none focus:border focus:border-green-500 appearance-none">
                 <option value="">Seleziona Tavolo...</option>
-                {tavoli.map(t => <option key={t.id} value={t.id} disabled={t.stato === 'manutenzione'}>Tavolo {t.numero || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}</option>)}
+                {/* CORREZIONE: Usiamo 'numero_tavolo' per stampare le opzioni */}
+                {tavoli.map(t => <option key={t.id} value={t.id} disabled={t.stato === 'manutenzione'}>Tavolo {t.numero_tavolo || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}</option>)}
             </select>
             
             <input type="datetime-local" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-8 outline-none focus:border focus:border-green-500" />
