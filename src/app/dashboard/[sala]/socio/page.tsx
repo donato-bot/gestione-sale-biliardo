@@ -128,31 +128,42 @@ export default function SocioPage() {
             <button onClick={() => setView("dashboard")} className="mb-8 text-gray-500 hover:text-white text-xs font-bold uppercase tracking-widest">← Indietro</button>
             <h2 className="text-3xl font-black uppercase mb-8 italic">Scegli sessione</h2>
             
-            {/* CORREZIONE MOBILE: Aggiunto style={{ colorScheme: 'dark' }} per forzare i menu nativi di Android/iOS in modalità scura */}
-            <select 
-              value={selectedTable} 
-              onChange={(e) => setSelectedTable(e.target.value)} 
-              className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-4 outline-none focus:border focus:border-green-500 cursor-pointer"
-              style={{ colorScheme: 'dark' }}
-            >
-                <option value="">Seleziona Tavolo...</option>
+            {/* NUOVO SISTEMA A GRIGLIA DI PULSANTI INVECE DELLA TENDINA */}
+            <div className="mb-6">
+              <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-3 block">Seleziona il Tavolo</label>
+              <div className="grid grid-cols-2 gap-3">
                 {tavoli.map(t => (
-                  <option key={t.id} value={t.id} disabled={t.stato === 'manutenzione'}>
-                    Tavolo {t.numero_tavolo || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}
-                  </option>
+                  <button
+                    key={t.id}
+                    onClick={() => setSelectedTable(t.id)}
+                    disabled={t.stato === 'manutenzione'}
+                    className={`p-4 rounded-2xl font-black uppercase text-xs transition-all border-2 ${
+                      selectedTable === t.id
+                        ? 'bg-green-600 border-green-500 text-black shadow-[0_0_15px_rgba(34,197,94,0.3)]'
+                        : t.stato === 'manutenzione'
+                        ? 'bg-gray-900/50 border-gray-800 text-gray-600 cursor-not-allowed'
+                        : 'bg-gray-900 border-gray-800 text-white hover:border-gray-600'
+                    }`}
+                  >
+                    Tavolo {t.numero_tavolo || t.nome_tavolo}
+                    {t.stato === 'manutenzione' && <span className="block text-[9px] mt-1 text-red-500 tracking-widest">Manutenzione</span>}
+                  </button>
                 ))}
-            </select>
+              </div>
+            </div>
             
-            {/* Stesso trucco per il calendario nativo del telefono */}
-            <input 
-              type="datetime-local" 
-              value={bookingTime} 
-              onChange={(e) => setBookingTime(e.target.value)} 
-              className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-8 outline-none focus:border focus:border-green-500 cursor-pointer" 
-              style={{ colorScheme: 'dark' }}
-            />
+            <div className="mb-8">
+              <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-3 block">Data e Ora</label>
+              <input 
+                type="datetime-local" 
+                value={bookingTime} 
+                onChange={(e) => setBookingTime(e.target.value)} 
+                className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl outline-none border-2 border-gray-800 focus:border-green-500 cursor-pointer" 
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
             
-            <button onClick={confermaPrenotazione} disabled={loading} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 py-6 rounded-3xl font-black uppercase tracking-widest transition-colors shadow-lg">
+            <button onClick={confermaPrenotazione} disabled={loading || !selectedTable || !bookingTime} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 disabled:text-gray-500 py-6 rounded-3xl font-black uppercase tracking-widest transition-colors shadow-lg">
               {loading ? "ELABORAZIONE..." : "CONFERMA"}
             </button>
         </div>
