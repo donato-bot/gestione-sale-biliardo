@@ -64,14 +64,13 @@ export default function SocioPage() {
     const tavoloObj = tavoli.find(t => t.id === selectedTable);
     const nomeTavoloScelto = tavoloObj ? `Tavolo ${tavoloObj.numero_tavolo || tavoloObj.nome_tavolo || ''}` : "Tavolo Generico";
 
-    // PIANO B INFALLIBILE: Se il socio è vecchio e non ha la tua email, la peschiamo dal tavolo!
     const emailGestore = socio.manager_email || (tavoloObj ? tavoloObj.manager_email : null);
 
     const { error } = await supabase
       .from('prenotazioni')
       .insert([{
         sala_id: socio.sala_id,
-        manager_email: emailGestore, // Usiamo la variabile corazzata
+        manager_email: emailGestore, 
         nome_cliente: `${socio.cognome} ${socio.nome}`,
         tavolo_numero: nomeTavoloScelto,
         data_ora: new Date(bookingTime).toISOString(),
@@ -129,12 +128,31 @@ export default function SocioPage() {
             <button onClick={() => setView("dashboard")} className="mb-8 text-gray-500 hover:text-white text-xs font-bold uppercase tracking-widest">← Indietro</button>
             <h2 className="text-3xl font-black uppercase mb-8 italic">Scegli sessione</h2>
             
-            <select value={selectedTable} onChange={(e) => setSelectedTable(e.target.value)} className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-4 outline-none focus:border focus:border-green-500 appearance-none">
-                <option value="">Seleziona Tavolo...</option>
-                {tavoli.map(t => <option key={t.id} value={t.id} disabled={t.stato === 'manutenzione'}>Tavolo {t.numero_tavolo || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}</option>)}
+            {/* CORREZIONE MOBILE: Rimossa la classe 'appearance-none' per far comparire la freccia di sistema, e aggiunti i colori base alle singole option */}
+            <select 
+              value={selectedTable} 
+              onChange={(e) => setSelectedTable(e.target.value)} 
+              className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-4 outline-none focus:border focus:border-green-500 cursor-pointer"
+            >
+                <option value="" className="bg-gray-900 text-white">Seleziona Tavolo...</option>
+                {tavoli.map(t => (
+                  <option 
+                    key={t.id} 
+                    value={t.id} 
+                    disabled={t.stato === 'manutenzione'}
+                    className="bg-gray-900 text-white"
+                  >
+                    Tavolo {t.numero_tavolo || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}
+                  </option>
+                ))}
             </select>
             
-            <input type="datetime-local" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-8 outline-none focus:border focus:border-green-500" />
+            <input 
+              type="datetime-local" 
+              value={bookingTime} 
+              onChange={(e) => setBookingTime(e.target.value)} 
+              className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-8 outline-none focus:border focus:border-green-500 cursor-pointer" 
+            />
             
             <button onClick={confermaPrenotazione} disabled={loading} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 py-6 rounded-3xl font-black uppercase tracking-widest transition-colors shadow-lg">
               {loading ? "ELABORAZIONE..." : "CONFERMA"}
