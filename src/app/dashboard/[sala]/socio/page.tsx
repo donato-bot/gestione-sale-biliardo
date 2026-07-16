@@ -23,7 +23,6 @@ export default function SocioPage() {
     async function fetchTavoli() {
       if (!salaId) return; 
 
-      // CORREZIONE: Ordiniamo usando il nome esatto della colonna su DB: 'numero_tavolo'
       const { data, error } = await supabase
         .from('tavoli')
         .select('*')
@@ -63,13 +62,14 @@ export default function SocioPage() {
     setLoading(true);
     
     const tavoloObj = tavoli.find(t => t.id === selectedTable);
-    // CORREZIONE: Usiamo 'numero_tavolo' per recuperare il nome da salvare in Agenda
     const nomeTavoloScelto = tavoloObj ? `Tavolo ${tavoloObj.numero_tavolo || tavoloObj.nome_tavolo || ''}` : "Tavolo Generico";
 
+    // IL PACCHETTO COMPLETO (Ora include anche manager_email)
     const { error } = await supabase
       .from('prenotazioni')
       .insert([{
         sala_id: socio.sala_id,
+        manager_email: socio.manager_email, // <-- ECCO LA CHIAVE DI SICUREZZA CHE MANCAVA!
         nome_cliente: `${socio.cognome} ${socio.nome}`,
         tavolo_numero: nomeTavoloScelto,
         data_ora: new Date(bookingTime).toISOString(),
@@ -129,7 +129,6 @@ export default function SocioPage() {
             
             <select value={selectedTable} onChange={(e) => setSelectedTable(e.target.value)} className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl mb-4 outline-none focus:border focus:border-green-500 appearance-none">
                 <option value="">Seleziona Tavolo...</option>
-                {/* CORREZIONE: Usiamo 'numero_tavolo' per stampare le opzioni */}
                 {tavoli.map(t => <option key={t.id} value={t.id} disabled={t.stato === 'manutenzione'}>Tavolo {t.numero_tavolo || t.nome_tavolo} {t.stato === 'manutenzione' && '(Manutenzione)'}</option>)}
             </select>
             
