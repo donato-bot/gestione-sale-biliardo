@@ -1,220 +1,259 @@
 "use client";
 
-// ==========================================
-// FILE: src/components/Soci.tsx
-// OBIETTIVO: Componente motore per l'Anagrafica Soci (Logica, UI e Sicurezza DB)
-// ==========================================
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { supabase } from "@/app/lib/supabase";
-import { useRouter } from 'next/navigation';
+import { useRouter } from "next/navigation";
 
-interface Socio {
-  id: string;
-  sala_id: string;
-  nome: string;
-  cognome: string;
-  telefono: string | null;
-  email: string | null;
-  app_inviata: boolean | null;
-}
-
-interface SociProps {
-  salaId: string;
-}
-
-export default function Soci({ salaId }: SociProps) {
-  const [soci, setSoci] = useState<Socio[]>([]);
-  const [inCaricamento, setInCaricamento] = useState(true);
-
-  // Stati per il modulo di inserimento
-  const [nuovoNome, setNuovoNome] = useState("");
-  const [nuovoCognome, setNuovoCognome] = useState("");
-  const [nuovoTelefono, setNuovoTelefono] = useState("");
-  const [nuovaEmail, setNuovaEmail] = useState("");
-  const [inInvia, setInInvia] = useState(false);
-
+export default function Soci({ salaId }: { salaId: string }) {
+  const [soci, setSoci] = useState<any[]>([]);
+  const [nome, setNome] = useState("");
+  const [cognome, setCognome] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Stati per la Modifica
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
+
   useEffect(() => {
-    if (salaId) {
-      caricaSoci();
-    }
+    fetchSoci();
   }, [salaId]);
 
-  const caricaSoci = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('soci')
-        .select('*')
-        .eq('sala_id', salaId)
-        .order('cognome', { ascending: true });
+  async function fetchSoci() {
+    if (!salaId) return;
+    const { data, error } = await supabase
+      .from("soci")
+      .select("*")
+      .eq("sala_id", salaId)
+      .order("cognome", { ascending: true });
 
-      if (error) {
-        alert("ERRORE DATABASE (Lettura Soci): " + error.message);
-        throw error;
-      }
-      if (data) setSoci(data);
-    } catch (error) {
-      console.error('Errore nel caricamento dei soci:', error);
-    } finally {
-      setInCaricamento(false);
+    if (error) {
+      console.error("Errore caricamento soci:", error.message);
+    } else if (data) {
+      setSoci(data);
     }
-  };
-
-  const aggiungiSocio = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (nuovoNome.trim() === "" || nuovoCognome.trim() === "") {
-      alert("Attenzione: Nome e Cognome sono campi obbligatori.");
-      return;
-    }
-
-    setInInvia(true);
-
-    try {
-      const { data, error } = await supabase
-        .from('soci')
-        .insert([{
-          sala_id: salaId,
-          nome: nuovoNome.trim().toUpperCase(), // Maiuscolo per standard DB
-          cognome: nuovoCognome.trim().toUpperCase(), // Maiuscolo per standard DB
-          telefono: nuovoTelefono.trim() === "" ? null : nuovoTelefono.trim(),
-          email: nuovaEmail.trim() === "" ? null : nuovaEmail.trim().toLowerCase(), // Minuscolo vitale per Login AppWeb!
-          app_inviata: false
-        }])
-        .select();
-
-      if (error) {
-        alert("ERRORE DATABASE (Salvataggio Socio): " + error.message);
-        throw error;
-      }
-
-      if (data) {
-        setSoci([...soci, data[0]].sort((a, b) => a.cognome.localeCompare(b.cognome)));
-        setNuovoNome("");
-        setNuovoCognome("");
-        setNuovoTelefono("");
-        setNuovaEmail("");
-        alert("Socio registrato con successo!");
-      }
-    } catch (error) {
-      console.error('Errore di connessione:', error);
-    } finally {
-      setInInvia(false);
-    }
-  };
-
-  if (inCaricamento) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <p className="text-xl font-bold text-emerald-500 animate-pulse">Caricamento Anagrafica...</p>
-      </div>
-    );
   }
 
+  const handleAggiungiSocio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nome || !cognome) return alert("Nome e Cognome sono obbligatori");
+    setLoading(true);
+
+    // Recupera la mail del manager dal database (se serve) o usa quella della sessione
+    const { data: userAuth } = await supabase.auth.getUser();
+    const managerEmail = userAuth.user?.email || "donato.sviluppo@libero.it"; // Fallback di sicurezza
+
+    const { error } = await supabase.from("soci").insert([
+      {
+        sala_id: salaId,
+        manager_email: managerEmail,
+        nome: nome.trim().toUpperCase(),
+        cognome: cognome.trim().toUpperCase(),
+        telefono: telefono.trim(),
+        email: email.trim().toLowerCase(),
+        credito: 0.0,
+      },
+    ]);
+
+    setLoading(false);
+    if (error) {
+      alert("ERRORE: " + error.message);
+    } else {
+      setNome("");
+      setCognome("");
+      setTelefono("");
+      setEmail("");
+      fetchSoci();
+    }
+  };
+
+  // ==========================================
+  // AZIONI CRUD: ELIMINA E MODIFICA
+  // ==========================================
+  
+  const handleElimina = async (id: string, nomeCompleto: string) => {
+    if (!window.confirm(`Sei sicuro di voler eliminare definitivamente il socio ${nomeCompleto}? Questa azione non può essere annullata.`)) {
+      return;
+    }
+    
+    setLoading(true);
+    const { error } = await supabase.from("soci").delete().eq("id", id);
+    
+    if (error) {
+      alert("ERRORE DURANTE L'ELIMINAZIONE: " + error.message);
+    } else {
+      fetchSoci();
+    }
+    setLoading(false);
+  };
+
+  const apriModifica = (socio: any) => {
+    setEditForm({
+      id: socio.id,
+      nome: socio.nome,
+      cognome: socio.cognome,
+      telefono: socio.telefono || "",
+      email: socio.email || "",
+      credito: socio.credito || 0
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSalvaModifiche = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const { error } = await supabase
+      .from("soci")
+      .update({
+        nome: editForm.nome.trim().toUpperCase(),
+        cognome: editForm.cognome.trim().toUpperCase(),
+        telefono: editForm.telefono.trim(),
+        email: editForm.email.trim().toLowerCase(),
+        credito: parseFloat(editForm.credito)
+      })
+      .eq("id", editForm.id);
+
+    setLoading(false);
+    if (error) {
+      alert("ERRORE DURANTE LA MODIFICA: " + error.message);
+    } else {
+      setShowEditModal(false);
+      fetchSoci();
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#050505] p-6 relative">
-      <header className="mb-8 border-b border-gray-800 pb-4 flex justify-between items-end">
-        <div>
-          <button 
-            onClick={() => router.push(`/dashboard/${salaId}`)}
-            className="text-gray-500 hover:text-white uppercase text-xs font-bold mb-4 flex items-center gap-2 transition-colors"
-          >
-            ← Torna alla Plancia Operativa
-          </button>
-          <h1 className="text-3xl font-black text-white uppercase tracking-widest flex items-center gap-3">
-            <span className="text-emerald-500">👥</span> Anagrafica Soci
-          </h1>
-          <p className="text-gray-400 font-bold mt-2">Registro e Tesseramento Membri</p>
-        </div>
-        
-        <div className="text-right bg-gray-900/50 p-4 rounded-xl border border-gray-800">
-          <p className="text-gray-500 text-xs font-bold uppercase mb-1">Totale Iscritti</p>
-          <p className="text-3xl font-black text-emerald-500">{soci.length}</p>
-        </div>
-      </header>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl">
-        <div className="bg-[#11131a] p-6 rounded-3xl border border-gray-800 h-fit shadow-xl">
-          <h2 className="text-xl font-black text-white uppercase mb-4 pb-2 border-b border-gray-800">
-            Nuova Tessera
-          </h2>
-          <form onSubmit={aggiungiSocio} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-gray-400 text-xs font-bold uppercase mb-1">Nome *</label>
-                <input 
-                  type="text" required placeholder="Es. Mario" value={nuovoNome}
-                  onChange={(e) => setNuovoNome(e.target.value)}
-                  className="w-full bg-black text-white font-bold p-3 rounded-lg border border-gray-700 focus:border-emerald-500 focus:outline-none"
-                />
+    <div className="min-h-screen bg-[#050505] p-6 text-white font-sans">
+      
+      {/* MODALE DI MODIFICA SOCIO */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#0B0D14] border border-[#2A2E39] p-8 rounded-[2rem] w-full max-w-md shadow-2xl">
+            <h3 className="text-[#00E5FF] font-black uppercase tracking-widest text-lg mb-6 border-b border-[#2A2E39] pb-4">✏️ Modifica Anagrafica</h3>
+            <form onSubmit={handleSalvaModifiche} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Nome</label>
+                  <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#00E5FF] uppercase" value={editForm.nome} onChange={(e) => setEditForm({...editForm, nome: e.target.value})} required />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Cognome</label>
+                  <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#00E5FF] uppercase" value={editForm.cognome} onChange={(e) => setEditForm({...editForm, cognome: e.target.value})} required />
+                </div>
               </div>
               <div>
-                <label className="block text-gray-400 text-xs font-bold uppercase mb-1">Cognome *</label>
-                <input 
-                  type="text" required placeholder="Es. Rossi" value={nuovoCognome}
-                  onChange={(e) => setNuovoCognome(e.target.value)}
-                  className="w-full bg-black text-white font-bold p-3 rounded-lg border border-gray-700 focus:border-emerald-500 focus:outline-none"
-                />
+                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Telefono</label>
+                <input type="tel" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#00E5FF]" value={editForm.telefono} onChange={(e) => setEditForm({...editForm, telefono: e.target.value})} />
               </div>
-            </div>
+              <div>
+                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Email (Login AppWeb)</label>
+                <input type="email" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#00E5FF] lowercase" value={editForm.email} onChange={(e) => setEditForm({...editForm, email: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Credito (€)</label>
+                <input type="number" step="0.01" className="w-full bg-[#1A1D24] text-[#00E676] font-black text-xl p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#00E5FF]" value={editForm.credito} onChange={(e) => setEditForm({...editForm, credito: e.target.value})} required />
+              </div>
 
-            <div>
-              <label className="block text-gray-400 text-xs font-bold uppercase mb-1">Telefono</label>
-              <input 
-                type="text" placeholder="Es. 3331234567" value={nuovoTelefono}
-                onChange={(e) => setNuovoTelefono(e.target.value)}
-                className="w-full bg-black text-white font-bold p-3 rounded-lg border border-gray-700 focus:border-emerald-500 focus:outline-none"
-              />
-            </div>
+              <div className="flex gap-4 pt-4 mt-6 border-t border-[#2A2E39]">
+                <button type="button" onClick={() => setShowEditModal(false)} className="w-1/3 bg-[#1A1D24] hover:bg-[#2A2E39] text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs">Annulla</button>
+                <button type="submit" disabled={loading} className="w-2/3 bg-[#00E5FF] hover:bg-[#00ADC6] text-black py-4 rounded-xl font-black uppercase tracking-widest text-xs active:scale-95">{loading ? "Salvataggio..." : "Salva Modifiche"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-            <div>
-              <label className="block text-gray-400 text-xs font-bold uppercase mb-1">Email (Per Login App)</label>
-              <input 
-                type="email" placeholder="Es. mario@email.com" value={nuovaEmail}
-                onChange={(e) => setNuovaEmail(e.target.value)}
-                className="w-full bg-black text-white font-bold p-3 rounded-lg border border-gray-700 focus:border-emerald-500 focus:outline-none"
-              />
-            </div>
-
-            <button 
-              type="submit" disabled={inInvia}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-800 text-white font-black py-4 rounded-xl uppercase tracking-wider transition-all shadow-lg mt-2"
-            >
-              {inInvia ? "Salvataggio..." : "🪪 Rilascia Tessera"}
-            </button>
-          </form>
+      {/* STRUTTURA PRINCIPALE (Senza il doppio pulsante Indietro) */}
+      <div className="max-w-7xl mx-auto bg-[#0B0D14] rounded-[2rem] border border-[#1E222B] p-8 shadow-2xl">
+        <div className="flex justify-between items-start mb-10 border-b border-[#1E222B] pb-6">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-black uppercase italic tracking-tight flex items-center gap-3">
+              <span className="text-[#8B5CF6]">👥</span> ANAGRAFICA SOCI
+            </h1>
+            <p className="text-gray-400 text-sm font-bold mt-2">Registro e Tesseramento Membri</p>
+          </div>
+          <div className="bg-[#1A1D24] border border-[#2A2E39] rounded-xl p-4 text-center min-w-[120px]">
+            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Totale Iscritti</p>
+            <p className="text-3xl font-black text-[#00E676]">{soci.length}</p>
+          </div>
         </div>
 
-        <div className="lg:col-span-2 bg-[#11131a] rounded-3xl border border-gray-800 overflow-hidden shadow-2xl">
-          {soci.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-gray-500 font-bold text-lg uppercase tracking-widest">Nessun socio registrato</p>
-              <p className="text-gray-600 mt-2">Compila il modulo a sinistra per inserire il primo iscritto.</p>
-            </div>
-          ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-900 border-b border-gray-800">
-                  <th className="p-4 text-gray-500 text-xs font-black uppercase tracking-wider">Cognome e Nome</th>
-                  <th className="p-4 text-gray-500 text-xs font-black uppercase tracking-wider">Telefono</th>
-                  <th className="p-4 text-gray-500 text-xs font-black uppercase tracking-wider">Email</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800/50">
-                {soci.map((socio) => (
-                  <tr key={socio.id} className="hover:bg-white/5 transition-colors">
-                    <td className="p-4 text-white font-bold uppercase tracking-wide">
-                      {socio.cognome} {socio.nome}
-                    </td>
-                    <td className="p-4 text-gray-400 font-mono text-sm">{socio.telefono || "-"}</td>
-                    <td className="p-4 text-gray-400 text-sm">{socio.email || "-"}</td>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* COLONNA SINISTRA: FORM INSERIMENTO */}
+          <div className="lg:col-span-4 bg-[#1A1D24] border border-[#2A2E39] rounded-[2rem] p-6 h-fit sticky top-6">
+            <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-white border-b border-gray-800 pb-4">Nuova Tessera</h3>
+            
+            <form onSubmit={handleAggiungiSocio} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Nome *</label>
+                  <input type="text" className="w-full bg-black text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#00E676] uppercase" placeholder="Es. Mario" value={nome} onChange={(e) => setNome(e.target.value)} required />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Cognome *</label>
+                  <input type="text" className="w-full bg-black text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#00E676] uppercase" placeholder="Es. Rossi" value={cognome} onChange={(e) => setCognome(e.target.value)} required />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Telefono</label>
+                <input type="tel" className="w-full bg-black text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#00E676]" placeholder="Es. 3331234567" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Email (Per Login App)</label>
+                <input type="email" className="w-full bg-black text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#00E676] lowercase" placeholder="Es. mario@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              
+              <button type="submit" disabled={loading} className="w-full bg-[#00E676] hover:bg-[#00C853] text-black py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all active:scale-95 mt-4 flex items-center justify-center gap-2">
+                {loading ? "Elaborazione..." : "🪪 Rilascia Tessera"}
+              </button>
+            </form>
+          </div>
+
+          {/* COLONNA DESTRA: TABELLA ISCRITTI */}
+          <div className="lg:col-span-8 bg-[#1A1D24] border border-[#2A2E39] rounded-[2rem] overflow-hidden flex flex-col">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-black/50 border-b border-[#2A2E39]">
+                    <th className="p-4 text-[10px] text-gray-500 font-black uppercase tracking-widest">Cognome e Nome</th>
+                    <th className="p-4 text-[10px] text-gray-500 font-black uppercase tracking-widest">Telefono</th>
+                    <th className="p-4 text-[10px] text-gray-500 font-black uppercase tracking-widest">Email</th>
+                    <th className="p-4 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">Azioni</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody className="divide-y divide-[#2A2E39]">
+                  {soci.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">Nessun socio registrato</td>
+                    </tr>
+                  ) : (
+                    soci.map((s) => (
+                      <tr key={s.id} className="hover:bg-[#2A2E39]/30 transition-colors group">
+                        <td className="p-4 font-black text-sm text-white uppercase">{s.cognome} {s.nome}</td>
+                        <td className="p-4 text-xs text-gray-400 font-bold">{s.telefono || "-"}</td>
+                        <td className="p-4 text-xs text-gray-400 font-bold lowercase">{s.email || "-"}</td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => apriModifica(s)} className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-lg transition-colors title='Modifica'" >
+                              ✏️
+                            </button>
+                            <button onClick={() => handleElimina(s.id, `${s.cognome} ${s.nome}`)} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors title='Elimina'" >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
