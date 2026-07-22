@@ -7,6 +7,8 @@ import { supabase } from "@/app/lib/supabase";
 export default function DettaglioTorneoPage() {
   const params = useParams();
   const router = useRouter();
+  
+  // Teniamo i params per il caricamento iniziale
   const salaId = (params?.sala || Object.values(params)[0]) as string;
   const torneoId = (params?.id || Object.values(params)[1]) as string;
 
@@ -27,7 +29,6 @@ export default function DettaglioTorneoPage() {
   }, [salaId, torneoId]);
 
   const caricaDatiTorneo = async () => {
-    // 1. Carica info Torneo
     const { data: dataTorneo } = await supabase
       .from('tornei')
       .select('*')
@@ -36,7 +37,6 @@ export default function DettaglioTorneoPage() {
       
     if (dataTorneo) setTorneo(dataTorneo);
 
-    // 2. Carica Iscritti
     const { data: dataIscritti } = await supabase
       .from('iscritti_torneo')
       .select('*')
@@ -59,14 +59,26 @@ export default function DettaglioTorneoPage() {
         return;
       }
 
+      // ESTRAZIONE INFALLIBILE DALL'URL
+      // L'indirizzo è formato da: /dashboard/ID_SALA/tornei/ID_TORNEO
+      const urlParts = window.location.pathname.split('/');
+      const safeSalaId = urlParts[2]; 
+      const safeTorneoId = urlParts[4] || torneoId;
+
+      if (!safeSalaId) {
+        alert("Errore di sistema: Impossibile leggere il codice sala dall'indirizzo.");
+        setIsGenerando(false);
+        return;
+      }
+
       const partite = [];
       let partitaNum = 1;
 
       // Accoppiamo i giocatori a 2 a 2 per gli Ottavi
       for (let i = 0; i < 16; i += 2) {
         partite.push({
-          sala_id: torneo.sala_id,   // <--- FIX BLINDATO: PRENDE L'ID DIRETTAMENTE DAL TORNEO SCARICATO!
-          torneo_id: torneoId,
+          sala_id: safeSalaId,       // <--- Valore estratto di forza dall'URL (Mai Null)
+          torneo_id: safeTorneoId,   // <--- Valore estratto di forza dall'URL
           turno: "Ottavi",
           partita_num: partitaNum,
           giocatore1_id: iscritti[i].giocatore_id || iscritti[i].id,
@@ -89,7 +101,7 @@ export default function DettaglioTorneoPage() {
       const { error: updateError } = await supabase
         .from('tornei')
         .update({ stato: 'IN CORSO' })
-        .eq('id', torneoId);
+        .eq('id', safeTorneoId);
 
       if (updateError) throw updateError;
 
