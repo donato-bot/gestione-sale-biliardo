@@ -28,7 +28,7 @@ export default function DettaglioTorneoPage() {
 
   const caricaDatiTorneo = async () => {
     // 1. Carica info Torneo
-    const { data: dataTorneo, error: errTorneo } = await supabase
+    const { data: dataTorneo } = await supabase
       .from('tornei')
       .select('*')
       .eq('id', torneoId)
@@ -37,7 +37,7 @@ export default function DettaglioTorneoPage() {
     if (dataTorneo) setTorneo(dataTorneo);
 
     // 2. Carica Iscritti
-    const { data: dataIscritti, error: errIscritti } = await supabase
+    const { data: dataIscritti } = await supabase
       .from('iscritti_torneo')
       .select('*')
       .eq('torneo_id', torneoId)
