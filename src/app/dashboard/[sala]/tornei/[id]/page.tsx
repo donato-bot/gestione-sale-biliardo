@@ -65,7 +65,7 @@ export default function DettaglioTorneoPage() {
       // Accoppiamo i giocatori a 2 a 2 per gli Ottavi
       for (let i = 0; i < 16; i += 2) {
         partite.push({
-          sala_id: salaId,           // <--- IL FIX RISOLUTIVO: IL PASSAPORTO DELLA SALA!
+          sala_id: torneo.sala_id,   // <--- FIX BLINDATO: PRENDE L'ID DIRETTAMENTE DAL TORNEO SCARICATO!
           torneo_id: torneoId,
           turno: "Ottavi",
           partita_num: partitaNum,
