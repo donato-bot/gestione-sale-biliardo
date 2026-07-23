@@ -51,7 +51,7 @@ export default function TabelloneRender({
       const vincitore_id = isVincitore1 ? partitaSelezionata.giocatore1_id : partitaSelezionata.giocatore2_id;
       const vincitore_nome = isVincitore1 ? partitaSelezionata.giocatore1_nome : partitaSelezionata.giocatore2_nome;
 
-      // 1. CHIUUDIAMO LA PARTITA CORRENTE
+      // 1. CHIUDIAMO LA PARTITA CORRENTE CON I PUNTEGGI
       const { error: errUpdate } = await supabase
         .from('partite_torneo')
         .update({
@@ -67,6 +67,7 @@ export default function TabelloneRender({
 
       // 2. LOGICA DI AVANZAMENTO AUTOMATICO AL TURNO SUCCESSIVO
       const turniMap: Record<string, string> = {
+        "Sedicesimi": "Ottavi",
         "Ottavi": "Quarti",
         "Quarti": "Semifinali",
         "Semifinali": "Finale",
@@ -75,14 +76,11 @@ export default function TabelloneRender({
 
       const prossimoTurno = turniMap[partitaSelezionata.turno];
 
-      // Se non è la finale, avanziamo il giocatore
+      // Se non è la finale, avanziamo il giocatore nel tabellone
       if (prossimoTurno && prossimoTurno !== "Vincitore Assoluto") {
-        // Calcola in quale slot deve andare il vincitore (Es. partita 1 e 2 vanno nella partita 1 del turno dopo)
         const proxPartitaNum = Math.ceil(partitaSelezionata.partita_num / 2);
-        // Se la partita di provenienza è dispari va nello slot in alto (giocatore1), se è pari in basso (giocatore2)
         const isGiocatore1 = partitaSelezionata.partita_num % 2 !== 0;
 
-        // Controlla se il "cassetto" della prossima partita esiste già
         const { data: proxPartita } = await supabase
           .from('partite_torneo')
           .select('*')
@@ -92,7 +90,7 @@ export default function TabelloneRender({
           .single();
 
         if (proxPartita) {
-          // La partita esiste (es. c'è già l'altro sfidante in attesa), la aggiorniamo
+          // Aggiorna lo slot esistente
           const updateData = isGiocatore1
             ? { giocatore1_id: vincitore_id, giocatore1_nome: vincitore_nome }
             : { giocatore2_id: vincitore_id, giocatore2_nome: vincitore_nome };
@@ -102,7 +100,7 @@ export default function TabelloneRender({
             .update(updateData)
             .eq('id', proxPartita.id);
         } else {
-          // La partita non esiste ancora, la creiamo inserendo il primo vincitore
+          // Crea la nuova partita del turno successivo
           const insertData: any = {
             sala_id: partitaSelezionata.sala_id,
             torneo_id: partitaSelezionata.torneo_id,
@@ -125,11 +123,10 @@ export default function TabelloneRender({
 
       chiudiModal();
       
-      // Aggiorna i dati sulla pagina principale
+      // Ricarica la vista
       if (onAggiorna) {
         onAggiorna();
       } else {
-        // Fallback robusto se il parent non ha passato la funzione di aggiornamento
         window.location.reload();
       }
 
@@ -140,13 +137,19 @@ export default function TabelloneRender({
     }
   };
 
+  // MOTORE DI ORDINAMENTO TESTUALE INFALLIBILE PER VERCEL
+  const ordineTurni = ["Sedicesimi", "Ottavi", "Quarti", "Semifinali", "Finale"];
+  const turniPresenti = [...new Set(partite.map(p => p.turno))].sort((a: any, b: any) => {
+    return ordineTurni.indexOf(a) - ordineTurni.indexOf(b);
+  });
+
   return (
     <>
       <div className="flex gap-12 min-w-max h-full min-h-[600px] items-stretch pb-4">
-        {[...new Set(partite.map(p => p.turno))].sort((a: any, b: any) => a - b).map(turnoNum => {
-          const partiteTurno = partite.filter(p => p.turno === turnoNum);
+        {turniPresenti.map(turnoTesto => {
+          const partiteTurno = partite.filter(p => p.turno === turnoTesto);
           return (
-            <div key={turnoNum} className="flex flex-col shrink-0" style={{ width: vistaCompatta ? '230px' : '320px' }}>
+            <div key={turnoTesto} className="flex flex-col shrink-0" style={{ width: vistaCompatta ? '230px' : '320px' }}>
               <h3 className="text-center font-black uppercase tracking-widest text-[#00E5FF] bg-[#1A1D24] py-3 rounded-lg border border-[#2A2E39] text-sm mb-8 shadow-md">
                 {getNomeTurno(partiteTurno.length)}
               </h3>
@@ -205,33 +208,35 @@ export default function TabelloneRender({
         })}
       </div>
 
-      {/* POP-UP DI ARBITRAGGIO */}
+      {/* POP-UP DI ARBITRAGGIO PER IL REFERTO */}
       {partitaSelezionata && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-[#0B0D14] border border-[#2A2E39] rounded-[2rem] p-8 w-full max-w-md shadow-[0_0_50px_rgba(0,0,0,0.8)]">
             <h2 className="text-white font-black text-xl uppercase mb-1">Referto Partita</h2>
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-8">Inserisci il punteggio finale</p>
+            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-8">Inserisci i punti finali dell'incontro</p>
 
             <div className="space-y-6 mb-8">
+              {/* Input Punti Giocatore 1 */}
               <div className="flex flex-col gap-2">
-                <label className="text-white text-sm font-black uppercase tracking-wider">{partitaSelezionata.giocatore1_nome}</label>
+                <label className="text-[#00E5FF] text-sm font-black uppercase tracking-wider">{partitaSelezionata.giocatore1_nome}</label>
                 <input 
                   type="number" 
                   value={punti1}
                   onChange={(e) => setPunti1(e.target.value)}
-                  placeholder="Es. 2"
-                  className="bg-black border border-[#2A2E39] text-white text-2xl font-black p-4 rounded-xl focus:outline-none focus:border-[#00E5FF] text-center"
+                  placeholder="Punti (Es. 100)"
+                  className="bg-black border border-[#2A2E39] text-white text-2xl font-black p-4 rounded-xl focus:outline-none focus:border-[#00E5FF] text-center transition-colors"
                 />
               </div>
 
+              {/* Input Punti Giocatore 2 */}
               <div className="flex flex-col gap-2">
-                <label className="text-white text-sm font-black uppercase tracking-wider">{partitaSelezionata.giocatore2_nome}</label>
+                <label className="text-[#00E5FF] text-sm font-black uppercase tracking-wider">{partitaSelezionata.giocatore2_nome}</label>
                 <input 
                   type="number" 
                   value={punti2}
                   onChange={(e) => setPunti2(e.target.value)}
-                  placeholder="Es. 0"
-                  className="bg-black border border-[#2A2E39] text-white text-2xl font-black p-4 rounded-xl focus:outline-none focus:border-[#00E5FF] text-center"
+                  placeholder="Punti (Es. 80)"
+                  className="bg-black border border-[#2A2E39] text-white text-2xl font-black p-4 rounded-xl focus:outline-none focus:border-[#00E5FF] text-center transition-colors"
                 />
               </div>
             </div>
@@ -245,10 +250,10 @@ export default function TabelloneRender({
               </button>
               <button 
                 onClick={salvaRisultato}
-                disabled={isSalvataggio || punti1 === "" || punti2 === ""}
+                disabled={isSalvataggio || punti1.toString() === "" || punti2.toString() === ""}
                 className="flex-1 bg-[#00E676] hover:bg-[#00C853] text-black py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSalvataggio ? 'Salvataggio...' : 'Conferma'}
+                {isSalvataggio ? 'Salvataggio...' : 'Conferma Referto'}
               </button>
             </div>
           </div>
