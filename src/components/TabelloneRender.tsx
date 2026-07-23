@@ -33,6 +33,18 @@ export default function TabelloneRender({
     setPunti2("");
   };
 
+  const apriModalArbitro = (p: any) => {
+    setPartitaSelezionata(p);
+    // Se la partita è già conclusa, ricarica i punti salvati per poterli modificare
+    if (p.stato === 'conclusa') {
+      setPunti1(p.punteggio1 ?? "");
+      setPunti2(p.punteggio2 ?? "");
+    } else {
+      setPunti1("");
+      setPunti2("");
+    }
+  };
+
   const salvaRisultato = async () => {
     if (!partitaSelezionata) return;
     
@@ -47,11 +59,12 @@ export default function TabelloneRender({
     setIsSalvataggio(true);
 
     try {
+      // CALCOLO AUTOMATICO DEL VINCITORE IN BASE AI PUNTI
       const isVincitore1 = score1 > score2;
       const vincitore_id = isVincitore1 ? partitaSelezionata.giocatore1_id : partitaSelezionata.giocatore2_id;
       const vincitore_nome = isVincitore1 ? partitaSelezionata.giocatore1_nome : partitaSelezionata.giocatore2_nome;
 
-      // 1. CHIUDIAMO LA PARTITA CORRENTE CON I PUNTEGGI
+      // 1. SALVIAMO I PUNTI E CHIUDIAMO LA PARTITA CORRENTE
       const { error: errUpdate } = await supabase
         .from('partite_torneo')
         .update({
@@ -90,7 +103,7 @@ export default function TabelloneRender({
           .single();
 
         if (proxPartita) {
-          // Aggiorna lo slot esistente
+          // La partita successiva esiste già (es. stiamo modificando un referto o l'avversario è già lì)
           const updateData = isGiocatore1
             ? { giocatore1_id: vincitore_id, giocatore1_nome: vincitore_nome }
             : { giocatore2_id: vincitore_id, giocatore2_nome: vincitore_nome };
@@ -155,7 +168,7 @@ export default function TabelloneRender({
               </h3>
               <div className="flex-1 flex flex-col justify-around gap-4">
                 {partiteTurno.map((p) => {
-                  const isGiocabile = p.giocatore1_nome && p.giocatore2_nome && !p.giocatore1_nome.includes('In Attesa') && !p.giocatore2_nome.includes('In Attesa') && p.stato !== 'conclusa';
+                  const isGiocabile = p.giocatore1_nome && p.giocatore2_nome && !p.giocatore1_nome.includes('In Attesa') && !p.giocatore2_nome.includes('In Attesa');
                   
                   return (
                     <div key={p.id} className={`bg-[#1A1D24] border ${p.stato === 'conclusa' ? 'border-[#00E676]/50 shadow-[0_0_15px_rgba(0,230,118,0.1)]' : 'border-[#2A2E39]'} rounded-xl p-4 shadow-lg transition-all`}>
@@ -186,18 +199,18 @@ export default function TabelloneRender({
                         </div>
                       </div>
 
-                      {/* TASTO ARBITRA */}
+                      {/* TASTO ARBITRA / MODIFICA */}
                       <button
-                        onClick={() => setPartitaSelezionata(p)}
+                        onClick={() => apriModalArbitro(p)}
                         disabled={!isGiocabile}
                         className={`w-full mt-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border
-                          ${p.stato === 'conclusa' 
+                          ${!isGiocabile 
                             ? 'bg-transparent border-[#2A2E39] text-gray-600 cursor-not-allowed' 
-                            : isGiocabile 
-                              ? 'bg-[#FF0055]/10 border-[#FF0055]/50 text-[#FF0055] hover:bg-[#FF0055] hover:text-white cursor-pointer active:scale-95'
-                              : 'bg-transparent border-[#2A2E39] text-gray-600 cursor-not-allowed'}`}
+                            : p.stato === 'conclusa'
+                              ? 'bg-blue-500/10 border-blue-500/50 text-blue-500 hover:bg-blue-500 hover:text-white cursor-pointer active:scale-95'
+                              : 'bg-[#FF0055]/10 border-[#FF0055]/50 text-[#FF0055] hover:bg-[#FF0055] hover:text-white cursor-pointer active:scale-95'}`}
                       >
-                        {p.stato === 'conclusa' ? 'REFERTO CHIUSO' : 'ARBITRA'}
+                        {p.stato === 'conclusa' ? 'MODIFICA REFERTO' : 'ARBITRA'}
                       </button>
                     </div>
                   );
@@ -208,7 +221,7 @@ export default function TabelloneRender({
         })}
       </div>
 
-      {/* POP-UP DI ARBITRAGGIO PER IL REFERTO */}
+      {/* POP-UP DI ARBITRAGGIO PER IL REFERTO (Con Inserimento Punti) */}
       {partitaSelezionata && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-[#0B0D14] border border-[#2A2E39] rounded-[2rem] p-8 w-full max-w-md shadow-[0_0_50px_rgba(0,0,0,0.8)]">
@@ -261,4 +274,4 @@ export default function TabelloneRender({
       )}
     </>
   );
-}
+}s
