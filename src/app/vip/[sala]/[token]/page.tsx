@@ -130,25 +130,36 @@ export default function AppVIP() {
     }
   };
 
-  // --- PRENOTAZIONE ---
+  // --- PRENOTAZIONE AGGIORNATA PER IL DATABASE ---
   const inviaPrenotazione = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sala || !socio || !dataOra) return;
 
     setIsSubmitting(true);
     try {
+      // Separa la stringa in arrivo (es. "2026-08-15T21:00") in data e ora
+      const [data_scelta, ora_scelta] = dataOra.split('T');
+      
+      // Calcola l'ora di fine (aggiungendo 1 ora di default) per rispettare il DB
+      const dataObj = new Date(dataOra);
+      dataObj.setHours(dataObj.getHours() + 1);
+      const ora_fine_calcolata = dataObj.toTimeString().split(' ')[0]; // Estrae "HH:mm:ss"
+
       const { error } = await supabase.from('prenotazioni').insert([{
         sala_id: sala.id,
         nome_cliente: `${socio.cognome} ${socio.nome}`,
-        telefono: telefono || socio.telefono || "Non fornito",
-        data_ora: dataOra,
+        telefono_cliente: telefono || socio.telefono || "Non fornito", // Nome colonna corretto
+        data_prenotazione: data_scelta,                                // Nome colonna corretto
+        ora_inizio: ora_scelta + ":00",                                // Formato HH:mm:ss
+        ora_fine: ora_fine_calcolata,                                  // Ora obbligatoria calcolata
         note: note,
         stato: 'in_attesa'
       }]);
+      
       if (error) throw error;
       setPrenotazioneSuccess(true);
-    } catch (error) {
-      alert("Errore durante la prenotazione.");
+    } catch (error: any) {
+      alert("Errore durante la prenotazione: " + error.message);
     } finally {
       setIsSubmitting(false);
     }

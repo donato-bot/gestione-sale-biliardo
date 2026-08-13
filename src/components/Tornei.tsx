@@ -1,728 +1,630 @@
+// ==========================================
+// FILE: src/components/TorneiManager.tsx
+// ==========================================
 "use client";
 
-// ==========================================
-// FILE: src/components/Tornei.tsx
-// OBIETTIVO: Componente Motore Tornei - Fase 3 (Ponte con Anagrafica Soci)
-// ==========================================
-
 import { useState, useEffect } from "react";
-import { supabase } from "@/app/lib/supabase";
-import { useRouter } from "next/navigation";
+import { supabase } from "../app/lib/supabase";
 
-export default function Tornei({ salaId }: { salaId: string }) {
-  // LIVELLO 1: BANDO
-  const [torneiList, setTorneiList] = useState<any[]>([]);
-  const [nomeTorneo, setNomeTorneo] = useState("");
-  const [disciplina, setDisciplina] = useState("5 Birilli");
-  const [quota, setQuota] = useState("");
-  const [iscrittiMax, setIscrittiMax] = useState("32");
-  const [formula, setFormula] = useState("Eliminazione Diretta");
-  
+interface Torneo {
+  id: string;
+  manager_email: string;
+  nome: string;
+  data_inizio: string | null;
+  quota_iscrizione: number | null;
+  stato: string | null;
+  formato: string | null;
+  max_partecipanti: number | null;
+}
+
+interface Socio {
+  id: string;
+  nome_completo: string;
+  telefono: string | null;
+}
+
+interface Iscrizione {
+  id: string;
+  nome_giocatore: string;
+  telefono: string | null;
+  quota_pagata: boolean;
+}
+
+interface Partita {
+  id: string;
+  turno: number;
+  partita_num: number;
+  giocatore1_nome: string;
+  giocatore2_nome: string;
+  stato: string;
+}
+
+export default function TorneiManager({ managerEmail }: { managerEmail: string }) {
+  const [tornei, setTornei] = useState<Torneo[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [torneoAttivo, setTorneoAttivo] = useState<Torneo | null>(null);
+  const [soci, setSoci] = useState<Socio[]>([]);
+  const [iscrizioni, setIscrizioni] = useState<Iscrizione[]>([]);
+  const [partite, setPartite] = useState<Partita[]>([]);
+  const [socioSelezionato, setSocioSelezionato] = useState<string>("");
+
+  const [nome, setNome] = useState("");
   const [dataInizio, setDataInizio] = useState("");
-  const [dataFine, setDataFine] = useState("");
-  const [scadenzaIscrizioni, setScadenzaIscrizioni] = useState("");
-  const [note, setNote] = useState("");
-  
-  const [loading, setLoading] = useState(false);
+  const [quota, setQuota] = useState("");
+  const [formato, setFormato] = useState("solo_iscrizioni");
+  const [maxPartecipanti, setMaxPartecipanti] = useState("32");
 
-  // LIVELLO 2: BOTTEGHINO & TABELLONE
-  const [torneoSelezionato, setTorneoSelezionato] = useState<any>(null);
-  const [iscritti, setIscritti] = useState<any[]>([]);
-  const [partite, setPartite] = useState<any[]>([]);
-  
-  // STATI DEL PONTE (SOCI)
-  const [listaSoci, setListaSoci] = useState<any[]>([]);
-  const [tipoIscrizione, setTipoIscrizione] = useState<'socio' | 'esterno'>('socio');
-  const [socioSelezionato, setSocioSelezionato] = useState("");
-  const [nomeGiocatoreEsterno, setNomeGiocatoreEsterno] = useState("");
-  const [quotaPagata, setQuotaPagata] = useState(false);
+  useEffect(() => {
+    if (managerEmail) {
+      fetchTornei();
+      fetchSoci(); 
+    }
+  }, [managerEmail]);
 
-  // LIVELLO 3: DIREZIONE GARA & VISUALIZZAZIONE
-  const [partitaDaArbitrare, setPartitaDaArbitrare] = useState<any>(null);
-  const [vistaCompatta, setVistaCompatta] = useState(false);
+  useEffect(() => {
+    if (torneoAttivo) {
+      fetchIscrizioni(torneoAttivo.id);
+      if (torneoAttivo.stato === 'in_corso' || torneoAttivo.stato === 'concluso') {
+        fetchPartite(torneoAttivo.id);
+      }
+    }
+  }, [torneoAttivo]);
 
-  // MODALS
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState<any>({});
-
-  const router = useRouter();
-  const urlSoci = typeof window !== "undefined" ? `${window.location.origin}/club/${salaId}` : "";
-
-  // ==========================================
-  // FETCH INIZIALE E SOCI
-  // ==========================================
-  async function fetchTornei(isInitial = false) {
-    if (!salaId) return;
+  const fetchTornei = async () => {
+    setLoading(true);
     const { data, error } = await supabase
       .from('tornei')
       .select('*')
-      .eq('sala_id', salaId)
+      .eq('manager_email', managerEmail)
       .order('created_at', { ascending: false });
-    
-    if (error) alert(`ERRORE DATABASE (Lettura Tornei): ${error.message}`);
-    
-    if (data) {
-      setTorneiList(data);
-      if (isInitial) {
-        const torneoAttivo = data.find(t => t.stato === 'in_corso');
-        if (torneoAttivo) setTorneoSelezionato(torneoAttivo);
-      }
-    }
-  }
 
-  async function fetchSoci() {
-    if (!salaId) return;
+    if (!error) setTornei(data || []);
+    setLoading(false);
+  };
+
+  const fetchSoci = async () => {
     const { data, error } = await supabase
       .from('soci')
-      .select('id, nome, cognome')
-      .eq('sala_id', salaId)
-      .order('cognome', { ascending: true });
+      .select('*')
+      .eq('manager_email', managerEmail)
+      .order('nome_completo', { ascending: true });
+    
+    if (!error) setSoci(data || []);
+  };
+
+  const fetchIscrizioni = async (torneoId: string) => {
+    const { data, error } = await supabase
+      .from('torneo_iscrizioni')
+      .select('*')
+      .eq('torneo_id', torneoId)
+      .order('created_at', { ascending: true });
       
-    if (error) console.error("Errore caricamento soci nel modulo Tornei:", error.message);
-    if (data) setListaSoci(data);
-  }
+    if (!error) setIscrizioni(data || []);
+  };
 
-  useEffect(() => {
-    fetchTornei(true);
-    fetchSoci(); // Carichiamo i soci all'avvio del modulo
-  }, [salaId]);
+  const fetchPartite = async (torneoId: string) => {
+    const { data, error } = await supabase
+      .from('partite_torneo')
+      .select('*')
+      .eq('torneo_id', torneoId)
+      .order('turno', { ascending: true })
+      .order('partita_num', { ascending: true });
 
-  async function fetchIscrittiEPartite(torneo: any) {
-    const resIscritti = await supabase.from('iscritti_torneo').select('*').eq('torneo_id', torneo.id).order('created_at', { ascending: true });
-    if (resIscritti.error) alert(`ERRORE DATABASE (Lettura Iscritti): ${resIscritti.error.message}`);
-    else if (resIscritti.data) setIscritti(resIscritti.data);
+    if (!error) setPartite(data || []);
+  };
 
-    if (torneo.stato === 'in_corso' || torneo.stato === 'concluso') {
-      const resPartite = await supabase.from('partite_torneo').select('*').eq('torneo_id', torneo.id).order('partita_num', { ascending: true });
-      if (resPartite.error) alert(`ERRORE DATABASE (Lettura Partite Tabellone): ${resPartite.error.message}`);
-      else if (resPartite.data) setPartite(resPartite.data);
-    }
-  }
-
-  useEffect(() => {
-    if (torneoSelezionato) fetchIscrittiEPartite(torneoSelezionato);
-  }, [torneoSelezionato]);
-
-  // ==========================================
-  // AZIONI BANDO
-  // ==========================================
-  const handleCreaTorneo = async (e: any) => {
+  const creaTorneo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nomeTorneo || !quota) return;
-    setLoading(true);
-    
-    const payload = {
-      sala_id: salaId, 
-      titolo: nomeTorneo, 
-      specialita: disciplina, 
-      max_partecipanti: parseInt(iscrittiMax), 
-      quota_iscrizione: parseFloat(quota), 
-      formato: formula, 
-      stato: 'iscrizioni',
-      data_inizio: dataInizio || null,
-      data_fine: dataFine || null,
-      scadenza_iscrizioni: scadenzaIscrizioni || null,
-      descrizione: note
-    };
+    if (!nome.trim() || !managerEmail) return;
 
-    const { error } = await supabase.from('tornei').insert([payload]);
-    
-    setLoading(false);
-    if (error) alert(`ERRORE DATABASE (Creazione Torneo): ${error.message}`);
-    else { 
-      setNomeTorneo(""); setQuota(""); setDataInizio(""); setDataFine(""); setScadenzaIscrizioni(""); setNote("");
-      fetchTornei(false); 
+    const { error } = await supabase.from('tornei').insert([
+      {
+        manager_email: managerEmail,
+        nome: nome.toUpperCase(),
+        data_inizio: dataInizio || null,
+        quota_iscrizione: quota ? parseFloat(quota) : 0,
+        formato: formato,
+        max_partecipanti: parseInt(maxPartecipanti, 10),
+        stato: 'iscrizioni_aperte'
+      }
+    ]);
+
+    if (error) alert("Errore creazione torneo: " + error.message);
+    else {
+      setNome(""); setDataInizio(""); setQuota(""); setFormato("solo_iscrizioni"); setMaxPartecipanti("32");
+      fetchTornei();
     }
   };
 
-  const apriModifica = () => {
-    setEditForm({
-      nome: torneoSelezionato.titolo || "",
-      disciplina: torneoSelezionato.specialita || "5 Birilli",
-      max_iscritti: torneoSelezionato.max_partecipanti || 32,
-      quota: torneoSelezionato.quota_iscrizione || 0,
-      formula: torneoSelezionato.formato || "Eliminazione Diretta",
-      data_inizio: torneoSelezionato.data_inizio ? torneoSelezionato.data_inizio.split('T')[0] : "",
-      data_fine: torneoSelezionato.data_fine || "",
-      scadenza_iscrizioni: torneoSelezionato.scadenza_iscrizioni || "",
-      note: torneoSelezionato.descrizione || ""
-    });
-    setShowEditModal(true);
+  const eliminaTorneo = async (id: string) => {
+    if (!confirm("Sei sicuro di voler eliminare questo torneo?")) return;
+    const { error } = await supabase.from('tornei').delete().eq('id', id);
+    if (!error) fetchTornei();
   };
 
-  const handleSalvaModifiche = async (e: any) => {
+  const aggiungiIscrizione = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    if (!socioSelezionato || !torneoAttivo) return;
 
-    const payload = {
-      titolo: editForm.nome,
-      specialita: editForm.disciplina,
-      max_partecipanti: parseInt(editForm.max_iscritti),
-      quota_iscrizione: parseFloat(editForm.quota),
-      formato: editForm.formula,
-      data_inizio: editForm.data_inizio || null,
-      data_fine: editForm.data_fine || null,
-      scadenza_iscrizioni: editForm.scadenza_iscrizioni || null,
-      descrizione: editForm.note
-    };
-
-    const { error } = await supabase.from('tornei').update(payload).eq('id', torneoSelezionato.id);
-
-    setLoading(false);
-    if (error) {
-      alert(`ERRORE DATABASE (Salvataggio Modifiche): ${error.message}`);
-    } else {
-      const torneoAggiornato = { ...torneoSelezionato, ...payload };
-      setTorneoSelezionato(torneoAggiornato);
-      fetchTornei(false); 
-      setShowEditModal(false);
-    }
-  };
-
-  // ==========================================
-  // GESTIONE ISCRITTI (IL PONTE)
-  // ==========================================
-  const handleIscriviGiocatore = async (e: any) => {
-    e.preventDefault();
-    if (iscritti.length >= (torneoSelezionato.max_partecipanti || 32)) {
-      alert("🚨 Attenzione: Raggiunto il limite massimo di iscritti per questo torneo!");
+    if (torneoAttivo.max_partecipanti && iscrizioni.length >= torneoAttivo.max_partecipanti) {
+      alert(`Attenzione: Il torneo ha raggiunto il limite massimo di ${torneoAttivo.max_partecipanti} iscritti.`);
       return;
     }
-    
-    let nomeFinale = "";
 
-    if (tipoIscrizione === 'socio') {
-      if (!socioSelezionato) return alert("Seleziona un socio dal menu a tendina.");
-      const socioDb = listaSoci.find(s => s.id === socioSelezionato);
-      if (!socioDb) return;
-      nomeFinale = `${socioDb.cognome} ${socioDb.nome}`;
-    } else {
-      if (!nomeGiocatoreEsterno.trim()) return alert("Inserisci il nome del giocatore esterno.");
-      nomeFinale = `${nomeGiocatoreEsterno.trim()} (Esterno)`;
-    }
-    
-    const { error } = await supabase.from('iscritti_torneo').insert([{ 
-      torneo_id: torneoSelezionato.id, 
-      nome_completo: nomeFinale, 
-      pagato: quotaPagata 
-    }]);
-    
-    if (error) alert(`ERRORE DATABASE (Iscrizione): ${error.message}`);
-    else { 
-      setSocioSelezionato(""); 
-      setNomeGiocatoreEsterno(""); 
-      setQuotaPagata(false); 
-      fetchIscrittiEPartite(torneoSelezionato); 
+    const socio = soci.find(s => s.id === socioSelezionato);
+    if (!socio) return;
+
+    const { error } = await supabase.from('torneo_iscrizioni').insert([
+      {
+        torneo_id: torneoAttivo.id,
+        manager_email: managerEmail,
+        nome_giocatore: socio.nome_completo,
+        telefono: socio.telefono,
+        quota_pagata: false
+      }
+    ]);
+
+    if (error) alert("Errore iscrizione: " + error.message);
+    else {
+      setSocioSelezionato("");
+      fetchIscrizioni(torneoAttivo.id);
     }
   };
 
-  const togglePagamento = async (iscritto: any) => {
-    const { error } = await supabase.from('iscritti_torneo').update({ pagato: !iscritto.pagato }).eq('id', iscritto.id);
-    if (error) alert(`ERRORE DATABASE (Aggiornamento Pagamento): ${error.message}`);
-    else fetchIscrittiEPartite(torneoSelezionato);
+  const segnaPagato = async (idIscrizione: string, statoAttuale: boolean) => {
+    const { error } = await supabase.from('torneo_iscrizioni')
+      .update({ quota_pagata: !statoAttuale })
+      .eq('id', idIscrizione);
+    
+    if (!error && torneoAttivo) fetchIscrizioni(torneoAttivo.id);
   };
 
-  const eliminaIscritto = async (id: string) => {
-    if(!window.confirm("Rimuovere il giocatore?")) return;
-    const { error } = await supabase.from('iscritti_torneo').delete().eq('id', id);
-    if (error) alert(`ERRORE DATABASE (Eliminazione): ${error.message}`);
-    else fetchIscrittiEPartite(torneoSelezionato);
+  const rimuoviIscrizione = async (idIscrizione: string) => {
+    if (!confirm("Rimuovere questo giocatore dal torneo?")) return;
+    const { error } = await supabase.from('torneo_iscrizioni').delete().eq('id', idIscrizione);
+    if (!error && torneoAttivo) fetchIscrizioni(torneoAttivo.id);
   };
 
-  const handleGeneraTabellone = async () => {
-    if (iscritti.length < 2) return alert("Servono almeno 2 iscritti.");
-    if (!window.confirm("Attenzione: stai per chiudere le iscrizioni e generare l'intero organigramma. Procedere?")) return;
+  const handleGestisciTabellone = async () => {
+    if (iscrizioni.length < 2) {
+      alert("Servono almeno 2 iscritti per generare il tabellone.");
+      return;
+    }
 
-    setLoading(true);
-    let giocatori = [...iscritti];
+    let giocatori = [...iscrizioni];
+    const targetSize = torneoAttivo!.max_partecipanti || 32;
 
-    const potenze = [2, 4, 8, 16, 32, 64, 128];
-    const targetSize = potenze.find(p => p >= giocatori.length) || 32;
+    if (iscrizioni.length > targetSize) {
+      alert(`Attenzione: Hai ${iscrizioni.length} iscritti, ma il limite del torneo è fissato a ${targetSize}. Rimuovi gli iscritti in eccesso.`);
+      return;
+    }
+
+    if (iscrizioni.length < targetSize) {
+      const procedi = window.confirm(
+        `Attenzione: Ci sono ${iscrizioni.length} iscritti. Il tabellone è impostato per ${targetSize} posti.\nIl sistema calcolerà automaticamente ${targetSize - iscrizioni.length} passaggi diretti al Turno 2 (BYE). Vuoi procedere?`
+      );
+      if (!procedi) return;
+    }
 
     const byesNeeded = targetSize - giocatori.length;
     for (let i = 0; i < byesNeeded; i++) {
-      giocatori.push({ id: null, nome_completo: "BYE (Passaggio Turno)" });
+      giocatori.push({ id: `bye_${i}`, nome_giocatore: "BYE", telefono: null, quota_pagata: true });
     }
 
     giocatori.sort(() => Math.random() - 0.5);
 
     const nuovePartite = [];
-    let turnoCorrente = 1;
-    let partiteInQuestoTurno = targetSize / 2;
+    const totalRounds = Math.log2(targetSize);
+    let turniMatches = targetSize / 2;
 
-    for (let i = 0; i < targetSize; i += 2) {
-      nuovePartite.push({
-        torneo_id: torneoSelezionato.id,
-        turno: turnoCorrente,
-        partita_num: (i / 2) + 1,
-        giocatore1_id: giocatori[i].id,
-        giocatore2_id: giocatori[i+1].id,
-        giocatore1_nome: giocatori[i].nome_completo,
-        giocatore2_nome: giocatori[i+1].nome_completo,
-        stato: 'da_giocare'
-      });
-    }
+    for (let t = 1; t <= totalRounds; t++) {
+      for (let m = 1; m <= turniMatches; m++) {
+        if (t === 1) {
+          const g1 = giocatori[(m - 1) * 2].nome_giocatore;
+          const g2 = giocatori[(m - 1) * 2 + 1].nome_giocatore;
+          const hasBye = g1 === "BYE" || g2 === "BYE";
 
-    turnoCorrente++;
-    partiteInQuestoTurno /= 2;
+          nuovePartite.push({
+            torneo_id: torneoAttivo!.id,
+            manager_email: managerEmail,
+            turno: 1,
+            partita_num: m,
+            giocatore1_nome: g1,
+            giocatore2_nome: g2,
+            stato: hasBye ? 'conclusa' : 'da_giocare'
+          });
+        } else {
+          const prevMatch1 = nuovePartite.find(p => p.turno === t - 1 && p.partita_num === m * 2 - 1);
+          const prevMatch2 = nuovePartite.find(p => p.turno === t - 1 && p.partita_num === m * 2);
 
-    while (partiteInQuestoTurno >= 1) {
-      for (let i = 0; i < partiteInQuestoTurno; i++) {
-        nuovePartite.push({
-          torneo_id: torneoSelezionato.id,
-          turno: turnoCorrente,
-          partita_num: i + 1,
-          giocatore1_nome: 'In Attesa',
-          giocatore2_nome: 'In Attesa',
-          stato: 'da_giocare'
-        });
+          let g1 = "In attesa...";
+          let g2 = "In attesa...";
+
+          if (prevMatch1 && prevMatch1.stato === 'conclusa') {
+            g1 = prevMatch1.giocatore1_nome === "BYE" ? prevMatch1.giocatore2_nome : prevMatch1.giocatore1_nome;
+          }
+          if (prevMatch2 && prevMatch2.stato === 'conclusa') {
+            g2 = prevMatch2.giocatore1_nome === "BYE" ? prevMatch2.giocatore2_nome : prevMatch2.giocatore1_nome;
+          }
+
+          const hasOneBye = g1 === "BYE" || g2 === "BYE";
+          
+          let statoMatch = 'in_attesa';
+          if (g1 !== "In attesa..." && g2 !== "In attesa...") {
+            statoMatch = hasOneBye ? 'conclusa' : 'da_giocare';
+          }
+
+          nuovePartite.push({
+            torneo_id: torneoAttivo!.id,
+            manager_email: managerEmail,
+            turno: t,
+            partita_num: m,
+            giocatore1_nome: g1,
+            giocatore2_nome: g2,
+            stato: statoMatch
+          });
+        }
       }
-      turnoCorrente++;
-      partiteInQuestoTurno /= 2;
+      turniMatches = turniMatches / 2;
     }
 
-    const { error: partiteError } = await supabase.from('partite_torneo').insert(nuovePartite);
-    if (partiteError) {
-      alert(`ERRORE DATABASE (Generazione Tabellone): ${partiteError.message}`);
-      setLoading(false);
+    const { error } = await supabase.from('partite_torneo').insert(nuovePartite);
+    
+    if (error) {
+      alert("Errore nella generazione del tabellone: " + error.message);
+    } else {
+      await supabase.from('tornei').update({ stato: 'in_corso' }).eq('id', torneoAttivo!.id);
+      const torneoAggiornato = { ...torneoAttivo!, stato: 'in_corso' };
+      setTorneoAttivo(torneoAggiornato);
+      fetchPartite(torneoAttivo!.id);
+      alert(`✓ Tabellone a ${targetSize} generato con successo!`);
+    }
+  };
+
+  const registraVittoria = async (partitaId: string, vincitoreNome: string) => {
+    if (!confirm(`Confermi che ${vincitoreNome} ha vinto la partita?`)) return;
+
+    const matchCorrente = partite.find(p => p.id === partitaId);
+    if (!matchCorrente) return;
+
+    // 1. Chiudi il match corrente
+    const { error: err1 } = await supabase
+      .from('partite_torneo')
+      .update({ stato: 'conclusa' })
+      .eq('id', partitaId);
+
+    if (err1) {
+      alert("Errore nell'aggiornamento della partita: " + err1.message);
       return;
     }
 
-    await supabase.from('tornei').update({ stato: 'in_corso' }).eq('id', torneoSelezionato.id);
-
-    const torneoAggiornato = { ...torneoSelezionato, stato: 'in_corso' };
-    setTorneoSelezionato(torneoAggiornato);
-    fetchTornei(false);
-    fetchIscrittiEPartite(torneoAggiornato);
-    setLoading(false);
-  };
-
-  const dichiaraVincitore = async (vincitoreId: string | null, vincitoreNome: string) => {
-    if (!partitaDaArbitrare) return;
-    setLoading(true);
-
-    const { error } = await supabase.from('partite_torneo').update({ stato: 'conclusa' }).eq('id', partitaDaArbitrare.id);
-    if (error) {
-       alert(`ERRORE DATABASE (Chiusura Incontro): ${error.message}`);
-       setLoading(false);
-       return;
-    }
-
-    const nextTurno = partitaDaArbitrare.turno + 1;
-    const nextPartitaNum = Math.ceil(partitaDaArbitrare.partita_num / 2);
-    const isGiocatore1Slot = partitaDaArbitrare.partita_num % 2 !== 0;
+    // 2. Calcola lo slot del turno successivo
+    const nextTurno = matchCorrente.turno + 1;
+    const nextPartitaNum = Math.ceil(matchCorrente.partita_num / 2);
+    const isPlayer1 = matchCorrente.partita_num % 2 !== 0;
 
     const nextMatch = partite.find(p => p.turno === nextTurno && p.partita_num === nextPartitaNum);
 
     if (nextMatch) {
-      const updatePayload = isGiocatore1Slot
-        ? { giocatore1_id: vincitoreId, giocatore1_nome: vincitoreNome }
-        : { giocatore2_id: vincitoreId, giocatore2_nome: vincitoreNome };
-
-      await supabase.from('partite_torneo').update(updatePayload).eq('id', nextMatch.id);
-    } else {
-      await supabase.from('tornei').update({ stato: 'concluso' }).eq('id', torneoSelezionato.id);
-      setTorneoSelezionato({ ...torneoSelezionato, stato: 'concluso' });
-      fetchTornei(false);
-    }
-
-    setPartitaDaArbitrare(null);
-    fetchIscrittiEPartite(torneoSelezionato);
-    setLoading(false);
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(urlSoci);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
-  };
-
-  const handleReturn = () => {
-    if (torneoSelezionato) { 
-      setTorneoSelezionato(null); 
-      fetchTornei(false); 
-    } else {
-      router.push(`/dashboard/${salaId}`);
-    }
-  };
-
-  const getNomeTurno = (numPartite: number) => {
-    if (numPartite === 1) return "Finale";
-    if (numPartite === 2) return "Semifinali";
-    if (numPartite === 4) return "Quarti di Finale";
-    if (numPartite === 8) return "Ottavi di Finale";
-    if (numPartite === 16) return "Sedicesimi";
-    return `Turno Preliminare`;
-  };
-
-  const isIscrizioniAperte = (stato: string) => stato === 'iscrizioni' || stato === 'Iscrizioni Aperte';
-
-  return (
-    <div className="min-h-screen bg-[#E6F0EB] py-10 px-4 sm:px-6 lg:px-8 font-sans animate-in fade-in duration-300 flex items-start justify-center print:bg-white print:py-0 print:px-0">
+      // Prepara i dati per il prossimo match
+      let updateData: any = {};
       
-      <style dangerouslySetInnerHTML={{__html: `
-      @media print {
-        @page { size: A4 landscape; margin: 8mm; }
-        body { background-color: #ffffff !important; color: #000000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .print-area { transform: scale(0.85); transform-origin: top left; width: 115% !important; }
+      if (isPlayer1) {
+        updateData.giocatore1_nome = vincitoreNome;
+        if (nextMatch.giocatore2_nome !== "In attesa..." && nextMatch.giocatore2_nome !== "BYE") {
+          updateData.stato = 'da_giocare';
+        }
+      } else {
+        updateData.giocatore2_nome = vincitoreNome;
+        if (nextMatch.giocatore1_nome !== "In attesa..." && nextMatch.giocatore1_nome !== "BYE") {
+          updateData.stato = 'da_giocare';
+        }
       }
-      `}} />
 
-      {/* MODALE MODIFICA BANDO */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
-          <div className="bg-[#0B0D14] border border-[#2A2E39] p-8 rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar">
-            <h3 className="text-[#FFCC00] font-black uppercase tracking-widest text-lg mb-6 border-b border-[#2A2E39] pb-4">⚙️ Modifica Bando</h3>
-            <form onSubmit={handleSalvaModifiche} className="space-y-4">
-              <div>
-                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Nome Torneo</label>
-                <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00]" value={editForm.nome} onChange={(e) => setEditForm({...editForm, nome: e.target.value})} required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Disciplina</label>
-                  <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] appearance-none" value={editForm.disciplina} onChange={(e) => setEditForm({...editForm, disciplina: e.target.value})}>
-                    <option>5 Birilli</option><option>Goriziana</option><option>Boccette</option><option>Pool (Palla 8)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Max Iscritti</label>
-                  <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] appearance-none" value={editForm.max_iscritti} onChange={(e) => setEditForm({...editForm, max_iscritti: e.target.value})}>
-                    <option>8</option><option>16</option><option>32</option><option>64</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Quota Iscrizione (€)</label>
-                <input type="number" className="w-full bg-[#1A1D24] text-[#E91E63] font-black text-xl p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00]" value={editForm.quota} onChange={(e) => setEditForm({...editForm, quota: e.target.value})} required />
-              </div>
-              <div>
-                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Formula di Gara</label>
-                <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] appearance-none" value={editForm.formula} onChange={(e) => setEditForm({...editForm, formula: e.target.value})}>
-                  <option>Eliminazione Diretta</option><option>Doppia Eliminazione (In Sviluppo)</option><option>Gironi (In Sviluppo)</option>
-                </select>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Data Inizio</label>
-                  <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00]" value={editForm.data_inizio} onChange={(e) => setEditForm({...editForm, data_inizio: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Data Fine</label>
-                  <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00]" value={editForm.data_fine} onChange={(e) => setEditForm({...editForm, data_fine: e.target.value})} />
-                </div>
-              </div>
-              
-              <div className="mt-2">
-                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Scadenza Iscrizioni</label>
-                <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00]" value={editForm.scadenza_iscrizioni} onChange={(e) => setEditForm({...editForm, scadenza_iscrizioni: e.target.value})} />
-              </div>
-              
-              <div className="mt-2 mb-6">
-                <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Note / Istruzioni</label>
-                <textarea className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#FFCC00] resize-none h-24" value={editForm.note} onChange={(e) => setEditForm({...editForm, note: e.target.value})}></textarea>
-              </div>
+      // Aggiorna il match successivo
+      await supabase.from('partite_torneo').update(updateData).eq('id', nextMatch.id);
+    } else {
+      // Se non c'è un nextMatch, significa che abbiamo registrato la Finale!
+      alert(`🏆 IL TORNEO È CONCLUSO! 🏆\nIl grande campione è ${vincitoreNome}!`);
+      await supabase.from('tornei').update({ stato: 'concluso' }).eq('id', torneoAttivo!.id);
+      
+      const torneoAggiornato = { ...torneoAttivo!, stato: 'concluso' };
+      setTorneoAttivo(torneoAggiornato);
+      fetchTornei(); // Aggiorna la lista principale
+    }
 
-              <div className="flex gap-4 pt-4 border-t border-[#2A2E39]">
-                <button type="button" onClick={() => setShowEditModal(false)} className="w-1/3 bg-[#1A1D24] hover:bg-[#2A2E39] text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs">Annulla</button>
-                <button type="submit" disabled={loading} className="w-2/3 bg-[#FFCC00] hover:bg-[#E6B800] text-black py-4 rounded-xl font-black uppercase tracking-widest text-xs active:scale-95">{loading ? "Salvataggio..." : "Salva Modifiche"}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+    // Sincronizza l'interfaccia
+    fetchPartite(torneoAttivo!.id);
+  };
 
-      {/* MODALE CONDIVISIONE */}
-      {showShareModal && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
-          <div className="bg-[#0B0D14] border border-[#2A2E39] p-8 rounded-[2rem] w-full max-w-sm text-center shadow-2xl">
-            <h3 className="text-white font-black uppercase tracking-widest text-sm mb-2">App Pubblica Soci</h3>
-            <p className="text-gray-400 text-xs mb-6 font-bold">Fai inquadrare questo codice o condividi il link.</p>
-            <div className="bg-white p-4 rounded-xl inline-block mb-6 shadow-inner">
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(urlSoci)}`} alt="QR Code" className="w-40 h-40" />
-            </div>
-            <div className="space-y-3">
-              <input type="text" readOnly value={urlSoci} className="w-full bg-black text-xs text-gray-400 p-3 rounded-lg border border-[#2A2E39] text-center select-all focus:outline-none" />
-              <button type="button" onClick={copyToClipboard} className={`w-full py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-colors ${copied ? 'bg-[#00E676] text-black' : 'bg-[#00ADC6] hover:bg-[#008A9E] text-white'}`}>
-                {copied ? "✓ Copiato" : "Copia Link Rapido"}
-              </button>
-            </div>
-            <button type="button" onClick={() => setShowShareModal(false)} className="mt-6 text-gray-500 hover:text-white uppercase text-[10px] font-black tracking-widest block mx-auto">Chiudi</button>
-          </div>
-        </div>
-      )}
+  const turniPresenti = Array.from(new Set(partite.map(p => p.turno))).sort((a, b) => a - b);
 
-      {/* MODALE ARBITRAGGIO */}
-      {partitaDaArbitrare && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
-          <div className="bg-[#0B0D14] border border-[#2A2E39] p-8 rounded-2xl w-full max-w-md shadow-2xl">
-            <h3 className="text-[#E91E63] font-black uppercase tracking-widest text-sm mb-6 text-center border-b border-gray-800 pb-4">Decretare il Vincitore</h3>
-            <div className="space-y-4">
-              <button type="button" onClick={() => dichiaraVincitore(partitaDaArbitrare.giocatore1_id, partitaDaArbitrare.giocatore1_nome)} className="w-full bg-[#1A1D24] hover:bg-[#2A2E39] border border-gray-700 hover:border-[#00E5FF] text-white font-bold p-5 rounded-xl">🏆 {partitaDaArbitrare.giocatore1_nome}</button>
-              <div className="text-center text-gray-600 font-black text-xs uppercase">VS</div>
-              <button type="button" onClick={() => dichiaraVincitore(partitaDaArbitrare.giocatore2_id, partitaDaArbitrare.giocatore2_nome)} className="w-full bg-[#1A1D24] hover:bg-[#2A2E39] border border-gray-700 hover:border-[#00E5FF] text-white font-bold p-5 rounded-xl">🏆 {partitaDaArbitrare.giocatore2_nome}</button>
-            </div>
-            <button type="button" onClick={() => setPartitaDaArbitrare(null)} className="w-full mt-8 text-gray-500 hover:text-white uppercase text-xs font-bold tracking-widest">Annulla</button>
-          </div>
-        </div>
-      )}
-
-      <div className="w-full max-w-[95%] bg-[#0B0D14] border border-[#1E222B] rounded-[2.5rem] p-8 md:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col print:shadow-none print:border-none print:p-0 print:bg-white print:text-black">
-        
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-[#1E222B] pb-6 gap-6 shrink-0 print:border-b-2 print:gray-300 print:mb-4">
+  if (torneoAttivo) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-[#0B0D14] border border-[#2A2E39] p-6 rounded-2xl shadow-xl gap-4">
           <div>
-            <p className="text-[10px] text-[#00E676] font-black uppercase tracking-widest mb-1 print:text-gray-500">
-              {torneoSelezionato ? (torneoSelezionato.stato === 'concluso' ? '🏆 Torneo Concluso' : (isIscrizioniAperte(torneoSelezionato.stato) ? '🟢 Iscrizioni Aperte' : '🔴 Live: Organigramma Torneo')) : 'Direzione Gara'}
+            <button 
+              onClick={() => setTorneoAttivo(null)}
+              className="text-cyan-500 hover:text-cyan-400 font-bold text-xs uppercase tracking-widest mb-2 flex items-center gap-2 transition-colors"
+            >
+              ⟵ Torna ai Tornei
+            </button>
+            <h3 className="text-2xl text-white font-black uppercase tracking-widest">{torneoAttivo.nome}</h3>
+            <p className="text-gray-400 text-xs mt-1 font-mono">
+              {torneoAttivo.stato === 'concluso' ? '🏆 TORNEO CONCLUSO' : 
+               torneoAttivo.stato === 'in_corso' ? 'TABELLONE UFFICIALE - ELIMINAZIONE DIRETTA' : 
+               'SEGRETERIA E ISCRIZIONI'}
             </p>
-            <h2 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tight print:text-black">
-              {torneoSelezionato ? torneoSelezionato.titolo : 'Gestione Tornei'}
-            </h2>
           </div>
-          
-          <div className="flex flex-wrap gap-3 print:hidden">
-            {torneoSelezionato && isIscrizioniAperte(torneoSelezionato.stato) && (
-              <button type="button" onClick={apriModifica} className="bg-[#FFCC00]/10 hover:bg-[#FFCC00]/20 text-[#FFCC00] border border-[#FFCC00]/30 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-all">⚙️ Modifica Bando</button>
+          <div className="flex items-center gap-6">
+            {torneoAttivo.formato !== 'solo_iscrizioni' && torneoAttivo.stato !== 'in_corso' && torneoAttivo.stato !== 'concluso' && (
+              <button 
+                type="button"
+                onClick={handleGestisciTabellone}
+                className="bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-white font-black px-5 py-3 rounded-xl text-xs uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)] animate-pulse"
+              >
+                🏁 Genera Tabellone
+              </button>
             )}
-            <button type="button" onClick={() => setShowShareModal(true)} className="bg-[#00E5FF]/10 hover:bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/30 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-all">🔗 Condividi Club</button>
-            {torneoSelezionato && (torneoSelezionato.stato === 'in_corso' || torneoSelezionato.stato === 'concluso') && (
-              <>
-                <button type="button" onClick={() => setVistaCompatta(!vistaCompatta)} className="bg-[#1A1D24] hover:bg-[#2A2E39] text-white border border-gray-700 px-4 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors">{vistaCompatta ? "🔎 Espandi Griglia" : "📱 Vista Compatta"}</button>
-                <button type="button" onClick={() => window.print()} className="bg-[#E91E63] hover:bg-[#C2185B] text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors">🖨️ Stampa PDF</button>
-              </>
-            )}
-            <button type="button" onClick={handleReturn} className="bg-[#1A1D24] hover:bg-[#2A2E39] text-white border border-gray-700 px-5 py-2.5 rounded-lg text-xs font-bold uppercase transition-colors">{torneoSelezionato ? "← Torna ai Tornei" : "← Torre di Controllo"}</button>
+            <div className="text-right">
+              <span className="block text-3xl font-black text-emerald-400">
+                {torneoAttivo.stato === 'in_corso' || torneoAttivo.stato === 'concluso' ? partite.length : iscrizioni.length}
+                <span className="text-lg text-gray-600">/{torneoAttivo.max_partecipanti || '∞'}</span>
+              </span>
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest">
+                {torneoAttivo.stato === 'in_corso' || torneoAttivo.stato === 'concluso' ? 'Partite Totali' : 'Iscritti Totali'}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* VISTA 3: IN CORSO / CONCLUSO */}
-        {torneoSelezionato && (torneoSelezionato.stato === 'in_corso' || torneoSelezionato.stato === 'concluso') && (
-          <div className="bg-[#0B0D14] border border-gray-800 rounded-2xl p-6 flex-1 overflow-x-auto custom-scrollbar print:border-none print:p-0 print:overflow-visible print:bg-white">
-            <div className="print-area flex gap-12 min-w-max h-full min-h-[600px] items-stretch pb-4 print:min-h-0 print:pb-0">
-              {[...new Set(partite.map(p => p.turno))].sort((a, b) => a - b).map(turnoNum => {
-                const partiteTurno = partite.filter(p => p.turno === turnoNum);
-                return (
-                  <div key={turnoNum} className="flex flex-col shrink-0 print:w-[230px]" style={{ width: vistaCompatta ? '230px' : '320px', transition: 'all 0.3s' }}>
-                    <h3 className={`text-center font-black uppercase tracking-widest text-[#00E5FF] bg-[#1A1D24] py-3 rounded-lg border border-[#2A2E39] print:bg-gray-100 print:text-black print:border-gray-300 print:mb-4 ${vistaCompatta ? 'text-[11px] mb-4' : 'text-sm mb-8'}`}>{getNomeTurno(partiteTurno.length)}</h3>
-                    <div className="flex-1 flex flex-col justify-around gap-4 relative">
-                      {partiteTurno.map((p) => (
-                        <div key={p.id} className={`bg-[#1A1D24] border ${p.stato === 'conclusa' ? 'border-[#00E676]/50' : 'border-[#2A2E39]'} rounded-xl ${vistaCompatta ? 'p-2.5 shadow-md' : 'p-4 shadow-lg'} relative z-10 group print:border-gray-400 print:bg-white print:shadow-none print:break-inside-avoid`}>
-                          <div className={`absolute top-0 left-0 w-1 h-full rounded-l-xl print:hidden ${p.stato === 'conclusa' ? 'bg-[#00E676]' : (p.turno === 1 ? 'bg-[#E91E63]' : 'bg-[#00ADC6]')}`}></div>
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest print:text-black">Incontro #{p.partita_num}</span>
-                            {p.stato === 'conclusa' && <span className="text-[9px] text-[#00E676] font-black uppercase tracking-widest print:text-gray-500">✓</span>}
-                          </div>
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between items-center bg-[#0B0D14] p-2 rounded-lg border border-[#2A2E39] print:bg-white print:border-gray-300">
-                              <span className={`font-bold truncate print:text-black ${vistaCompatta ? 'text-[11px]' : 'text-xs'} ${p.giocatore1_nome?.includes('BYE') || p.giocatore1_nome === 'In Attesa' ? 'text-gray-600 print:text-gray-400' : 'text-white'}`}>{p.giocatore1_nome}</span>
-                            </div>
-                            <div className="flex justify-between items-center bg-[#0B0D14] p-2 rounded-lg border border-[#2A2E39] print:bg-white print:border-gray-300">
-                              <span className={`font-bold truncate print:text-black ${vistaCompatta ? 'text-[11px]' : 'text-xs'} ${p.giocatore2_nome?.includes('BYE') || p.giocatore2_nome === 'In Attesa' ? 'text-gray-600 print:text-gray-400' : 'text-white'}`}>{p.giocatore2_nome}</span>
-                            </div>
-                          </div>
-                          {p.stato !== 'conclusa' && p.giocatore1_nome !== 'In Attesa' && p.giocatore2_nome !== 'In Attesa' && (
-                            <button type="button" onClick={() => setPartitaDaArbitrare(p)} className={`w-full border border-gray-700 hover:border-[#00E5FF] hover:text-[#00E5FF] text-gray-500 font-bold uppercase tracking-widest rounded-md transition-colors print:hidden ${vistaCompatta ? 'text-[8px] py-1 mt-2' : 'text-[9px] py-1.5 mt-3'}`}>Arbitra</button>
+        {torneoAttivo.stato === 'in_corso' || torneoAttivo.stato === 'concluso' ? (
+          <div className="bg-[#0B0D14] border border-[#2A2E39] p-6 rounded-2xl shadow-xl space-y-10 overflow-x-auto">
+            {turniPresenti.map(turno => (
+              <div key={turno} className="relative min-w-[300px]">
+                <div className="flex items-center gap-4 mb-6">
+                  <h4 className="text-lg text-cyan-400 font-black uppercase tracking-widest bg-[#0B0D14] pr-4">
+                    🏆 Griglia Turno {turno} {turno === turniPresenti.length ? '(FINALE)' : ''}
+                  </h4>
+                  <div className="flex-1 border-b border-gray-800"></div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                  {partite.filter(p => p.turno === turno).map(p => {
+                    const isP1Bye = p.giocatore1_nome === "BYE";
+                    const isP2Bye = p.giocatore2_nome === "BYE";
+
+                    return (
+                      <div key={p.id || `${p.turno}-${p.partita_num}`} className="bg-[#121520] border border-gray-800 p-4 rounded-xl flex flex-col justify-between hover:border-gray-700 transition-colors">
+                        <div className="flex justify-between items-center mb-4">
+                          <span className="text-[10px] font-mono text-cyan-500 uppercase font-bold">Match #{p.partita_num}</span>
+                          {p.stato === 'conclusa' ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase font-black">Conclusa</span>
+                          ) : p.stato === 'da_giocare' ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 uppercase font-black animate-pulse">Da Giocare</span>
+                          ) : (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-gray-500/20 text-gray-500 uppercase font-bold">In Attesa</span>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* VISTA 2: ISCRIZIONI APERTE (IL PONTE AGGIORNATO) */}
-        {torneoSelezionato && isIscrizioniAperte(torneoSelezionato.stato) && (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-            <div className="col-span-1 md:col-span-8 bg-transparent border border-gray-700 rounded-2xl p-6 flex flex-col min-h-[500px]">
-              <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-white">Elenco Giocatori</h3>
-                <span className="bg-[#1A1D24] px-3 py-1 rounded-md text-[10px] text-white font-black tracking-widest">ISCRITTI: {iscritti.length} / {torneoSelezionato.max_partecipanti || 32}</span>
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-                {iscritti.length === 0 ? <div className="h-full flex items-center justify-center opacity-50"><p className="font-black text-sm uppercase tracking-widest">Nessun giocatore iscritto</p></div> 
-                : iscritti.map((iscritto, i) => (
-                  <div key={iscritto.id} className="bg-[#1A1D24] border border-[#2A2E39] p-4 rounded-xl flex justify-between items-center group">
-                    <div className="flex items-center gap-4">
-                      <span className="text-gray-600 font-black w-6 text-right">{i + 1}.</span>
-                      <h4 className="text-white font-bold text-sm uppercase">
-                        {iscritto.nome_completo}
-                      </h4>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <button type="button" onClick={() => togglePagamento(iscritto)} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest border ${iscritto.pagato ? 'bg-[#00E676]/20 text-[#00E676] border-[#00E676]/30' : 'bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/30'}`}>{iscritto.pagato ? '✓ PAGATO' : 'DA PAGARE'}</button>
-                      <button type="button" onClick={() => eliminaIscritto(iscritto.id)} className="text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100">🗑️</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="col-span-1 md:col-span-4 bg-transparent border border-gray-700 rounded-2xl p-6 h-fit sticky top-6">
-              <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-[#E91E63] border-b border-gray-800 pb-4">Nuovo Iscritto</h3>
-              
-              {/* TOGGLE TIPO ISCRIZIONE */}
-              <div className="flex mb-6 bg-[#1A1D24] p-1 rounded-lg border border-[#2A2E39]">
-                <button 
-                  onClick={() => setTipoIscrizione('socio')} 
-                  className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-md transition-all ${tipoIscrizione === 'socio' ? 'bg-[#E91E63] text-white shadow-md' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  Socio Club
-                </button>
-                <button 
-                  onClick={() => setTipoIscrizione('esterno')} 
-                  className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-md transition-all ${tipoIscrizione === 'esterno' ? 'bg-gray-700 text-white shadow-md' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  Esterno
-                </button>
-              </div>
-
-              <form onSubmit={handleIscriviGiocatore} className="space-y-5">
-                
-                {tipoIscrizione === 'socio' ? (
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Seleziona dal Database</label>
-                    <select 
-                      value={socioSelezionato} 
-                      onChange={(e) => setSocioSelezionato(e.target.value)} 
-                      disabled={iscritti.length >= (torneoSelezionato.max_partecipanti || 32)}
-                      className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] appearance-none"
-                    >
-                      <option value="">-- Clicca per cercare --</option>
-                      {listaSoci.map(s => (
-                        <option key={s.id} value={s.id}>{s.cognome} {s.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Nome Giocatore Esterno</label>
-                    <input 
-                      type="text" 
-                      className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-gray-500" 
-                      placeholder="Es. Mario Rossi" 
-                      value={nomeGiocatoreEsterno} 
-                      onChange={(e) => setNomeGiocatoreEsterno(e.target.value)} 
-                      disabled={iscritti.length >= (torneoSelezionato.max_partecipanti || 32)} 
-                    />
-                  </div>
-                )}
-
-                <label className="flex items-center gap-3 cursor-pointer p-3 bg-[#1A1D24] border border-[#2A2E39] rounded-lg">
-                  <input type="checkbox" className="w-5 h-5 accent-[#E91E63]" checked={quotaPagata} onChange={(e) => setQuotaPagata(e.target.checked)} disabled={iscritti.length >= (torneoSelezionato.max_partecipanti || 32)}/>
-                  <span className="text-sm font-bold text-white">Quota Versata (€ {torneoSelezionato.quota_iscrizione})</span>
-                </label>
-
-                <button 
-                  type="submit" 
-                  disabled={(tipoIscrizione === 'socio' ? !socioSelezionato : !nomeGiocatoreEsterno) || iscritti.length >= (torneoSelezionato.max_partecipanti || 32)} 
-                  className={`w-full py-4 rounded-xl font-black uppercase text-sm mt-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${iscritti.length >= (torneoSelezionato.max_partecipanti || 32) ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : (tipoIscrizione === 'socio' ? 'bg-[#E91E63] text-white hover:bg-[#C2185B]' : 'bg-gray-600 text-white hover:bg-gray-500')}`}
-                >
-                  {iscritti.length >= (torneoSelezionato.max_partecipanti || 32) ? "Torneo Completo" : "Iscrivi Giocatore"}
-                </button>
-              </form>
-              
-              <div className="mt-8 pt-6 border-t border-gray-800">
-                <button type="button" onClick={handleGeneraTabellone} disabled={iscritti.length < 2 || loading} className="w-full bg-[#00ADC6] hover:bg-[#008A9E] disabled:bg-gray-800 text-white py-4 rounded-xl font-black uppercase text-xs shadow-[0_5px_15px_rgba(0,173,198,0.2)]">
-                  {loading ? 'Elaborazione...' : 'Genera Tabellone 🏁'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* VISTA 1: ARCHIVIO (DEFAULT) */}
-        {!torneoSelezionato && (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-            <div className="col-span-1 md:col-span-8 flex flex-col gap-6">
-              <div className="bg-transparent border border-gray-700 rounded-2xl p-6 flex-1 flex flex-col min-h-[500px]">
-                <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
-                  <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#E91E63] animate-pulse"></span> Archivio Competizioni</h3>
-                </div>
-                <div className="flex-1 overflow-y-auto space-y-3">
-                  {torneiList.map((torneo) => (
-                    <div key={torneo.id} onClick={() => setTorneoSelezionato(torneo)} className="bg-[#1A1D24] border border-[#2A2E39] p-5 rounded-xl flex justify-between items-center hover:border-[#E91E63] hover:shadow-[0_0_15px_rgba(233,30,99,0.2)] transition-all cursor-pointer group">
-                      <div>
-                        <h4 className="text-white font-black text-lg uppercase tracking-tight group-hover:text-[#E91E63] transition-colors">{torneo.titolo}</h4>
-                        <div className="flex gap-3 mt-2">
-                          <span className="text-[10px] text-[#00E5FF] font-black uppercase bg-[#00E5FF]/10 px-2 py-0.5 rounded-sm">{torneo.specialita}</span>
-                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-sm ${torneo.stato === 'in_corso' ? 'bg-[#00E676]/10 text-[#00E676]' : (torneo.stato === 'concluso' ? 'bg-gray-600/20 text-gray-400' : 'bg-[#FFCC00]/10 text-[#FFCC00]')}`}>
-                            {torneo.stato === 'in_corso' ? 'In Corso' : (torneo.stato === 'concluso' ? 'Concluso' : 'Iscrizioni Aperte')}
-                          </span>
+                        <div className="space-y-1.5">
+                          {/* Giocatore 1 */}
+                          <div className={`flex justify-between items-center text-xs font-bold uppercase px-3 py-2.5 rounded-lg border transition-all ${
+                            p.stato === 'conclusa' && isP2Bye ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : 
+                            isP1Bye ? 'bg-black/20 text-gray-700 border-gray-800/50 opacity-50 line-through' : 
+                            'bg-black/40 text-white border-gray-800/80'
+                          }`}>
+                            <span className="truncate pr-2">{p.giocatore1_nome}</span>
+                            {p.stato === 'da_giocare' && !isP1Bye && (
+                              <button 
+                                onClick={() => registraVittoria(p.id, p.giocatore1_nome)}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded shadow-md transition-transform active:scale-95"
+                                title="Dichiara Vincitore"
+                              >
+                                🏆
+                              </button>
+                            )}
+                          </div>
+                          
+                          <div className="text-center text-gray-700 font-black text-[10px]">VS</div>
+                          
+                          {/* Giocatore 2 */}
+                          <div className={`flex justify-between items-center text-xs font-bold uppercase px-3 py-2.5 rounded-lg border transition-all ${
+                            p.stato === 'conclusa' && isP1Bye ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : 
+                            isP2Bye ? 'bg-black/20 text-gray-700 border-gray-800/50 opacity-50 line-through' : 
+                            'bg-black/40 text-white border-gray-800/80'
+                          }`}>
+                            <span className="truncate pr-2">{p.giocatore2_nome}</span>
+                            {p.stato === 'da_giocare' && !isP2Bye && (
+                              <button 
+                                onClick={() => registraVittoria(p.id, p.giocatore2_nome)}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded shadow-md transition-transform active:scale-95"
+                                title="Dichiara Vincitore"
+                              >
+                                🏆
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
-            </div>
-            
-            <div className="col-span-1 md:col-span-4 bg-transparent border border-gray-700 rounded-2xl p-6 h-fit sticky top-6">
-              <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-[#E91E63] border-b border-gray-800 pb-4">Nuovo Bando</h3>
-              <form onSubmit={handleCreaTorneo} className="space-y-4">
-                <div>
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Nome Torneo</label>
-                  <input className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" placeholder="Es. 1° Trofeo Cittadino" value={nomeTorneo} onChange={(e) => setNomeTorneo(e.target.value)} required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Disciplina</label>
-                    <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors appearance-none" value={disciplina} onChange={(e) => setDisciplina(e.target.value)}>
-                      <option>5 Birilli</option><option>Goriziana</option><option>Boccette</option><option>Pool (Palla 8)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Max Iscritti</label>
-                    <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors appearance-none" value={iscrittiMax} onChange={(e) => setIscrittiMax(e.target.value)}>
-                      <option>8</option><option>16</option><option>32</option><option>64</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Quota Iscrizione (€)</label>
-                  <input type="number" className="w-full bg-[#1A1D24] text-[#E91E63] font-black text-xl p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" placeholder="0.00" value={quota} onChange={(e) => setQuota(e.target.value)} required />
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Formula di Gara</label>
-                  <select className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors appearance-none" value={formula} onChange={(e) => setFormula(e.target.value)}>
-                    <option>Eliminazione Diretta</option><option>Doppia Eliminazione (In Sviluppo)</option><option>Gironi (In Sviluppo)</option>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="bg-[#0B0D14] border border-[#2A2E39] p-6 rounded-2xl shadow-xl">
+              <form onSubmit={aggiungiIscrizione} className="flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex-1 w-full">
+                  <label className="block text-[10px] text-cyan-500 font-black uppercase tracking-widest mb-2">Seleziona Socio dal database</label>
+                  <select 
+                    value={socioSelezionato}
+                    onChange={e => setSocioSelezionato(e.target.value)}
+                    className="bg-black border border-gray-800 px-4 py-3 rounded-xl text-white text-xs font-bold uppercase focus:outline-none focus:border-cyan-500 w-full appearance-none cursor-pointer"
+                    required
+                  >
+                    <option value="">-- Scegli un giocatore --</option>
+                    {soci.map(socio => (
+                      <option key={socio.id} value={socio.id}>{socio.nome_completo}</option> 
+                    ))}
                   </select>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Data Inizio</label>
-                    <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Data Fine</label>
-                    <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" value={dataFine} onChange={(e) => setDataFine(e.target.value)} />
-                  </div>
-                </div>
-                
-                <div className="mt-2">
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Scadenza Iscrizioni</label>
-                  <input type="date" className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors" value={scadenzaIscrizioni} onChange={(e) => setScadenzaIscrizioni(e.target.value)} />
-                </div>
-                
-                <div className="mt-2 mb-6">
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1.5 block">Note / Istruzioni</label>
-                  <textarea className="w-full bg-[#1A1D24] text-white font-bold p-3.5 rounded-lg border border-[#2A2E39] focus:outline-none focus:border-[#E91E63] transition-colors resize-none h-24" placeholder="Es. Iscrizioni aperte tramite App o bancone..." value={note} onChange={(e) => setNote(e.target.value)}></textarea>
-                </div>
-
-                <button type="submit" disabled={loading} className="w-full bg-[#E91E63] hover:bg-[#C2185B] text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all active:scale-95 mt-4">
-                  {loading ? "Generazione..." : "Genera Bando"}
+                <button 
+                  type="submit" 
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white font-black px-8 py-3 rounded-xl text-xs uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] w-full md:w-auto"
+                >
+                  + Iscrivi
                 </button>
               </form>
             </div>
-          </div>
+
+            <div className="bg-[#0B0D14] border border-[#2A2E39] rounded-2xl shadow-xl overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#121520] border-b border-gray-800">
+                    <th className="p-4 text-[10px] text-gray-500 font-black uppercase tracking-widest">Giocatore</th>
+                    <th className="p-4 text-[10px] text-gray-500 font-black uppercase tracking-widest">Quota</th>
+                    <th className="p-4 text-[10px] text-gray-500 font-black uppercase tracking-widest text-right">Azioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {iscrizioni.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="p-8 text-center text-gray-500 text-xs font-bold uppercase">
+                        Nessun giocatore iscritto al momento.
+                      </td>
+                    </tr>
+                  ) : (
+                    iscrizioni.map(iscr => (
+                      <tr key={iscr.id} className="border-b border-gray-800/50 hover:bg-[#121520] transition-colors">
+                        <td className="p-4 text-white font-bold uppercase text-sm">{iscr.nome_giocatore}</td>
+                        <td className="p-4">
+                          <button 
+                            onClick={() => segnaPagato(iscr.id, iscr.quota_pagata)}
+                            className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-md transition-all ${
+                              iscr.quota_pagata 
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            }`}
+                          >
+                            {iscr.quota_pagata ? '✅ Pagato' : '❌ Da Pagare'}
+                          </button>
+                        </td>
+                        <td className="p-4 text-right">
+                          <button 
+                            onClick={() => rimuoviIscrizione(iscr.id)}
+                            className="text-gray-600 hover:text-red-500 font-black transition-colors"
+                          >
+                            ✖
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="bg-[#0B0D14] border border-[#2A2E39] p-6 rounded-2xl shadow-xl">
+        <div className="mb-6">
+          <h3 className="text-xl text-white font-black uppercase tracking-widest">🏆 Nuovo Torneo</h3>
+          <p className="text-gray-400 text-xs mt-1">Imposta i parametri e scegli il formato della competizione.</p>
+        </div>
+
+        <form onSubmit={creaTorneo} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+          <div className="lg:col-span-2">
+            <label className="block text-[10px] text-cyan-500 font-black uppercase tracking-widest mb-2">Nome Competizione</label>
+            <input type="text" placeholder="Es. TROFEO DI PRIMAVERA" value={nome} onChange={e => setNome(e.target.value)} className="bg-black border border-gray-800 px-4 py-3 rounded-xl text-white text-xs font-bold uppercase placeholder-gray-600 focus:outline-none focus:border-cyan-500 w-full" required />
+          </div>
+          <div>
+            <label className="block text-[10px] text-cyan-500 font-black uppercase tracking-widest mb-2">Data Inizio</label>
+            <input type="date" value={dataInizio} onChange={e => setDataInizio(e.target.value)} className="bg-black border border-gray-800 px-4 py-3 rounded-xl text-white text-xs font-bold uppercase focus:outline-none focus:border-cyan-500 w-full" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-cyan-500 font-black uppercase tracking-widest mb-2">Quota (€)</label>
+            <input type="number" placeholder="Es. 15" value={quota} onChange={e => setQuota(e.target.value)} className="bg-black border border-gray-800 px-4 py-3 rounded-xl text-white text-xs font-bold uppercase placeholder-gray-600 focus:outline-none focus:border-cyan-500 w-full" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-cyan-500 font-black uppercase tracking-widest mb-2">Max Iscritti</label>
+            <select value={maxPartecipanti} onChange={e => setMaxPartecipanti(e.target.value)} className="bg-black border border-gray-800 px-4 py-3 rounded-xl text-white text-xs font-bold uppercase focus:outline-none focus:border-cyan-500 w-full appearance-none cursor-pointer">
+              <option value="8">8 Giocatori</option>
+              <option value="16">16 Giocatori</option>
+              <option value="32">32 Giocatori</option>
+              <option value="64">64 Giocatori</option>
+              <option value="128">128 Giocatori</option>
+            </select>
+          </div>
+          <div className="lg:col-span-2">
+            <label className="block text-[10px] text-cyan-500 font-black uppercase tracking-widest mb-2">Formato Torneo</label>
+            <select value={formato} onChange={e => setFormato(e.target.value)} className="bg-black border border-gray-800 px-4 py-3 rounded-xl text-white text-xs font-bold uppercase focus:outline-none focus:border-cyan-500 w-full appearance-none cursor-pointer">
+              <option value="solo_iscrizioni">Solo Iscrizioni (Gestione Manuale)</option>
+              <option value="eliminazione_diretta">Tabellone a Eliminazione Diretta</option>
+              <option value="gironi">Gironi + Eliminazione Diretta</option>
+            </select>
+          </div>
+          <div className="lg:col-span-3 flex justify-end">
+            <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_15px_rgba(6,182,212,0.3)] w-full md:w-auto">
+              + Crea Torneo
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {loading ? (
+        <div className="p-10 text-center text-cyan-500 animate-pulse font-bold uppercase tracking-widest">Caricamento tornei in corso...</div>
+      ) : tornei.length > 0 ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {tornei.map(torneo => (
+            <div key={torneo.id} className="bg-[#0B0D14] border border-[#2A2E39] p-6 rounded-2xl relative overflow-hidden flex flex-col justify-between hover:border-cyan-900/50 transition-colors">
+              <div>
+                <div className="flex justify-between items-start mb-4">
+                  <h4 className="text-xl text-white font-black uppercase tracking-tight">{torneo.nome}</h4>
+                  <button type="button" onClick={() => eliminaTorneo(torneo.id)} className="text-gray-600 hover:text-red-500 transition-colors">✖</button>
+                </div>
+                <div className="space-y-2 mb-6">
+                  <p className="text-xs text-gray-400 font-mono"><span className="text-gray-500">FORMATO:</span> {torneo.formato?.replace('_', ' ').toUpperCase()}</p>
+                  <p className="text-xs text-gray-400 font-mono"><span className="text-gray-500">DATA:</span> {torneo.data_inizio ? new Date(torneo.data_inizio).toLocaleDateString('it-IT') : 'Da definire'}</p>
+                  <p className="text-xs text-gray-400 font-mono">
+                    <span className="text-gray-500">QUOTA:</span> {torneo.quota_iscrizione ? `€ ${torneo.quota_iscrizione}` : 'Gratis'}
+                    <span className="mx-2 text-gray-700">|</span>
+                    <span className="text-gray-500">MAX ISCRITTI:</span> {torneo.max_partecipanti || 'N/D'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-between items-center border-t border-gray-800 pt-4 mt-4">
+                <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-md ${
+                  torneo.stato === 'in_corso' ? 'bg-cyan-500/20 text-cyan-400' : 
+                  torneo.stato === 'concluso' ? 'bg-amber-500/20 text-amber-400' :
+                  'bg-emerald-500/20 text-emerald-400'
+                }`}>
+                  {torneo.stato ? torneo.stato.replace('_', ' ') : 'ATTIVO'}
+                </span>
+                <button 
+                  type="button" 
+                  onClick={() => setTorneoAttivo(torneo)}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                >
+                  Gestisci ➔
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-[#0B0D14] border border-[#2A2E39] rounded-2xl p-16 text-center">
+          <p className="text-gray-500 font-black uppercase tracking-widest mb-2">Nessun torneo in programma.</p>
+        </div>
+      )}
     </div>
   );
 }

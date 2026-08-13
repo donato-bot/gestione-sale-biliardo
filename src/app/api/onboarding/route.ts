@@ -1,174 +1,255 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
+// ==========================================
+// FILE: src/app/api/onboarding/route.ts
+// OBIETTIVO: API Backend per Varo, Kill Switch, Cancellazione e Invio Email (Resend Dinamico)
+// ==========================================
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const SUPER_ADMIN = "donatorzz1946@gmail.com";
+// --- HELPER FUNCTION: Inizializza Supabase Admin ---
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// CONTROLLO DI SICUREZZA UNIFICATO
-async function verificaSuperAdmin(request: Request) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Configurazione Server Errata (Ambiente)");
+  }
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+// --- HELPER FUNCTION: Verifica Autorizzazione Super Admin ---
+async function verifySuperAdmin(request: Request, supabaseAdmin: any) {
   const authHeader = request.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "");
+  if (!authHeader) throw new Error("Token mancante");
+
+  const token = authHeader.split(" ")[1];
+  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
   
-  if (!token) return null;
-  
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user || user.email !== SUPER_ADMIN) return null;
-  
+  if (authError || !user || user.email?.toLowerCase() !== "donatorzz1946@gmail.com") {
+    throw new Error("Accesso negato: Solo il Super Admin può eseguire questa operazione.");
+  }
   return user;
 }
 
-// 1. GESTIONE CREAZIONE SALA E UTENTE (POST)
+
+// ==========================================
+// METODO POST: Creazione/Aggiornamento Sala e INVIO EMAIL
+// ==========================================
 export async function POST(request: Request) {
   try {
-    const adminAutenticato = await verificaSuperAdmin(request);
-    if (!adminAutenticato) {
-      return NextResponse.json({ error: "Accesso negato: Solo il Super Admin può varare nuovi club" }, { status: 403 });
-    }
+    const supabaseAdmin = getSupabaseAdmin();
+    await verifySuperAdmin(request, supabaseAdmin);
 
-    const { nomeSala, emailManager, passwordTemporanea } = await request.json();
+    const body = await request.json();
+    const { nomeSala, emailManager, passwordTemporanea, numeroBiliardi } = body;
 
     if (!nomeSala || !emailManager || !passwordTemporanea) {
-      return NextResponse.json({ error: "Dati incompleti" }, { status: 400 });
+      return NextResponse.json({ error: "Parametri incompleti" }, { status: 400 });
     }
 
-    // Creazione Utente in Auth
-    const { data: authUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
+    const tavoliInt = parseInt(numeroBiliardi, 10) || 0;
+    const nomeFormattato = nomeSala.toUpperCase();
+
+    // 1. SignUp
+    const { error: createError } = await supabaseAdmin.auth.signUp({
       email: emailManager,
       password: passwordTemporanea,
-      email_confirm: true,
+      options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback` }
     });
 
-    if (createUserError) {
-      return NextResponse.json({ error: `Errore creazione Auth: ${createUserError.message}` }, { status: 400 });
+    if (createError && !createError.message.toLowerCase().includes("already registered")) {
+      console.error("ERRORE SignUp:", createError);
+      return NextResponse.json({ error: createError.message }, { status: 400 });
     }
 
-    // Calcolo scadenza contributo (30 giorni)
-    const scadenza = new Date();
-    scadenza.setDate(scadenza.getDate() + 30);
+    // 2. Verifica se la sala esiste già e Database Insert
+    const { data: existingSala } = await supabaseAdmin
+      .from('sale')
+      .select('id')
+      .eq('name', nomeFormattato)
+      .maybeSingle();
 
-    // Inserimento nella tabella 'sale'
-    const { error: dbError } = await supabaseAdmin
-      .from("sale")
-      .insert([
-        {
-          name: nomeSala.toUpperCase(),
+    let insertSalaError = null;
+
+    if (existingSala) {
+      const { error } = await supabaseAdmin
+        .from('sale')
+        .update({
           manager_email: emailManager.toLowerCase(),
-          scadenza_contributo: scadenza.toISOString(),
+          numero_biliardi: tavoliInt,
           is_active: true,
-        },
-      ]);
-
-    if (dbError) {
-      // Se il DB fallisce, eliminiamo l'utente appena creato in Auth per non lasciare sporco
-      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
-      return NextResponse.json({ error: `Errore inserimento DB: ${dbError.message}` }, { status: 400 });
+          scadenza_contributo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+        })
+        .eq('name', nomeFormattato);
+      insertSalaError = error;
+    } else {
+      const { error } = await supabaseAdmin
+        .from('sale')
+        .insert([
+          { 
+            name: nomeFormattato, 
+            manager_email: emailManager.toLowerCase(), 
+            numero_biliardi: tavoliInt,
+            is_active: true,
+            scadenza_contributo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        ]);
+      insertSalaError = error;
     }
 
-    // Registrazione dell'azione nei Log
-    await supabaseAdmin.from("admin_logs").insert([
-      { azione: "VARO CLUB", dettagli: `Creata la sala ${nomeSala.toUpperCase()} (${emailManager})` },
-    ]);
+    if (insertSalaError) {
+      console.error("ERRORE DB:", insertSalaError);
+      return NextResponse.json({ error: insertSalaError.message }, { status: 400 });
+    }
 
-    // Invio Email con Resend
-    try {
-      if (process.env.RESEND_API_KEY) {
-        await resend.emails.send({
-          from: "Il Campione <onboarding@ilcampione-biliardo.it>", 
-          to: emailManager,
-          subject: "Benvenuto su Il Campione - Credenziali della tua Plancia",
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
-              <h2 style="color: #06b6d4; text-transform: uppercase;">Il Campione</h2>
-              <p>La tua sala <strong>${nomeSala.toUpperCase()}</strong> è attiva.</p>
-              <div style="background-color: #f4f4f5; padding: 15px; border-radius: 8px; font-family: monospace; margin: 20px 0;">
-                <strong>Email:</strong> ${emailManager}<br/>
-                <strong>Password Temporanea:</strong> ${passwordTemporanea}
+    // 3. Registra l'azione
+    await supabaseAdmin.from('admin_logs').insert([{
+      manager_email: emailManager.toLowerCase(),
+      azione: 'VARO CLUB',
+      dettagli: `Creata/Aggiornata sala '${nomeFormattato}' con ${tavoliInt} biliardi.`
+    }]);
+
+    // 4. SPEDIZIONE EMAIL CON RESEND (Ora legge la chiave in tempo reale!)
+    if (!process.env.RESEND_API_KEY) {
+      console.error("⚠️ ALLARME: La chiave RESEND_API_KEY non è stata trovata. Controlla di aver salvato il file .env.local!");
+    } else {
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const urlPiattaforma = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+      
+      const { error: emailError } = await resend.emails.send({
+        from: 'Il Campione <onboarding@resend.dev>', 
+        to: [emailManager.toLowerCase()],
+        subject: `[IL CAMPIONE] Credenziali Ufficiali: ${nomeFormattato}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; background-color: #050505; color: #ffffff; padding: 40px 20px; text-align: center;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #11131a; border: 2px solid #0891b2; border-radius: 16px; padding: 40px; box-shadow: 0 0 20px rgba(8, 145, 178, 0.2);">
+              <h1 style="color: #22d3ee; text-transform: uppercase; letter-spacing: 2px; font-style: italic; margin-bottom: 10px;">
+                IL CAMPIONE
+              </h1>
+              <p style="color: #9ca3af; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 40px;">
+                Terminale di Rete Unificato
+              </p>
+              
+              <h2 style="color: #ffffff; font-size: 20px; margin-bottom: 20px;">
+                BENVENUTO A BORDO, <br>
+                <span style="color: #22d3ee;">${nomeFormattato}</span>
+              </h2>
+              
+              <p style="color: #d1d5db; line-height: 1.6; margin-bottom: 30px;">
+                La tua plancia di comando è stata varata con successo ed è pronta per l'operatività. Sono stati configurati <strong>${tavoliInt}</strong> biliardi per il tuo club.
+              </p>
+
+              <div style="background-color: #000000; border: 1px solid #1f2937; border-radius: 8px; padding: 20px; margin-bottom: 30px; text-align: left;">
+                <p style="margin: 0 0 10px 0; color: #9ca3af; font-size: 12px; text-transform: uppercase;">Le tue credenziali di accesso:</p>
+                <p style="margin: 0 0 10px 0; font-size: 16px;"><strong>Email:</strong> <span style="color: #22d3ee;">${emailManager.toLowerCase()}</span></p>
+                <p style="margin: 0; font-size: 16px;"><strong>Password:</strong> <span style="color: #22d3ee;">${passwordTemporanea}</span></p>
               </div>
+
+              <p style="color: #ef4444; font-size: 12px; margin-bottom: 30px;">
+                ⚠️ Per ragioni di sicurezza, ti invitiamo a modificare la password al tuo primo accesso tramite le impostazioni del profilo.
+              </p>
+
+              <a href="${urlPiattaforma}/login" style="display: inline-block; background-color: #0891b2; color: #000000; text-decoration: none; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; padding: 15px 30px; border-radius: 8px;">
+                ACCEDI ALLA PLANCIA
+              </a>
             </div>
-          `,
-        });
+            <p style="color: #6b7280; font-size: 11px; margin-top: 30px;">
+              Questa è una comunicazione generata automaticamente dal sistema IL CAMPIONE.<br>Non rispondere a questa email.
+            </p>
+          </div>
+        `
+      });
+
+      if (emailError) {
+        console.error("⚠️ ERRORE INVIO EMAIL RESEND:", emailError);
+      } else {
+        console.log("✅ EMAIL RESEND INVIATA CON SUCCESSO A:", emailManager);
       }
-    } catch (mErr) { console.error("Errore invio email:", mErr); }
+    }
 
     return NextResponse.json({ success: true });
+
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("ERRORE FATALE API POST:", err);
+    return NextResponse.json({ error: err.message }, { status: err.message.includes('Accesso negato') ? 403 : 500 });
   }
 }
 
-// 2. GESTIONE INTERRUTTORE KILL SWITCH (PATCH)
+// ==========================================
+// METODO PATCH: Toggle Kill Switch
+// ==========================================
 export async function PATCH(request: Request) {
   try {
-    const adminAutenticato = await verificaSuperAdmin(request);
-    if (!adminAutenticato) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
+    const supabaseAdmin = getSupabaseAdmin();
+    await verifySuperAdmin(request, supabaseAdmin);
+
+    const body = await request.json();
+    const { id, is_active } = body;
+
+    if (!id || typeof is_active !== 'boolean') {
+      return NextResponse.json({ error: "Parametri ID o stato mancanti" }, { status: 400 });
     }
 
-    const { id, is_active } = await request.json();
-    if (id === undefined || is_active === undefined) {
-      return NextResponse.json({ error: "Parametri mancanti" }, { status: 400 });
-    }
+    const { data: salaData, error: fetchError } = await supabaseAdmin.from('sale').select('manager_email, name').eq('id', id).single();
+    if (fetchError || !salaData) throw new Error("Sala non trovata.");
 
-    const { error: dbError } = await supabaseAdmin
-      .from("sale")
-      .update({ is_active: is_active })
-      .eq("id", id);
+    const { error: updateError } = await supabaseAdmin
+      .from('sale')
+      .update({ is_active })
+      .eq('id', id);
 
-    if (dbError) throw dbError;
+    if (updateError) throw updateError;
 
-    const statoTesto = is_active ? "RIATTIVAZIONE" : "SOSPENSIONE";
-    await supabaseAdmin.from("admin_logs").insert([
-      { azione: statoTesto, dettagli: `Modificato stato is_active a ${is_active} per la sala con ID ${id}` },
-    ]);
+    await supabaseAdmin.from('admin_logs').insert([{
+      manager_email: salaData.manager_email,
+      azione: is_active ? 'RIATTIVAZIONE CONTRATTO' : 'SOSPENSIONE CONTRATTO',
+      dettagli: `Lo stato della sala '${salaData.name}' è stato impostato su ${is_active ? 'ATTIVO' : 'SOSPESO'}.`
+    }]);
 
-    return NextResponse.json({ success: true, message: `Stato sala aggiornato` });
+    return NextResponse.json({ success: true, is_active });
+
   } catch (err: any) {
+    console.error("ERRORE FATALE API PATCH:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-// 3. GESTIONE CANCELLAZIONE TOTALE (DELETE)
+// ==========================================
+// METODO DELETE: Eliminazione Definitiva Sala
+// ==========================================
 export async function DELETE(request: Request) {
   try {
-    const adminAutenticato = await verificaSuperAdmin(request);
-    if (!adminAutenticato) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
-    }
+    const supabaseAdmin = getSupabaseAdmin();
+    await verifySuperAdmin(request, supabaseAdmin);
 
-    const { id, manager_email } = await request.json();
+    const body = await request.json();
+    const { id, manager_email } = body;
+
     if (!id || !manager_email) {
-      return NextResponse.json({ error: "Dati mancanti per l'eliminazione" }, { status: 400 });
+      return NextResponse.json({ error: "ID Sala o Email mancanti per l'eliminazione" }, { status: 400 });
     }
 
-    // Elimina riga dal Database
-    const { error: dbError } = await supabaseAdmin.from("sale").delete().eq("id", id);
-    if (dbError) throw dbError;
+    await supabaseAdmin.from('admin_logs').insert([{
+      manager_email: manager_email,
+      azione: 'ELIMINAZIONE DEFINITIVA',
+      dettagli: `La sala con ID ${id} è stata eliminata definitivamente dal Super Admin.`
+    }]);
 
-    // Cerca ed elimina l'utente da Supabase Auth
-    const { data: usersData, error: userError } = await supabaseAdmin.auth.admin.listUsers();
-    if (!userError && usersData?.users) {
-      const targetUser = usersData.users.find(u => u.email?.toLowerCase() === manager_email.toLowerCase());
-      if (targetUser) {
-        await supabaseAdmin.auth.admin.deleteUser(targetUser.id);
-      }
+    const { error: deleteError } = await supabaseAdmin
+      .from('sale')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error("ERRORE ELIMINAZIONE:", deleteError);
+      return NextResponse.json({ error: `Errore database: ${deleteError.message}. Controlla i vincoli di Cascade.` }, { status: 400 });
     }
 
-    await supabaseAdmin.from("admin_logs").insert([
-      { azione: "ELIMINAZIONE CLUB", dettagli: `Rimossa definitivamente la sala con ID ${id} (${manager_email})` },
-    ]);
+    return NextResponse.json({ success: true, message: "Sala eliminata correttamente" });
 
-    return NextResponse.json({ success: true, message: "Sala ed utente rimossi con successo" });
   } catch (err: any) {
+    console.error("ERRORE FATALE API DELETE:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
