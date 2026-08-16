@@ -4,6 +4,7 @@ import { useState } from "react";
 // Usiamo il percorso relativo corretto: torniamo indietro di una cartella (..) e entriamo in lib
 import { supabase } from "../lib/supabase"; 
 import { useRouter } from "next/navigation";
+export const dynamic = 'force-dynamic';
 
 export default function RegistratiPage() {
   const [email, setEmail] = useState("");

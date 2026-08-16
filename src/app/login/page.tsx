@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase"; // <-- Percorso relativo corretto (torna indietro di una cartella)
 import { useRouter } from "next/navigation";
+export const dynamic = 'force-dynamic';
 
 const SUPER_ADMIN = "donatorzz1946@gmail.com";
 
