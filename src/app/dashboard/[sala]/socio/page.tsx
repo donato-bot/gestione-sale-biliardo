@@ -1,6 +1,6 @@
 // ==========================================
 // FILE: src/app/dashboard/[sala]/socio/page.tsx
-// OBIETTIVO: App Web per i Giocatori (Interfaccia "Mobile Frame")
+// OBIETTIVO: App Web per i Giocatori (Interfaccia "Mobile Frame" con opzione Qualsiasi e Note)
 // ==========================================
 "use client";
 
@@ -19,8 +19,11 @@ export default function SocioPage() {
   const [miePrenotazioni, setMiePrenotazioni] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"login" | "dashboard" | "prenota">("login");
+  
+  // Nuovi stati per la prenotazione flessibile
   const [selectedTable, setSelectedTable] = useState("");
   const [bookingTime, setBookingTime] = useState("");
+  const [noteCliente, setNoteCliente] = useState("");
 
   useEffect(() => {
     async function fetchTavoli() {
@@ -75,15 +78,27 @@ export default function SocioPage() {
 
   const confermaPrenotazione = async () => {
     if (!selectedTable || !bookingTime) { 
-      alert("Seleziona tavolo e orario (Giorno e Ora)!"); 
+      alert("Seleziona un tavolo (o 'Qualsiasi') e l'orario!"); 
       return; 
     }
     setLoading(true);
     
-    const tavoloObj = tavoli.find(t => t.id === selectedTable);
-    const nomeTavoloScelto = tavoloObj ? `Tavolo ${tavoloObj.numero_tavolo || tavoloObj.nome_tavolo || ''}` : "Tavolo Generico";
+    // Gestione logica "Tavolo Qualsiasi" vs "Tavolo Specifico"
+    let nomeTavoloScelto = "Qualsiasi Tavolo";
+    let emailGestore = socio.manager_email;
 
-    const emailGestore = socio.manager_email || (tavoloObj ? tavoloObj.manager_email : null);
+    if (selectedTable !== "qualsiasi") {
+      const tavoloObj = tavoli.find(t => t.id === selectedTable);
+      if (tavoloObj) {
+        nomeTavoloScelto = `Tavolo ${tavoloObj.numero_tavolo || tavoloObj.nome_tavolo || ''}`;
+        emailGestore = tavoloObj.manager_email || socio.manager_email;
+      }
+    }
+
+    // Costruzione della nota finale
+    const notaFinale = noteCliente.trim() 
+      ? `[APP SOCI] Nota Cliente: ${noteCliente.trim()}` 
+      : "[APP SOCI] Prenotazione inviata automaticamente da smartphone (Nessuna nota aggiuntiva).";
 
     const { error } = await supabase
       .from('prenotazioni')
@@ -93,7 +108,7 @@ export default function SocioPage() {
         nome_cliente: `${socio.cognome} ${socio.nome}`,
         tavolo_numero: nomeTavoloScelto,
         data_ora: new Date(bookingTime).toISOString(),
-        note: "[APP SOCI] Prenotazione inviata automaticamente da smartphone."
+        note: notaFinale
       }]);
 
     if (error) {
@@ -102,8 +117,11 @@ export default function SocioPage() {
       alert("✅ Prenotazione confermata!");
       await caricaLeMiePrenotazioni(socio); 
       setView("dashboard");
+      
+      // Reset campi form
       setBookingTime(""); 
       setSelectedTable(""); 
+      setNoteCliente("");
     }
     setLoading(false);
   };
@@ -199,6 +217,20 @@ export default function SocioPage() {
             <div className="mb-6">
               <label className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-3 block">1. Seleziona il Tavolo</label>
               <div className="grid grid-cols-2 gap-3">
+                {/* Opzione QUALSIASI fissa e sempre disponibile */}
+                <button
+                  onClick={() => setSelectedTable("qualsiasi")}
+                  className={`p-4 rounded-2xl font-black uppercase text-xs transition-all border-2 flex flex-col items-center justify-center gap-1 ${
+                    selectedTable === "qualsiasi"
+                      ? 'bg-green-600 border-green-400 text-black shadow-[0_0_20px_rgba(34,197,94,0.4)] transform scale-[1.02]'
+                      : 'bg-gray-900 border-gray-700 text-white hover:border-gray-500 shadow-md'
+                  }`}
+                >
+                  <span className="text-lg">🎲</span>
+                  Qualsiasi Tavolo
+                </button>
+
+                {/* Lista tavoli dal database (se presenti) */}
                 {tavoli.map(t => (
                   <button
                     key={t.id}
@@ -219,7 +251,7 @@ export default function SocioPage() {
               </div>
             </div>
             
-            <div className="mb-8">
+            <div className="mb-6">
               <label className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-3 block">2. Data e Ora</label>
               <input 
                 type="datetime-local" 
@@ -229,8 +261,19 @@ export default function SocioPage() {
                 style={{ colorScheme: 'dark' }}
               />
             </div>
+
+            <div className="mb-8">
+              <label className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-3 block">3. Note (Opzionale)</label>
+              <textarea 
+                value={noteCliente} 
+                onChange={(e) => setNoteCliente(e.target.value)} 
+                placeholder="Es. Arrivo con 10 min di ritardo, siamo in 4..."
+                rows={2}
+                className="w-full bg-gray-900 text-white font-bold p-4 rounded-2xl outline-none border border-gray-700 focus:border-green-500 shadow-inner resize-none text-sm placeholder-gray-600"
+              />
+            </div>
             
-            <div className="mt-auto pt-6">
+            <div className="mt-auto pt-2">
               <button onClick={confermaPrenotazione} disabled={loading || !selectedTable || !bookingTime} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 disabled:border-gray-800 disabled:text-gray-500 border border-green-400 py-6 rounded-2xl font-black text-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)]">
                 {loading ? "ELABORAZIONE..." : "CONFERMA PRENOTAZIONE"}
               </button>
