@@ -1,6 +1,6 @@
 // ==========================================
 // FILE: src/app/dashboard/[sala]/socio/page.tsx
-// OBIETTIVO: App Web per i Giocatori (Interfaccia "Mobile Frame" con Nome Sala Dinamico)
+// OBIETTIVO: App Web per i Giocatori (Opzione "Qualsiasi" preselezionata)
 // ==========================================
 "use client";
 
@@ -21,8 +21,8 @@ export default function SocioPage() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"login" | "dashboard" | "prenota">("login");
   
-  // Stati per la prenotazione flessibile
-  const [selectedTable, setSelectedTable] = useState("");
+  // MODIFICA QUI: Inizializziamo selectedTable con "qualsiasi" invece di una stringa vuota
+  const [selectedTable, setSelectedTable] = useState("qualsiasi"); 
   const [bookingTime, setBookingTime] = useState("");
   const [noteCliente, setNoteCliente] = useState("");
 
@@ -30,7 +30,6 @@ export default function SocioPage() {
     async function fetchDatiIniziali() {
       if (!salaId) return; 
 
-      // 1. Cerchiamo di recuperare il Nome della Sala
       const { data: salaData, error: salaError } = await supabase
         .from('sale')
         .select('name')
@@ -40,11 +39,9 @@ export default function SocioPage() {
       if (!salaError && salaData) {
         setNomeSala(salaData.name.toUpperCase());
       } else {
-        // Se la RLS blocca la lettura ai non loggati, usiamo un fallback
         setNomeSala("IL TUO CLUB");
       }
 
-      // 2. Recupero Tavoli
       const { data: tavoliData, error: tavoliError } = await supabase
         .from('tavoli')
         .select('*')
@@ -134,7 +131,8 @@ export default function SocioPage() {
       setView("dashboard");
       
       setBookingTime(""); 
-      setSelectedTable(""); 
+      // Quando resetto dopo la prenotazione, torna a "qualsiasi"
+      setSelectedTable("qualsiasi"); 
       setNoteCliente("");
     }
     setLoading(false);
@@ -144,7 +142,6 @@ export default function SocioPage() {
     <div className="min-h-screen bg-neutral-950 sm:p-8 md:p-12 flex justify-center items-center">
       <div className="w-full max-w-md bg-black sm:border-2 border-gray-800 sm:rounded-[3rem] sm:shadow-[0_0_60px_rgba(34,197,94,0.15)] min-h-screen sm:min-h-[800px] flex flex-col items-center justify-center p-8 relative overflow-hidden">
         <div className="w-full text-center">
-          {/* Nome Sala Dinamico */}
           <h1 className="text-4xl md:text-5xl font-black text-green-500 mb-10 italic drop-shadow-[0_0_15px_rgba(34,197,94,0.4)] leading-tight">
             {nomeSala}
           </h1>
