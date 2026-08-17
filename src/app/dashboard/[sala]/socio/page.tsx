@@ -1,11 +1,13 @@
+// ==========================================
+// FILE: src/app/dashboard/[sala]/socio/page.tsx
+// OBIETTIVO: App Web per i Giocatori (Login Rapido via Email)
+// ==========================================
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from "../../../lib/supabase"; // <-- Ottimizzazione: Client centralizzato
 import { useParams } from 'next/navigation';
 import BachecaSocio from "../../../../components/BachecaSocio"; 
-
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
 export default function SocioPage() {
   const params = useParams();
