@@ -5,7 +5,7 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "../lib/supabase"; // <-- Percorso relativo corretto (torna indietro di una cartella)
+import { supabase } from "../lib/supabase"; // <-- Percorso relativo corretto
 import { useRouter } from "next/navigation";
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +39,7 @@ export default function LoginPage() {
     if (cleanEmail === SUPER_ADMIN) {
       
       // ROTTA A: È il Super Admin -> Va dritto alla Torre di Controllo
-      router.push("/admin");
+      router.push("/admin/dashboard"); // <--- ECCO LA ROTTA CORRETTA!
       
     } else {
       
