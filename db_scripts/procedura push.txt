@@ -1,3 +1,0 @@
--- da terminal   >>  Mettere in coda tutte le modifiche:            git add .  
--- da terminal   >> "Impacchetta" le modifiche con un'etichetta:    git commit -m "Completato onboarding soci e invio link App" 
--- da terminale  >> Spedisci il pacchetto online:                   git push

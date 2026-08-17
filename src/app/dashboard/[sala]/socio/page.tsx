@@ -1,6 +1,6 @@
 // ==========================================
 // FILE: src/app/dashboard/[sala]/socio/page.tsx
-// OBIETTIVO: App Web per i Giocatori (Interfaccia "Mobile Frame" con opzione Qualsiasi e Note)
+// OBIETTIVO: App Web per i Giocatori (Interfaccia "Mobile Frame" con Nome Sala Dinamico)
 // ==========================================
 "use client";
 
@@ -13,6 +13,7 @@ export default function SocioPage() {
   const params = useParams();
   const salaId = (params?.sala || Object.values(params)[0]) as string;
 
+  const [nomeSala, setNomeSala] = useState("CARICAMENTO...");
   const [email, setEmail] = useState("");
   const [socio, setSocio] = useState<any>(null);
   const [tavoli, setTavoli] = useState<any[]>([]);
@@ -20,25 +21,41 @@ export default function SocioPage() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"login" | "dashboard" | "prenota">("login");
   
-  // Nuovi stati per la prenotazione flessibile
+  // Stati per la prenotazione flessibile
   const [selectedTable, setSelectedTable] = useState("");
   const [bookingTime, setBookingTime] = useState("");
   const [noteCliente, setNoteCliente] = useState("");
 
   useEffect(() => {
-    async function fetchTavoli() {
+    async function fetchDatiIniziali() {
       if (!salaId) return; 
 
-      const { data, error } = await supabase
+      // 1. Cerchiamo di recuperare il Nome della Sala
+      const { data: salaData, error: salaError } = await supabase
+        .from('sale')
+        .select('name')
+        .eq('id', salaId)
+        .single();
+        
+      if (!salaError && salaData) {
+        setNomeSala(salaData.name.toUpperCase());
+      } else {
+        // Se la RLS blocca la lettura ai non loggati, usiamo un fallback
+        setNomeSala("IL TUO CLUB");
+      }
+
+      // 2. Recupero Tavoli
+      const { data: tavoliData, error: tavoliError } = await supabase
         .from('tavoli')
         .select('*')
         .eq('sala_id', salaId) 
         .order('numero_tavolo', { ascending: true });
         
-      if (error) console.error("Errore lettura tavoli AppWeb:", error.message);
-      if (data) setTavoli(data);
+      if (tavoliError) console.error("Errore lettura tavoli AppWeb:", tavoliError.message);
+      if (tavoliData) setTavoli(tavoliData);
     }
-    fetchTavoli();
+    
+    fetchDatiIniziali();
   }, [salaId]);
 
   const caricaLeMiePrenotazioni = async (socioData: any) => {
@@ -83,7 +100,6 @@ export default function SocioPage() {
     }
     setLoading(true);
     
-    // Gestione logica "Tavolo Qualsiasi" vs "Tavolo Specifico"
     let nomeTavoloScelto = "Qualsiasi Tavolo";
     let emailGestore = socio.manager_email;
 
@@ -95,7 +111,6 @@ export default function SocioPage() {
       }
     }
 
-    // Costruzione della nota finale
     const notaFinale = noteCliente.trim() 
       ? `[APP SOCI] Nota Cliente: ${noteCliente.trim()}` 
       : "[APP SOCI] Prenotazione inviata automaticamente da smartphone (Nessuna nota aggiuntiva).";
@@ -118,7 +133,6 @@ export default function SocioPage() {
       await caricaLeMiePrenotazioni(socio); 
       setView("dashboard");
       
-      // Reset campi form
       setBookingTime(""); 
       setSelectedTable(""); 
       setNoteCliente("");
@@ -126,13 +140,15 @@ export default function SocioPage() {
     setLoading(false);
   };
 
-  // --- COMPONENTI UI CON EFFETTO "MOBILE APP FRAME" SU DESKTOP ---
-
   if (view === "login") return (
     <div className="min-h-screen bg-neutral-950 sm:p-8 md:p-12 flex justify-center items-center">
       <div className="w-full max-w-md bg-black sm:border-2 border-gray-800 sm:rounded-[3rem] sm:shadow-[0_0_60px_rgba(34,197,94,0.15)] min-h-screen sm:min-h-[800px] flex flex-col items-center justify-center p-8 relative overflow-hidden">
         <div className="w-full text-center">
-          <h1 className="text-5xl font-black text-green-500 mb-10 italic drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]">Biliardo Royal</h1>
+          {/* Nome Sala Dinamico */}
+          <h1 className="text-4xl md:text-5xl font-black text-green-500 mb-10 italic drop-shadow-[0_0_15px_rgba(34,197,94,0.4)] leading-tight">
+            {nomeSala}
+          </h1>
+          
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="La tua Email" className="w-full bg-gray-900 border border-gray-700 p-5 rounded-2xl mb-6 text-center outline-none focus:border-green-500 font-bold text-white shadow-inner" />
           <button onClick={loginSocio} disabled={loading} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 py-5 rounded-2xl font-black text-black transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)]">
             {loading ? "VERIFICA IN CORSO..." : "ACCEDI ALLA PLANCIA"}
@@ -217,7 +233,6 @@ export default function SocioPage() {
             <div className="mb-6">
               <label className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-3 block">1. Seleziona il Tavolo</label>
               <div className="grid grid-cols-2 gap-3">
-                {/* Opzione QUALSIASI fissa e sempre disponibile */}
                 <button
                   onClick={() => setSelectedTable("qualsiasi")}
                   className={`p-4 rounded-2xl font-black uppercase text-xs transition-all border-2 flex flex-col items-center justify-center gap-1 ${
@@ -230,7 +245,6 @@ export default function SocioPage() {
                   Qualsiasi Tavolo
                 </button>
 
-                {/* Lista tavoli dal database (se presenti) */}
                 {tavoli.map(t => (
                   <button
                     key={t.id}
