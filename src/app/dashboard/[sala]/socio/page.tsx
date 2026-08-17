@@ -1,6 +1,6 @@
 // ==========================================
 // FILE: src/app/dashboard/[sala]/socio/page.tsx
-// OBIETTIVO: App Web per i Giocatori (Opzione "Qualsiasi" preselezionata)
+// OBIETTIVO: App Web per i Giocatori (Flusso di prenotazione ultra-rapido)
 // ==========================================
 "use client";
 
@@ -16,13 +16,11 @@ export default function SocioPage() {
   const [nomeSala, setNomeSala] = useState("CARICAMENTO...");
   const [email, setEmail] = useState("");
   const [socio, setSocio] = useState<any>(null);
-  const [tavoli, setTavoli] = useState<any[]>([]);
   const [miePrenotazioni, setMiePrenotazioni] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"login" | "dashboard" | "prenota">("login");
   
-  // MODIFICA QUI: Inizializziamo selectedTable con "qualsiasi" invece di una stringa vuota
-  const [selectedTable, setSelectedTable] = useState("qualsiasi"); 
+  // Stati per la prenotazione semplificata
   const [bookingTime, setBookingTime] = useState("");
   const [noteCliente, setNoteCliente] = useState("");
 
@@ -41,15 +39,6 @@ export default function SocioPage() {
       } else {
         setNomeSala("IL TUO CLUB");
       }
-
-      const { data: tavoliData, error: tavoliError } = await supabase
-        .from('tavoli')
-        .select('*')
-        .eq('sala_id', salaId) 
-        .order('numero_tavolo', { ascending: true });
-        
-      if (tavoliError) console.error("Errore lettura tavoli AppWeb:", tavoliError.message);
-      if (tavoliData) setTavoli(tavoliData);
     }
     
     fetchDatiIniziali();
@@ -91,26 +80,19 @@ export default function SocioPage() {
   };
 
   const confermaPrenotazione = async () => {
-    if (!selectedTable || !bookingTime) { 
-      alert("Seleziona un tavolo (o 'Qualsiasi') e l'orario!"); 
+    if (!bookingTime) { 
+      alert("Seleziona la Data e l'Ora della prenotazione!"); 
       return; 
     }
     setLoading(true);
     
-    let nomeTavoloScelto = "Qualsiasi Tavolo";
-    let emailGestore = socio.manager_email;
-
-    if (selectedTable !== "qualsiasi") {
-      const tavoloObj = tavoli.find(t => t.id === selectedTable);
-      if (tavoloObj) {
-        nomeTavoloScelto = `Tavolo ${tavoloObj.numero_tavolo || tavoloObj.nome_tavolo || ''}`;
-        emailGestore = tavoloObj.manager_email || socio.manager_email;
-      }
-    }
+    // Il tavolo è sempre "Qualsiasi" di default. Gestore e id li prendiamo dal socio
+    const nomeTavoloScelto = "Qualsiasi Tavolo";
+    const emailGestore = socio.manager_email;
 
     const notaFinale = noteCliente.trim() 
       ? `[APP SOCI] Nota Cliente: ${noteCliente.trim()}` 
-      : "[APP SOCI] Prenotazione inviata automaticamente da smartphone (Nessuna nota aggiuntiva).";
+      : "[APP SOCI] Prenotazione rapida da smartphone.";
 
     const { error } = await supabase
       .from('prenotazioni')
@@ -126,13 +108,11 @@ export default function SocioPage() {
     if (error) {
       alert("ERRORE DATABASE (Prenotazione): " + error.message);
     } else {
-      alert("✅ Prenotazione confermata!");
+      alert("✅ Prenotazione confermata con successo!");
       await caricaLeMiePrenotazioni(socio); 
       setView("dashboard");
       
       setBookingTime(""); 
-      // Quando resetto dopo la prenotazione, torna a "qualsiasi"
-      setSelectedTable("qualsiasi"); 
       setNoteCliente("");
     }
     setLoading(false);
@@ -190,7 +170,7 @@ export default function SocioPage() {
                  return (
                    <div key={p.id} className="bg-black border border-gray-700 p-4 rounded-2xl flex justify-between items-center shadow-md">
                      <div>
-                       <p className="text-white font-black uppercase text-sm">{p.tavolo_numero}</p>
+                       <p className="text-white font-black uppercase text-sm">Sessione Biliardo</p>
                        <p className="text-gray-400 text-[10px] font-bold uppercase mt-1">
                          {dataPrenotazione.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                        </p>
@@ -227,43 +207,8 @@ export default function SocioPage() {
             <button onClick={() => setView("dashboard")} className="mb-6 self-start text-gray-500 hover:text-white text-[10px] font-black uppercase tracking-widest bg-gray-900 px-4 py-2 rounded-lg">← Torna alla Plancia</button>
             <h2 className="text-4xl font-black uppercase mb-8 italic text-white drop-shadow-md">Scegli sessione</h2>
             
-            <div className="mb-6">
-              <label className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-3 block">1. Seleziona il Tavolo</label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setSelectedTable("qualsiasi")}
-                  className={`p-4 rounded-2xl font-black uppercase text-xs transition-all border-2 flex flex-col items-center justify-center gap-1 ${
-                    selectedTable === "qualsiasi"
-                      ? 'bg-green-600 border-green-400 text-black shadow-[0_0_20px_rgba(34,197,94,0.4)] transform scale-[1.02]'
-                      : 'bg-gray-900 border-gray-700 text-white hover:border-gray-500 shadow-md'
-                  }`}
-                >
-                  <span className="text-lg">🎲</span>
-                  Qualsiasi Tavolo
-                </button>
-
-                {tavoli.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setSelectedTable(t.id)}
-                    disabled={t.stato === 'manutenzione'}
-                    className={`p-4 rounded-2xl font-black uppercase text-xs transition-all border-2 ${
-                      selectedTable === t.id
-                        ? 'bg-green-600 border-green-400 text-black shadow-[0_0_20px_rgba(34,197,94,0.4)] transform scale-[1.02]'
-                        : t.stato === 'manutenzione'
-                        ? 'bg-gray-900/50 border-gray-800 text-gray-600 cursor-not-allowed'
-                        : 'bg-gray-900 border-gray-700 text-white hover:border-gray-500 shadow-md'
-                    }`}
-                  >
-                    Tavolo {t.numero_tavolo || t.nome_tavolo}
-                    {t.stato === 'manutenzione' && <span className="block text-[9px] mt-1 text-red-500 tracking-widest">Manutenzione</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <label className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-3 block">2. Data e Ora</label>
+            <div className="mb-6 mt-4">
+              <label className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-3 block">1. Data e Ora d'arrivo</label>
               <input 
                 type="datetime-local" 
                 value={bookingTime} 
@@ -274,18 +219,18 @@ export default function SocioPage() {
             </div>
 
             <div className="mb-8">
-              <label className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-3 block">3. Note (Opzionale)</label>
+              <label className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-3 block">2. Note (Opzionale)</label>
               <textarea 
                 value={noteCliente} 
                 onChange={(e) => setNoteCliente(e.target.value)} 
-                placeholder="Es. Arrivo con 10 min di ritardo, siamo in 4..."
-                rows={2}
-                className="w-full bg-gray-900 text-white font-bold p-4 rounded-2xl outline-none border border-gray-700 focus:border-green-500 shadow-inner resize-none text-sm placeholder-gray-600"
+                placeholder="Es. Preferirei il Tavolo 3, arriviamo in 4 persone..."
+                rows={3}
+                className="w-full bg-gray-900 text-white font-bold p-5 rounded-2xl outline-none border border-gray-700 focus:border-green-500 shadow-inner resize-none text-sm placeholder-gray-600"
               />
             </div>
             
             <div className="mt-auto pt-2">
-              <button onClick={confermaPrenotazione} disabled={loading || !selectedTable || !bookingTime} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 disabled:border-gray-800 disabled:text-gray-500 border border-green-400 py-6 rounded-2xl font-black text-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+              <button onClick={confermaPrenotazione} disabled={loading || !bookingTime} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 disabled:border-gray-800 disabled:text-gray-500 border border-green-400 py-6 rounded-2xl font-black text-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)]">
                 {loading ? "ELABORAZIONE..." : "CONFERMA PRENOTAZIONE"}
               </button>
             </div>
