@@ -1,6 +1,6 @@
 // ==========================================
 // FILE: src/app/dashboard/[sala]/soci/page.tsx
-// OBIETTIVO: Gestione Anagrafica Soci e Tesseramenti con Funzione di Eliminazione
+// OBIETTIVO: Gestione Anagrafica Soci e Tesseramenti con Funzione di Eliminazione e Invio Link
 // ==========================================
 "use client";
 
@@ -87,6 +87,10 @@ export default function SociPage() {
       alert("Nome e Cognome sono obbligatori.");
       return;
     }
+    if (!email.trim()) {
+      alert("L'Email è obbligatoria per far accedere il socio all'App.");
+      return;
+    }
 
     setSalvataggio(true);
     try {
@@ -96,14 +100,15 @@ export default function SociPage() {
       const datiSocio = {
         sala_id: salaId,
         manager_email: userEmail,
-        nome: nome.toUpperCase(),
-        cognome: cognome.toUpperCase(),
+        nome: nome.trim().toUpperCase(),
+        cognome: cognome.trim().toUpperCase(),
         nome_completo: `${nome.trim().toUpperCase()} ${cognome.trim().toUpperCase()}`,
         telefono,
         email: email.trim().toLowerCase(),
         codice_fiscale: codiceFiscale.toUpperCase(),
         scadenza_tessera: scadenzaTessera || null,
-        app_inviata: false
+        // Inseriamo app_inviata solo se è un nuovo socio, altrimenti non lo tocchiamo
+        ...(socioInModificaId ? {} : { app_inviata: false })
       };
 
       if (socioInModificaId) {
@@ -147,6 +152,32 @@ export default function SociPage() {
       
     } catch (err: any) {
       console.error("Errore eliminazione socio:", err.message);
+    }
+  };
+
+  // Funzione Magica: Invia il link App via WhatsApp o copia negli appunti
+  const inviaLinkApp = async (socio: Socio) => {
+    if (!socio.email) {
+      alert("Attenzione: Inserisci un'email per questo socio prima di inviargli l'accesso all'App.");
+      return;
+    }
+
+    const appLink = `https://gestione-sale-biliardo.vercel.app/dashboard/${salaId}/socio`;
+    const messaggio = `Ciao ${socio.nome}, benvenuto al Biliardo Royal! 🎱\n\nEcco il link per accedere alla tua plancia personale, prenotare i tavoli e controllare il tuo credito:\n${appLink}\n\nPer entrare utilizza la tua email: ${socio.email}`;
+
+    // Segnamo nel database che gli abbiamo inviato l'app
+    if (!socio.app_inviata) {
+      await supabase.from("soci").update({ app_inviata: true }).eq("id", socio.id);
+      setSoci(soci.map(s => s.id === socio.id ? { ...s, app_inviata: true } : s));
+    }
+
+    if (socio.telefono) {
+      // Puliamo il numero da spazi e zeri iniziali per formattazione internazionale
+      const numeroPulito = socio.telefono.replace(/\s+/g, '').replace(/^00/, '+');
+      window.open(`https://wa.me/${numeroPulito}?text=${encodeURIComponent(messaggio)}`, '_blank');
+    } else {
+      navigator.clipboard.writeText(messaggio);
+      alert(`Nessun numero di telefono salvato per questo socio.\n\nIl messaggio di benvenuto e il link magico sono stati copiati nei tuoi appunti, pronti per essere incollati in una Mail o Telegram!`);
     }
   };
 
@@ -203,8 +234,8 @@ export default function SociPage() {
                   <th className="p-5 w-[25%]">Socio</th>
                   <th className="p-5 w-[20%]">Contatti</th>
                   <th className="p-5 w-[20%]">Codice Fiscale</th>
-                  <th className="p-5 w-[20%]">Scadenza Tessera</th>
-                  <th className="p-5 w-[15%] text-right print:hidden">Stato / Azioni</th>
+                  <th className="p-5 w-[15%]">Scadenza Tessera</th>
+                  <th className="p-5 w-[20%] text-right print:hidden">Stato / Azioni</th>
                 </tr>
               </thead>
               <tbody className="text-sm font-bold text-white divide-y divide-gray-700/50 print:text-black print:divide-gray-300">
@@ -235,6 +266,13 @@ export default function SociPage() {
                           
                           {/* Pulsanti Azione */}
                           <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                            <button 
+                              onClick={() => inviaLinkApp(socio)} 
+                              title="Invia o copia il link di accesso"
+                              className={`text-[10px] uppercase font-black tracking-widest transition-colors flex items-center gap-1 ${socio.app_inviata ? 'text-emerald-500 hover:text-emerald-400' : 'text-indigo-400 hover:text-indigo-300'}`}
+                            >
+                              {socio.app_inviata ? "📱 Ri-invia App" : "📨 Invia App"}
+                            </button>
                             <button 
                               onClick={() => apriModificaSocio(socio)} 
                               className="text-[10px] text-cyan-500 hover:text-cyan-300 uppercase font-black tracking-widest transition-colors"
@@ -287,8 +325,8 @@ export default function SociPage() {
                        <input type="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} className="w-full bg-[#1e293b] border-2 border-gray-700 p-3 rounded-xl text-white font-bold text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
                      </div>
                      <div>
-                       <label className="block text-[10px] text-gray-400 font-black uppercase tracking-widest mb-2">Email</label>
-                       <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-[#1e293b] border-2 border-gray-700 p-3 rounded-xl text-white font-bold text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
+                       <label className="block text-[10px] text-gray-400 font-black uppercase tracking-widest mb-2">Email *</label>
+                       <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-[#1e293b] border-2 border-gray-700 p-3 rounded-xl text-white font-bold text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
                      </div>
                   </div>
                   <div>
