@@ -1,3 +1,7 @@
+// ==========================================
+// FILE: src/app/dashboard/[sala]/prenotazioni/page.tsx
+// OBIETTIVO: Plancia Gestore - Gestione Prenotazioni e Assegnazione Tavoli
+// ==========================================
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -6,245 +10,243 @@ import { supabase } from "../../../lib/supabase";
 
 interface Prenotazione {
   id: string;
-  cliente: string;
-  tavolo: string;
-  canale: string;
-  data_prevista: string;
+  nome_cliente: string;
+  tavolo_numero: string;
+  data_ora: string;
   note: string;
+  stato: string; // es. 'in_attesa', 'confermata', 'conclusa', 'annullata'
 }
 
-export default function PrenotazioniPage() {
+interface Tavolo {
+  id: string;
+  numero_tavolo: string;
+  nome_tavolo: string;
+}
+
+export default function GestionePrenotazioniPage() {
   const router = useRouter();
   const urlParams = useParams();
   const salaId = (urlParams?.sala || Object.values(urlParams)[0]) as string;
 
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
+  const [tavoli, setTavoli] = useState<Tavolo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filtroVista, setFiltroVista] = useState<"attive" | "storico">("attive");
 
-  // Stati per il Modal (Popup Form)
-  const [mostraForm, setMostraForm] = useState(false);
-  const [salvataggio, setSalvataggio] = useState(false);
-  const [prenotazioneInModificaId, setPrenotazioneInModificaId] = useState<string | null>(null);
-  
-  // Campi Form
-  const [cliente, setCliente] = useState("");
-  const [tavolo, setTavolo] = useState("");
-  const [canale, setCanale] = useState("Chiamata Telefonica");
-  const [dataPrevista, setDataPrevista] = useState("");
-  const [note, setNote] = useState("");
-
-  const caricaPrenotazioni = useCallback(async () => {
+  const caricaDati = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // 1. Carica le prenotazioni
+      const { data: dataPrenotazioni, error: errPrenotazioni } = await supabase
         .from("prenotazioni")
         .select("*")
         .eq("sala_id", salaId)
-        .order("data_prevista", { ascending: true });
+        .order("data_ora", { ascending: true });
 
-      if (error) throw error;
-      setPrenotazioni(data || []);
+      if (errPrenotazioni) throw errPrenotazioni;
+
+      // 2. Carica i tavoli disponibili per la tendina di assegnazione
+      const { data: dataTavoli, error: errTavoli } = await supabase
+        .from("tavoli")
+        .select("*")
+        .eq("sala_id", salaId)
+        .order("numero_tavolo", { ascending: true });
+
+      if (errTavoli) throw errTavoli;
+
+      setPrenotazioni(dataPrenotazioni || []);
+      setTavoli(dataTavoli || []);
     } catch (err: any) {
-      console.error("Errore caricamento prenotazioni:", err.message);
+      console.error("Errore caricamento dati:", err.message);
+      alert("Errore nel caricamento delle prenotazioni.");
     } finally {
       setLoading(false);
     }
   }, [salaId]);
 
   useEffect(() => {
-    caricaPrenotazioni();
-  }, [caricaPrenotazioni]);
+    caricaDati();
+  }, [caricaDati]);
 
-  // Apre Modal per Nuova Prenotazione
-  const apriNuovaPrenotazione = () => {
-    setPrenotazioneInModificaId(null);
-    setCliente(""); setTavolo(""); setCanale("Chiamata Telefonica"); setDataPrevista(""); setNote("");
-    setMostraForm(true);
-  };
+  // Aggiorna il tavolo assegnato
+  const assegnaTavolo = async (id: string, nuovoTavoloNome: string) => {
+    try {
+      const { error } = await supabase
+        .from("prenotazioni")
+        .update({ tavolo_numero: nuovoTavoloNome })
+        .eq("id", id);
 
-  // Apre Modal precompilato per Modifica
-  const apriModificaPrenotazione = (prenotazione: Prenotazione) => {
-    setPrenotazioneInModificaId(prenotazione.id);
-    setCliente(prenotazione.cliente);
-    setTavolo(prenotazione.tavolo || "");
-    setCanale(prenotazione.canale || "Chiamata Telefonica");
-    
-    // Format data per input datetime-local
-    if (prenotazione.data_prevista) {
-      const dateObj = new Date(prenotazione.data_prevista);
-      const tzOffset = dateObj.getTimezoneOffset() * 60000;
-      const localISOTime = (new Date(dateObj.getTime() - tzOffset)).toISOString().slice(0, 16);
-      setDataPrevista(localISOTime);
-    } else {
-      setDataPrevista("");
+      if (error) throw error;
+      
+      // Aggiorna UI locale
+      setPrenotazioni(prenotazioni.map(p => p.id === id ? { ...p, tavolo_numero: nuovoTavoloNome } : p));
+    } catch (err: any) {
+      alert("Errore durante l'assegnazione del tavolo: " + err.message);
     }
-    
-    setNote(prenotazione.note || "");
-    setMostraForm(true);
   };
 
-  // Elimina Prenotazione
+  // Aggiorna lo stato (es. per segnarla come conclusa)
+  const cambiaStato = async (id: string, nuovoStato: string) => {
+    try {
+      const { error } = await supabase
+        .from("prenotazioni")
+        .update({ stato: nuovoStato })
+        .eq("id", id);
+
+      if (error) throw error;
+      setPrenotazioni(prenotazioni.map(p => p.id === id ? { ...p, stato: nuovoStato } : p));
+    } catch (err: any) {
+      alert("Errore aggiornamento stato: " + err.message);
+    }
+  };
+
   const eliminaPrenotazione = async (id: string) => {
-    if (!window.confirm("Sei sicuro di voler eliminare questa prenotazione?")) return;
+    if (!confirm("Sei sicuro di voler eliminare questa prenotazione?")) return;
     try {
       const { error } = await supabase.from("prenotazioni").delete().eq("id", id);
       if (error) throw error;
-      await caricaPrenotazioni();
+      setPrenotazioni(prenotazioni.filter(p => p.id !== id));
     } catch (err: any) {
-      alert("Errore durante l'eliminazione: " + err.message);
+      alert("Errore eliminazione: " + err.message);
     }
   };
 
-  // Salvataggio (Insert o Update)
-  const salvaPrenotazione = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!cliente.trim() || !dataPrevista) {
-      alert("Nominativo e Data/Ora sono obbligatori.");
-      return;
+  // Filtriamo le prenotazioni in base alla vista scelta
+  const oraAttuale = new Date();
+  const prenotazioniFiltrate = prenotazioni.filter(p => {
+    const dataPrenotazione = new Date(p.data_ora);
+    const isPassata = dataPrenotazione < oraAttuale;
+    const isConclusa = p.stato === 'conclusa' || p.stato === 'annullata';
+    
+    if (filtroVista === "attive") {
+      return !isPassata && !isConclusa; // Mostra solo le future non concluse
+    } else {
+      return isPassata || isConclusa; // Mostra quelle passate o archiviate
     }
-
-    setSalvataggio(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userEmail = sessionData.session?.user?.email;
-
-      const datiPrenotazione = {
-        sala_id: salaId,
-        manager_email: userEmail,
-        cliente: cliente.toUpperCase(),
-        tavolo: tavolo,
-        canale: canale,
-        data_prevista: new Date(dataPrevista).toISOString(),
-        note: note
-      };
-
-      if (prenotazioneInModificaId) {
-        // MODIFICA (Update)
-        const { error } = await supabase.from("prenotazioni").update(datiPrenotazione).eq("id", prenotazioneInModificaId);
-        if (error) throw error;
-      } else {
-        // NUOVO (Insert)
-        const { error } = await supabase.from("prenotazioni").insert([datiPrenotazione]);
-        if (error) throw error;
-      }
-
-      setMostraForm(false);
-      await caricaPrenotazioni();
-    } catch (err: any) {
-      alert("Errore salvataggio prenotazione: " + err.message);
-    } finally {
-      setSalvataggio(false);
-    }
-  };
-
-  // Helper per i colori del badge Canale
-  const getBadgeCanale = (tipoCanale: string) => {
-    switch (tipoCanale) {
-      case "WhatsApp": return "bg-emerald-950/50 text-emerald-400 border-emerald-500/30";
-      case "Chiamata Telefonica": return "bg-blue-950/50 text-blue-400 border-blue-500/30";
-      case "App Soci": return "bg-gray-800 text-gray-300 border-gray-600";
-      case "In Sala": return "bg-amber-950/50 text-amber-400 border-amber-500/30";
-      default: return "bg-gray-800 text-gray-300 border-gray-600";
-    }
-  };
+  });
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 font-sans">
-      <div className="w-full max-w-[1600px] mx-auto space-y-6">
+    <div className="min-h-screen bg-[#05070a] text-white p-4 sm:p-8 font-sans">
+      <div className="w-full max-w-[1600px] mx-auto space-y-8">
         
         {/* HEADER */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-gray-800 pb-4 gap-4">
+        <header className="flex justify-between items-end border-b border-gray-800 pb-4">
           <div>
             <button 
               onClick={() => router.push(`/dashboard/${salaId}`)}
-              className="text-gray-500 hover:text-cyan-400 text-[10px] font-black uppercase tracking-widest transition-colors mb-2 flex items-center gap-2"
+              className="text-gray-500 hover:text-green-400 text-[10px] font-black uppercase tracking-widest transition-colors mb-2 flex items-center gap-2"
             >
               ← Torna alla Plancia
             </button>
-            <p className="text-cyan-500 text-[10px] font-black uppercase tracking-widest mb-1 mt-2">Gestione Agenda</p>
             <h1 className="text-3xl font-black uppercase tracking-tight text-white italic">
               PRENOTAZIONI SALA
             </h1>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+              Gestione Arrivi e Assegnazione Tavoli
+            </p>
           </div>
-          <div className="flex flex-wrap gap-4">
-            <button className="bg-[#11131a] border border-gray-800 hover:border-gray-600 text-gray-300 px-6 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
-              📄 Stampa Foglio
+
+          {/* TOGGLE VISTA */}
+          <div className="flex bg-[#111827] rounded-xl p-1 border border-gray-800">
+            <button 
+              onClick={() => setFiltroVista("attive")}
+              className={`px-6 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filtroVista === "attive" ? "bg-green-600 text-black shadow-lg" : "text-gray-500 hover:text-white"}`}
+            >
+              Prossimi Arrivi
             </button>
             <button 
-              onClick={apriNuovaPrenotazione}
-              className="bg-cyan-600 hover:bg-cyan-500 text-black px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+              onClick={() => setFiltroVista("storico")}
+              className={`px-6 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filtroVista === "storico" ? "bg-gray-700 text-white shadow-lg" : "text-gray-500 hover:text-white"}`}
             >
-              + Registra Prenotazione
+              Storico
             </button>
           </div>
         </header>
 
-        {/* TABELLONE UNICO (SINGOLA COLONNA A TUTTA LARGHEZZA) */}
-        <div className="bg-[#0a0b0f] border border-gray-800/80 rounded-2xl overflow-hidden shadow-2xl">
-          <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-[#11131a]">
-            <h2 className="text-sm font-black uppercase tracking-widest text-white">Tabellone Appuntamenti</h2>
-            <div className="bg-gray-900 border border-gray-700 text-[10px] font-black text-cyan-400 px-4 py-1.5 rounded-lg flex gap-2">
-              <span className="text-gray-500">ATTIVE</span>
-              <span>{prenotazioni.length}</span>
-            </div>
-          </div>
-          
+        {/* TABELLA PRENOTAZIONI */}
+        <div className="bg-[#111827] border border-gray-700/70 border-t-4 border-t-green-500 rounded-2xl overflow-hidden shadow-2xl shadow-black/60">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[800px]">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-black/40 border-b border-gray-800 text-[9px] text-gray-500 font-black uppercase tracking-widest">
-                  <th className="p-5 w-[15%]">Orario / Data</th>
-                  <th className="p-5 w-[35%]">Anagrafica Cliente</th>
-                  <th className="p-5 w-[15%]">Biliardo</th>
-                  <th className="p-5 w-[15%] text-center">Canale</th>
-                  <th className="p-5 w-[20%] text-right">Azioni</th>
+                <tr className="bg-[#0b0e14]/50 border-b border-gray-700/50 text-[10px] text-gray-400 font-black uppercase tracking-widest">
+                  <th className="p-5 w-[20%]">Data e Ora</th>
+                  <th className="p-5 w-[20%]">Socio</th>
+                  <th className="p-5 w-[25%]">Assegnazione Tavolo</th>
+                  <th className="p-5 w-[25%]">Note Cliente</th>
+                  <th className="p-5 w-[10%] text-right">Azioni</th>
                 </tr>
               </thead>
-              <tbody className="text-sm font-bold text-white divide-y divide-gray-800/40">
+              <tbody className="text-sm font-bold text-white divide-y divide-gray-700/50">
                 {loading ? (
-                  <tr><td colSpan={5} className="p-10 text-center text-cyan-500 font-black uppercase tracking-widest text-[10px] animate-pulse">Caricamento in corso...</td></tr>
-                ) : prenotazioni.length === 0 ? (
-                  <tr><td colSpan={5} className="p-10 text-center text-gray-600 font-black uppercase tracking-widest text-[10px]">Nessun appuntamento in agenda.</td></tr>
+                  <tr><td colSpan={5} className="p-8 text-center text-green-500 font-black uppercase tracking-widest text-[10px] animate-pulse">Sincronizzazione in corso...</td></tr>
+                ) : prenotazioniFiltrate.length === 0 ? (
+                  <tr><td colSpan={5} className="p-8 text-center text-gray-500 font-black uppercase tracking-widest text-[10px]">Nessuna prenotazione trovata.</td></tr>
                 ) : (
-                  prenotazioni.map((prenotazione) => {
-                    const dataObj = new Date(prenotazione.data_prevista);
+                  prenotazioniFiltrate.map((prenotazione) => {
+                    const dataObj = new Date(prenotazione.data_ora);
+                    const giorno = dataObj.toLocaleDateString("it-IT", { weekday: 'short', day: '2-digit', month: 'short' });
+                    const ora = dataObj.toLocaleTimeString("it-IT", { hour: '2-digit', minute: '2-digit' });
+                    
+                    const isNonAssegnato = prenotazione.tavolo_numero === "Qualsiasi Tavolo" || !prenotazione.tavolo_numero;
+
                     return (
-                      <tr key={prenotazione.id} className="hover:bg-gray-800/30 transition-colors group">
+                      <tr key={prenotazione.id} className="hover:bg-[#1e293b]/50 transition-colors group">
+                        
+                        {/* DATA E ORA */}
                         <td className="p-5">
-                          <p className="text-base font-black text-cyan-400">{dataObj.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</p>
-                          <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">{dataObj.toLocaleDateString("it-IT", { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
-                        </td>
-                        <td className="p-5">
-                          <p className="text-sm font-black uppercase text-gray-200">{prenotazione.cliente}</p>
-                          {prenotazione.note && (
-                            <p className="text-[10px] text-gray-500 italic mt-1 line-clamp-1">{prenotazione.note}</p>
-                          )}
-                        </td>
-                        <td className="p-5">
-                          <span className="text-[11px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1.5">
-                            📌 {prenotazione.tavolo || "—"}
-                          </span>
-                        </td>
-                        <td className="p-5 text-center">
-                          <span className={`text-[9px] px-3 py-1.5 rounded border font-black uppercase tracking-widest ${getBadgeCanale(prenotazione.canale)}`}>
-                            {prenotazione.canale}
-                          </span>
-                        </td>
-                        <td className="p-5 text-right">
-                          <div className="flex justify-end gap-3">
-                            <button 
-                              onClick={() => apriModificaPrenotazione(prenotazione)} 
-                              className="text-gray-500 hover:text-cyan-400 px-2 py-1 transition-colors text-[10px] font-black uppercase tracking-widest border border-transparent hover:border-cyan-500/30 rounded"
-                            >
-                              ✏️ Modifica
-                            </button>
-                            <button 
-                              onClick={() => eliminaPrenotazione(prenotazione.id)} 
-                              className="text-gray-600 hover:text-red-500 px-2 py-1 transition-colors text-[10px] font-black uppercase tracking-widest border border-transparent hover:border-red-500/30 rounded"
-                            >
-                              🗑️ Elimina
-                            </button>
+                          <div className="flex flex-col">
+                            <span className="text-lg font-black uppercase text-green-400">{ora}</span>
+                            <span className="text-[10px] text-gray-400 uppercase tracking-widest">{giorno}</span>
                           </div>
+                        </td>
+
+                        {/* CLIENTE */}
+                        <td className="p-5">
+                          <p className="text-base font-black uppercase text-gray-200">{prenotazione.nome_cliente}</p>
+                        </td>
+
+                        {/* ASSEGNAZIONE TAVOLO (TENDINA) */}
+                        <td className="p-5">
+                          <select 
+                            value={prenotazione.tavolo_numero} 
+                            onChange={(e) => assegnaTavolo(prenotazione.id, e.target.value)}
+                            className={`p-2 rounded-lg text-xs font-black uppercase tracking-widest border outline-none transition-colors cursor-pointer ${isNonAssegnato ? 'bg-amber-900/30 border-amber-500/50 text-amber-400' : 'bg-gray-800 border-gray-600 text-white'}`}
+                          >
+                            <option value="Qualsiasi Tavolo">⚠️ DA ASSEGNARE</option>
+                            {tavoli.map(t => (
+                              <option key={t.id} value={`Tavolo ${t.numero_tavolo}`}>
+                                Tavolo {t.numero_tavolo} {t.nome_tavolo ? `(${t.nome_tavolo})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* NOTE */}
+                        <td className="p-5">
+                          <p className="text-[10px] text-gray-400 font-medium leading-relaxed max-w-xs">
+                            {prenotazione.note || "—"}
+                          </p>
+                        </td>
+
+                        {/* AZIONI */}
+                        <td className="p-5 text-right flex flex-col items-end gap-2">
+                          {filtroVista === "attive" ? (
+                             <button 
+                               onClick={() => cambiaStato(prenotazione.id, 'conclusa')} 
+                               className="text-[9px] bg-gray-800 hover:bg-green-600 text-gray-300 hover:text-black px-3 py-1.5 rounded border border-gray-700 hover:border-green-500 font-black uppercase tracking-widest transition-all"
+                             >
+                               ✓ Concludi
+                             </button>
+                          ) : (
+                             <span className="text-[9px] text-gray-600 font-black uppercase tracking-widest border border-gray-700/50 px-2 py-1 rounded">Archiviata</span>
+                          )}
+                          
+                          <button 
+                            onClick={() => eliminaPrenotazione(prenotazione.id)} 
+                            className="text-[9px] text-red-500/50 hover:text-red-500 uppercase font-black tracking-widest transition-colors mt-1"
+                          >
+                            Elimina
+                          </button>
                         </td>
                       </tr>
                     );
@@ -253,63 +255,12 @@ export default function PrenotazioniPage() {
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-
-      {/* POPUP MODAL: FORM PRENOTAZIONE (Sovrimpressione) */}
-      {mostraForm && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#0a0b0f] border border-gray-800 rounded-2xl w-full max-w-2xl shadow-2xl relative">
-            <button onClick={() => setMostraForm(false)} className="absolute top-6 right-6 text-gray-500 hover:text-red-500 font-black text-xl z-10 transition-colors">✖</button>
-            <div className="p-8">
-              <h2 className="text-xl font-black italic text-cyan-400 uppercase mb-6">
-                {prenotazioneInModificaId ? "✏️ Modifica Prenotazione" : "📝 Registrazione Manuale"}
-              </h2>
-              
-              <form onSubmit={salvaPrenotazione} className="space-y-5">
-                
-                <div>
-                  <label className="block text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1.5">Sorgente Contatto</label>
-                  <select value={canale} onChange={(e) => setCanale(e.target.value)} className="w-full bg-black border border-gray-800 p-3 rounded-xl text-white font-bold text-xs focus:outline-none focus:border-cyan-500 transition-colors">
-                    <option value="Chiamata Telefonica">📞 Chiamata Telefonica</option>
-                    <option value="WhatsApp">💬 WhatsApp</option>
-                    <option value="App Soci">📱 App Soci</option>
-                    <option value="In Sala">🚶 In Sala</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1.5">Nominativo Cliente *</label>
-                  <input type="text" placeholder="Es. Mario Rossi" required value={cliente} onChange={(e) => setCliente(e.target.value)} className="w-full bg-black border border-gray-800 p-3 rounded-xl text-white font-bold text-xs uppercase focus:outline-none focus:border-cyan-500 transition-colors" />
-                </div>
-
-                <div>
-                  <label className="block text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1.5">Tavolo o Specialità</label>
-                  <input type="text" placeholder="Es. Tavolo 3 o Biliardo" value={tavolo} onChange={(e) => setTavolo(e.target.value)} className="w-full bg-black border border-gray-800 p-3 rounded-xl text-white font-bold text-xs focus:outline-none focus:border-cyan-500 transition-colors" />
-                </div>
-
-                <div>
-                  <label className="block text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1.5">Data e Ora Prevista *</label>
-                  <input type="datetime-local" required value={dataPrevista} onChange={(e) => setDataPrevista(e.target.value)} className="w-full bg-black border border-gray-800 p-3 rounded-xl text-white font-bold text-xs focus:outline-none focus:border-cyan-500 custom-calendar-icon transition-colors" />
-                </div>
-
-                <div>
-                  <label className="block text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1.5">Note Aggiuntive</label>
-                  <textarea placeholder="Es. Richiede stecca personale..." rows={3} value={note} onChange={(e) => setNote(e.target.value)} className="w-full bg-black border border-gray-800 p-3 rounded-xl text-white font-bold text-xs focus:outline-none focus:border-cyan-500 transition-colors resize-none"></textarea>
-                </div>
-
-                <div className="pt-2">
-                  <button type="submit" disabled={salvataggio} className={`w-full py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${prenotazioneInModificaId ? "bg-amber-600 hover:bg-amber-500 text-black" : "bg-cyan-600 hover:bg-cyan-500 text-black"}`}>
-                    {salvataggio ? "SALVATAGGIO..." : (prenotazioneInModificaId ? "AGGIORNA PRENOTAZIONE" : "SALVA PRENOTAZIONE")}
-                  </button>
-                </div>
-              </form>
-
-            </div>
+          <div className="bg-[#0b0e14] border-t border-gray-700/70 p-4 text-[10px] font-black uppercase tracking-widest text-gray-500 flex justify-between">
+            <span>Totale Visualizzate: {prenotazioniFiltrate.length}</span>
+            <span className="text-green-500">Aggiornamento in tempo reale</span>
           </div>
         </div>
-      )}
-
+      </div>
     </div>
   );
 }
